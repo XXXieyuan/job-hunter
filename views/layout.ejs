@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>职位猎手 · Job Hunter</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/main.css" />
+  </head>
+  <body>
+    <div class="app-root container">
+      <header class="app-header navbar">
+        <div class="brand">
+          <div class="brand-orb"></div>
+          <span class="brand-title">职位猎手 · Job Hunter</span>
+        </div>
+        <nav class="nav">
+          <a
+            href="/jobs"
+            class="nav-link <%= currentPath && currentPath.startsWith('/jobs') ? 'active' : '' %>"
+            >Jobs</a
+          >
+          <a
+            href="/admin?token=job-hunter-admin-2026"
+            class="nav-link <%= currentPath && currentPath.startsWith('/admin') ? 'active' : '' %>"
+            >Admin</a
+          >
+        </nav>
+      </header>
+
+      <main class="app-main">
+        <%- body %>
+      </main>
+
+      <footer>
+        <span>© <%= new Date().getFullYear() %> Job Hunter. All rights reserved.</span>
+        <span>AI‑powered job search assistant for the Australian market.</span>
+      </footer>
+    </div>
+
+    <script src="/js/main.js"></script>
+    <script src="/js/admin.js"></script>
+  </body>
+</html>
+

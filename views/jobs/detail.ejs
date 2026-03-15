@@ -1,0 +1,135 @@
+<% layout('layout') -%>
+
+<section class="page-section">
+  <div class="section-header detail-header">
+    <a href="/jobs" class="back-link">返回职位列表</a>
+    <h1 class="detail-title"><%= job.title %></h1>
+    <p class="section-subtitle detail-meta">
+      <span class="company-name"><%= job.company_name || '公司未知' %></span>
+      <% if (job.location) { %> · <span class="meta-item"><%= job.location %></span> <% } %>
+    </p>
+  </div>
+
+  <div class="detail-layout">
+    <div class="detail-main">
+      <section class="glass-card detail-block">
+        <div class="tabs" data-tabs-root="detail-tabs-root">
+          <button class="tab-btn active" type="button" data-tab-target="tab-overview">
+            职位描述
+          </button>
+          <button class="tab-btn" type="button" data-tab-target="tab-analysis">匹配分析</button>
+          <button class="tab-btn" type="button" data-tab-target="tab-gaps">差距分析</button>
+        </div>
+
+        <div id="detail-tabs-root" class="tab-content tab-content-root">
+          <div class="tab-pane active" data-tab-id="tab-overview">
+            <div class="section">
+              <h2 class="section-title">职位描述</h2>
+              <p class="muted">
+                来源：<%= job.source || '未知' %>
+                <% if (job.posted_at) { %> · 发布于 <%= job.posted_at %> <% } %>
+              </p>
+              <pre class="job-description"><%= job.description || '暂无职位描述。' %></pre>
+              <% if (job.url) { %>
+              <p class="muted">
+                原始链接：
+                <a href="<%= job.url %>" target="_blank" rel="noopener noreferrer"
+                  ><%= job.url %></a
+                >
+              </p>
+              <% } %>
+            </div>
+          </div>
+
+          <div class="tab-pane" data-tab-id="tab-analysis">
+            <div class="section">
+              <h2 class="section-title">匹配分析</h2>
+              <% if (!score) { %>
+              <p>暂未计算匹配度，请在管理面板中运行分析。</p>
+              <% } else { 
+                const overall = score.overall_score;
+              %>
+              <div class="score-block fit-score">
+                <div class="score-main">
+                  <div class="score-label">
+                    匹配度
+                    <span
+                      class="score-value"
+                      data-score="<%= overall %>"
+                    ><%= overall.toFixed(1) %>%</span>
+                  </div>
+                  <div class="score-bar large">
+                    <div
+                      class="score-bar-fill"
+                      style="width: <%= Math.max(5, Math.min(100, overall)) %>%"
+                    ></div>
+                  </div>
+                </div>
+                <div class="score-breakdown detail-list">
+                  <div class="detail-item">
+                    <span class="muted">关键词匹配：</span>
+                    <span><%= score.keyword_score.toFixed(1) %>%</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="muted">语义相似度：</span>
+                    <span>
+                      <%= score.embedding_score != null
+                        ? score.embedding_score.toFixed(1) + '%'
+                        : '未启用（缺少 API Key）' %>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="chips-row">
+                <span class="chip">
+                  已匹配关键词：<%= (breakdown.matched_keywords || []).join('，') || '暂无' %>
+                </span>
+              </div>
+              <% } %>
+            </div>
+          </div>
+
+          <div class="tab-pane" data-tab-id="tab-gaps">
+            <div class="section">
+              <h2 class="section-title">差距分析</h2>
+              <% const missing = breakdown.missing_skills || []; %>
+              <% if (!missing.length) { %>
+              <p>暂未发现明显技能差距，您与该职位高度匹配。</p>
+              <% } else { %>
+              <p class="muted">以下是该职位要求中，简历中弱化或缺失的关键词：</p>
+              <ul class="gap-list">
+                <% missing.forEach(function(kw){ %>
+                <li class="gap-item"><span class="tag tag-warning"><%= kw %></span></li>
+                <% }) %>
+              </ul>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="detail-side">
+      <section class="glass-card detail-block">
+        <h2 class="section-title">Cover Letter</h2>
+        <% if (!coverLetter) { %>
+        <p>尚未生成 Cover Letter，请在管理面板中运行分析。</p>
+        <% } else { %>
+        <pre class="cover-letter-content"><%= coverLetter.content %></pre>
+        <% } %>
+      </section>
+
+      <section class="glass-card detail-block resume-section">
+        <h2 class="section-title">公司调查</h2>
+        <% if (!company) { %>
+        <p>暂未找到公司调研信息。</p>
+        <% } else { %>
+        <p class="muted"><%= company.website || '暂无官网信息' %></p>
+        <p><%= company.description || '信息暂无' %></p>
+        <% } %>
+      </section>
+    </aside>
+  </div>
+</section>
+

@@ -1,0 +1,117 @@
+<% layout('layout') -%>
+
+<section class="page-section">
+  <div class="section-header jobs-header">
+    <h1>职位列表</h1>
+    <p class="section-subtitle">根据您的简历自动计算匹配度，优先显示高匹配职位。</p>
+  </div>
+
+  <form class="filter-bar search-box" method="get" action="/jobs">
+    <div class="filter-group">
+      <label>角色</label>
+      <select name="role">
+        <option value="">全部</option>
+        <% roles.forEach(function(r){ %>
+        <option value="<%= r %>" <%= filters.role === r ? 'selected' : '' %>>
+          <%= r %>
+        </option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label>来源</label>
+      <select name="source">
+        <option value="">全部</option>
+        <% sources.forEach(function(s){ %>
+        <option value="<%= s %>" <%= filters.source === s ? 'selected' : '' %>>
+          <%= s %>
+        </option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label>最低匹配度</label>
+      <input
+        type="number"
+        name="minScore"
+        min="0"
+        max="100"
+        step="5"
+        value="<%= filters.minScore || '' %>"
+        placeholder="例如 70"
+        class="search-input"
+      />
+    </div>
+
+    <div class="filter-actions">
+      <button class="btn btn-primary" type="submit">筛选</button>
+    </div>
+  </form>
+
+  <div class="cards-grid jobs-list">
+    <% if (!jobs.length) { %>
+    <div class="empty-state glass-card">
+      <p>暂无职位数据，请在管理面板中上传职位数据并运行分析。</p>
+    </div>
+    <% } %>
+
+    <% jobs.forEach(function(job){ 
+      const score = typeof job.overall_score === 'number' ? job.overall_score : null;
+      let scoreClass = 'score-low';
+      if (score !== null) {
+        if (score > 70) scoreClass = 'score-high';
+        else if (score >= 50) scoreClass = 'score-mid';
+      }
+    %>
+    <article class="job-card glass-card">
+      <header class="job-card-header">
+        <div>
+          <h2 class="job-title"><%= job.title %></h2>
+          <div class="job-meta">
+            <span><%= job.company_name || '公司未知' %></span>
+            <% if (job.location) { %>
+            <span>· <%= job.location %></span>
+            <% } %>
+            <% if (job.role) { %>
+            <span class="tag role-tag"><%= job.role %></span>
+            <% } %>
+          </div>
+        </div>
+        <div class="job-score">
+          <div class="score-label">
+            匹配度
+            <span class="score-value"><%= score !== null ? score.toFixed(0) + '%' : '未计算' %></span>
+          </div>
+          <div class="score-bar">
+            <div
+              class="score-bar-fill <%= scoreClass %>"
+              style="width: <%= score !== null ? Math.max(5, Math.min(100, score)) : 0 %>%"
+            ></div>
+          </div>
+        </div>
+      </header>
+
+      <p class="job-snippet">
+        <%= (job.description || '').slice(0, 120) %><%=
+        (job.description || '').length > 120 ? '…' : '' %>
+      </p>
+
+      <footer class="job-card-footer">
+        <div class="job-tags">
+          <% if (job.source) { %>
+          <span class="tag"><%= job.source %></span>
+          <% } %>
+          <% if (job.salary) { %>
+          <span class="tag tag-soft"><%= job.salary %></span>
+          <% } %>
+        </div>
+        <div class="job-actions">
+          <a href="/jobs/<%= job.id %>" class="btn btn-ghost">查看详情</a>
+        </div>
+      </footer>
+    </article>
+    <% }) %>
+  </div>
+</section>

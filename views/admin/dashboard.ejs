@@ -1,0 +1,89 @@
+<% layout('layout') -%>
+
+<section class="page-section admin-section">
+  <div class="section-header admin-header">
+    <h1>管理面板</h1>
+    <p class="section-subtitle">运行分析、上传职位数据，并查看整体求职匹配统计。</p>
+  </div>
+
+  <div class="admin-grid stats-grid">
+    <section class="glass-card stat-card">
+      <h2 class="section-title">运行状态</h2>
+      <% if (!lastRun) { %>
+      <p>尚未运行过分析。</p>
+      <% } else { %>
+      <p>
+        最近一次运行 ID：<span class="tag"><%= lastRun.id %></span>
+      </p>
+      <p>
+        状态：
+        <% if (lastRun.status === 'running') { %>
+        <span class="status-pill status-running">运行中</span>
+        <% } else if (lastRun.status === 'completed') { %>
+        <span class="status-pill status-success">完成</span>
+        <% } else { %>
+        <span class="status-pill status-failed">失败</span>
+        <% } %>
+      </p>
+      <% if (lastRun.error) { %>
+      <p class="muted">错误信息：<%= lastRun.error %></p>
+      <% } %>
+      <% } %>
+
+      <button id="run-analysis-btn" class="btn btn-primary run-btn">运行分析</button>
+      <p id="run-analysis-status" class="muted small run-status"></p>
+    </section>
+
+    <section class="glass-card stat-card">
+      <h2 class="section-title">数据统计</h2>
+      <ul class="stats-list">
+        <li>
+          <span>职位总数</span>
+          <span class="stat-value"><%= jobCounts.total %></span>
+        </li>
+        <li>
+          <span>已打分职位数</span>
+          <span class="stat-value"><%= jobCounts.withScore %></span>
+        </li>
+        <li>
+          <span>匹配记录总数</span>
+          <span class="stat-value"><%= fitStats.total %></span>
+        </li>
+        <li>
+          <span>平均匹配度</span>
+          <span class="stat-value"><%= fitStats.avg.toFixed(1) %>%</span>
+        </li>
+      </ul>
+      <h3 class="mt">高匹配职位数（按角色）</h3>
+      <ul class="stats-list">
+        <% if (!fitStats.highFitPerRole.length) { %>
+        <li><span class="muted">暂无数据</span></li>
+        <% } else { %>
+        <% fitStats.highFitPerRole.forEach(function(r){ %>
+        <li>
+          <span><%= r.role || '未知角色' %></span>
+          <span><%= r.count %></span>
+        </li>
+        <% }) %>
+        <% } %>
+      </ul>
+    </section>
+
+    <section class="glass-card admin-section">
+      <h2 class="section-title">上传职位数据</h2>
+      <p class="muted">
+        接受 JSON 格式，内容为职位对象数组：包含 title, company_name, description, role, url,
+        location, salary 等字段。
+      </p>
+      <form id="upload-form">
+        <textarea
+          id="upload-json"
+          rows="8"
+          placeholder='[{"title":"Senior AI Engineer", "company_name":"示例公司", "description":"...", "role":"AI Engineer"}]'
+        ></textarea>
+        <button type="submit" class="btn btn-secondary">上传职位数据</button>
+      </form>
+      <p id="upload-status" class="muted small"></p>
+    </section>
+  </div>
+</section>

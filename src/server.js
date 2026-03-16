@@ -3,6 +3,9 @@ const app = require('./app');
 const { PORT } = require('./config');
 const { runMigrations } = require('./db/migrate');
 const { ensureSampleResumeSeeded } = require('./services/resumeService');
+const { getLogger } = require('./logger');
+
+const logger = getLogger('server');
 
 async function start() {
   try {
@@ -10,15 +13,22 @@ async function start() {
     await ensureSampleResumeSeeded();
 
     app.listen(PORT, () => {
-      // eslint-disable-next-line no-console
-      console.log(`Job Hunter listening on port ${PORT}`);
+      logger.info(`Job Hunter listening on port ${PORT}`);
     });
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to start Job Hunter:', err);
+    logger.error('Failed to start Job Hunter', { err });
     process.exit(1);
   }
 }
 
-start();
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception', { err });
+  process.exit(1);
+});
 
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection', { reason });
+  process.exit(1);
+});
+
+start();

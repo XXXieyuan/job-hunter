@@ -13,6 +13,12 @@ const OPENAI_CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o';
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 
+// Logging
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const LOG_LEVEL =
+  process.env.LOG_LEVEL ||
+  (NODE_ENV === 'production' ? 'info' : 'debug');
+
 module.exports = {
   PORT,
   DB_PATH,
@@ -21,5 +27,6 @@ module.exports = {
   OPENAI_EMBEDDING_MODEL,
   OPENAI_CHAT_MODEL,
   ADMIN_TOKEN,
+  NODE_ENV,
+  LOG_LEVEL,
 };
-

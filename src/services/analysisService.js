@@ -11,6 +11,9 @@ const { scoreJobAgainstResume } = require('./scoringService');
 const { generateCoverLetter } = require('./coverLetterService');
 const { ensureCompanyForJob } = require('./companyService');
 const { getPrimaryResume } = require('./resumeService');
+const { getLogger } = require('../logger');
+
+const logger = getLogger('analysisService');
 
 async function runFullAnalysisAsync(runId) {
   try {
@@ -23,6 +26,10 @@ async function runFullAnalysisAsync(runId) {
         fitStats: getFitStats(),
         jobCounts: jobCountsEmpty,
         resumeId: null,
+      });
+      logger.info('Analysis run completed with no primary resume', {
+        runId,
+        jobCounts: jobCountsEmpty,
       });
       return;
     }
@@ -76,6 +83,7 @@ async function runFullAnalysisAsync(runId) {
 
     markRunCompleted(runId, stats);
   } catch (err) {
+    logger.error('Analysis run failed', { runId, err });
     markRunFailed(runId, err.message || String(err));
   }
 }
@@ -83,6 +91,7 @@ async function runFullAnalysisAsync(runId) {
 function triggerFullAnalysis(sources) {
   const runId = createRun(sources || {});
   setImmediate(() => {
+    logger.info('Starting full analysis run', { runId, sources });
     runFullAnalysisAsync(runId);
   });
   return runId;

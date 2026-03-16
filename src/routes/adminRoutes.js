@@ -14,6 +14,9 @@ const {
   getScraperRuns,
 } = require('../services/scraperService');
 const { upsertCompany } = require('../repositories/companiesRepo');
+const { getLogger } = require('../logger');
+
+const logger = getLogger('adminRoutes');
 
 const router = express.Router();
 
@@ -73,11 +76,13 @@ router.get('/admin', (req, res) => {
     jobCounts,
     fitStats,
     scraperRuns,
+    adminToken: ADMIN_TOKEN,
   });
 });
 
 router.post('/admin/run', async (req, res) => {
   const runId = triggerFullAnalysis({ source: 'admin_manual' });
+  logger.info('Admin triggered full analysis run', { runId });
   res.json({ runId });
 });
 
@@ -88,8 +93,17 @@ router.post('/admin/scraper/run', express.json({ limit: '1mb' }), (req, res) => 
 
   try {
     const runId = triggerScrape(name, options);
+    logger.info('Admin triggered scraper run', {
+      runId,
+      scraperName: name,
+    });
     res.json({ runId });
   } catch (err) {
+    if (err && err.code === 'INVALID_SCRAPER_OPTIONS') {
+      return res
+        .status(400)
+        .json({ error: err.message || '无效的抓取参数。' });
+    }
     res.status(500).json({ error: err.message || String(err) });
   }
 });
@@ -138,6 +152,9 @@ router.post('/admin/upload', express.json({ limit: '2mb' }), (req, res) => {
 
   try {
     upsertManyJobs(mapped);
+    logger.info('Admin uploaded jobs via JSON body', {
+      jobsCount: mapped.length,
+    });
 
     // Lightweight company upsert based on company_name only
     const uniqueCompanyNames = Array.from(
@@ -156,6 +173,9 @@ router.post('/admin/upload', express.json({ limit: '2mb' }), (req, res) => {
 
     res.json({ inserted: mapped.length });
   } catch (err) {
+    logger.error('Failed to upsert jobs from JSON body', {
+      error: err && err.message,
+    });
     res.status(500).json({ error: err.message || String(err) });
   }
 });
@@ -191,6 +211,10 @@ router.post(
 
     try {
       upsertManyJobs(mapped);
+      logger.info('Admin uploaded jobs via file', {
+        jobsCount: mapped.length,
+        // Avoid logging file path or name; only counts
+      });
 
       const uniqueCompanyNames = Array.from(
         new Set(mapped.map((j) => j.company_name).filter(Boolean)),
@@ -213,6 +237,9 @@ router.post(
         `上传成功，处理职位数量：${mapped.length}。<a href="/admin${tokenQuery}">返回管理面板</a>`,
       );
     } catch (err) {
+      logger.error('Failed to upsert jobs from uploaded file', {
+        error: err && err.message,
+      });
       res
         .status(500)
         .send(`写入数据库失败：${err.message || String(err)}`);

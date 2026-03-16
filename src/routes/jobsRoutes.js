@@ -4,7 +4,9 @@ const { getBestFitScoreForJob } = require('../repositories/fitScoresRepo');
 const { getCoverLetter } = require('../repositories/coverLettersRepo');
 const { getCompanyByName } = require('../repositories/companiesRepo');
 const { getPrimaryResume } = require('../services/resumeService');
+const { getLogger } = require('../logger');
 
+const logger = getLogger('jobsRoutes');
 const router = express.Router();
 
 router.get('/', (req, res) => {
@@ -28,6 +30,15 @@ router.get('/jobs', (req, res) => {
   const sources = Array.from(
     new Set(jobs.map((j) => j.source).filter((s) => !!s))
   );
+
+  logger.debug('Rendering jobs list', {
+    filters: {
+      role: role || undefined,
+      source: source || undefined,
+      minScore: Number.isFinite(minScore) ? minScore : undefined,
+    },
+    jobsCount: jobs.length,
+  });
 
   res.render('jobs/list', {
     jobs,
@@ -69,6 +80,14 @@ router.get('/jobs/:id', (req, res, next) => {
       ? getCoverLetter(job.id, resume.id, 'zh')
       : null;
 
+  logger.debug('Rendering job detail', {
+    jobId: job.id,
+    hasResume: !!resume,
+    hasScore: !!score,
+    hasCompany: !!company,
+    hasCoverLetter: !!coverLetter,
+  });
+
   res.render('jobs/detail', {
     job,
     resume,
@@ -80,4 +99,3 @@ router.get('/jobs/:id', (req, res, next) => {
 });
 
 module.exports = router;
-

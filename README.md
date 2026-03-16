@@ -1,134 +1,136 @@
+[English](./README.md) | [中文](./README_CN.md)
+
 # Job Hunter
 
-Job Hunter 是一个 AI 驱动的职位搜索助手，专注于澳大利亚市场。它帮助求职者了解自己与开放职位的匹配度，生成量身定制的求职信，并突出简历与职位要求之间的差距。
+Job Hunter is an AI-powered job search assistant focused on the Australian market. It helps candidates understand how well they match open roles, generates tailored cover letters, and highlights gaps between their resume and job requirements.
 
-## 核心功能
+## Core Features
 
-### 🎯 职位匹配与筛选
-- **职位列表**：带角色、来源和最低匹配度筛选器的职位列表
-- **智能评分**：结合关键词重叠和语义相似度的匹配评分（需 OpenAI API）
-- **实时过滤**：根据匹配度快速筛选高相关职位
+### 🎯 Job Matching & Filtering
+- **Job list**: Job list with filters for role, source, and minimum fit score
+- **Intelligent scoring**: Match scoring that combines keyword overlap and semantic similarity (requires OpenAI API)
+- **Real-time filtering**: Quickly filter highly relevant roles based on fit score
 
-### 📊 详细职位视图
-- **整体匹配度**：综合评分和详细分解
-- **差距分析**：高亮显示缺失或薄弱的技能关键词
-- **求职信生成**：AI 生成的中文求职信（3-5 段，400 字内）
-- **公司调研**：当有公司信息时显示简介和网站
+### 📊 Detailed Job View
+- **Overall fit score**: Aggregate score with detailed breakdown
+- **Gap analysis**: Highlights missing or weak skill keywords
+- **Cover letter generation**: AI-generated Chinese cover letter (3–5 paragraphs, under 400 Chinese characters)
+- **Company research**: Shows company summary and website when available
 
-### ⚙️ 管理面板
-- **批量分析**：触发对所有存储职位的批处理评分
-- **数据上传**：通过 JSON 格式上传新职位数据
-- **统计看板**：职位计数、平均匹配度、高匹配职位按角色分组
+### ⚙️ Admin Dashboard
+- **Batch analysis**: Trigger batch scoring for all stored jobs
+- **Data upload**: Upload new job data via JSON
+- **Statistics dashboard**: Job counts, average fit score, and high-fit jobs grouped by role
 
-### 🎨 用户体验
-- **深色主题**：现代化的玻璃拟态 UI
-- **响应式设计**：优化桌面和移动端体验
-- **无 API 模式**：缺少 API Key 时仍可使用基本功能
+### 🎨 User Experience
+- **Dark theme**: Modern glassmorphism-style UI
+- **Responsive design**: Optimized for both desktop and mobile
+- **No-API mode**: Basic functionality available even without an API key
 
-## 技术栈
+## Tech Stack
 
-- **后端**: Node.js, Express
-- **模板引擎**: EJS + ejs-mate 布局
-- **数据库**: SQLite (better-sqlite3)
-- **AI 集成**: OpenAI API (语义评分和内容生成)
-- **爬虫**: Puppeteer (APSJobs 爬取)
-- **前端**: 原生 JavaScript + CSS 现代特性
+- **Backend**: Node.js, Express
+- **Templating**: EJS + ejs-mate layouts
+- **Database**: SQLite (better-sqlite3)
+- **AI integration**: OpenAI API (semantic scoring and content generation)
+- **Scraper**: Puppeteer (APSJobs scraping)
+- **Frontend**: Vanilla JavaScript + modern CSS
 
-## 架构概览
+## Architecture Overview
 
 ```
 job-hunter/
 ├── src/
-│   ├── server.js              # 服务器入口
-│   ├── app.js                 # Express 应用配置
-│   ├── config/                # 配置加载
+│   ├── server.js              # Server entrypoint
+│   ├── app.js                 # Express app configuration
+│   ├── config/                # Configuration loading
 │   │   └── index.js
-│   ├── db/                    # 数据库层
+│   ├── db/                    # Database layer
 │   │   ├── connection.js
 │   │   ├── migrate.js
-│   │   └── migrations/        # SQL 迁移文件
-│   ├── repositories/          # 数据访问层
+│   │   └── migrations/        # SQL migration files
+│   ├── repositories/          # Data access layer
 │   │   ├── jobsRepo.js
 │   │   ├── fitScoresRepo.js
 │   │   ├── coverLettersRepo.js
 │   │   ├── companiesRepo.js
 │   │   ├── resumesRepo.js
 │   │   └── analysisRunsRepo.js
-│   ├── services/              # 业务逻辑层
-│   │   ├── openAIClient.js    # OpenAI API 封装
-│   │   ├── scoringService.js  # 匹配度计算
-│   │   ├── coverLetterService.js # 求职信生成
-│   │   ├── analysisService.js # 批处理分析
-│   │   ├── companyService.js  # 公司调研
-│   │   └── resumeService.js   # 简历管理
-│   ├── routes/                # 路由
-│   │   ├── jobsRoutes.js      # 职位相关路由
-│   │   └── adminRoutes.js     # 管理面板路由
-│   └── scrapers/              # 爬虫
-│       └── apsjobsScraper.js  # APSJobs 爬取
-├── public/                    # 静态资源
+│   ├── services/              # Business logic layer
+│   │   ├── openAIClient.js    # OpenAI API wrapper
+│   │   ├── scoringService.js  # Fit score calculation
+│   │   ├── coverLetterService.js # Cover letter generation
+│   │   ├── analysisService.js # Batch analysis
+│   │   ├── companyService.js  # Company research
+│   │   └── resumeService.js   # Resume management
+│   ├── routes/                # Routes
+│   │   ├── jobsRoutes.js      # Job-related routes
+│   │   └── adminRoutes.js     # Admin dashboard routes
+│   └── scrapers/              # Scrapers
+│       └── apsjobsScraper.js  # APSJobs scraper
+├── public/                    # Static assets
 │   ├── css/
 │   │   └── main.css
 │   └── js/
-│       ├── main.js            # 通用前端逻辑
-│       └── admin.js           # 管理面板逻辑
-├── views/                     # EJS 模板
+│       ├── main.js            # General frontend logic
+│       └── admin.js           # Admin dashboard logic
+├── views/                     # EJS templates
 │   ├── layout.ejs
 │   ├── jobs/
 │   │   ├── list.ejs
 │   │   └── detail.ejs
 │   └── admin/
 │       └── dashboard.ejs
-├── data/                      # SQLite 数据库
-├── .env                       # 环境变量
+├── data/                      # SQLite database
+├── .env                       # Environment variables
 └── package.json
 ```
 
-## 数据库模型
+## Data Model
 
-### 表结构
+### Tables
 
-**jobs** - 职位信息
+**jobs** – Job information
 ```sql
 id, external_id, source, role, title, company_name, location, salary, 
 description, url, posted_at, application_status, raw_json, created_at
 ```
 
-**resumes** - 简历信息
+**resumes** – Resume information
 ```sql
 id, name, summary, skills_json, experience_json, education_json, raw_json
 ```
 
-**job_fit_scores** - 匹配度评分
+**job_fit_scores** – Fit scores
 ```sql
 id, job_id, resume_id, overall_score, keyword_score, embedding_score, 
 breakdown_json, created_at
 ```
 
-**cover_letters** - 生成的求职信
+**cover_letters** – Generated cover letters
 ```sql
 id, job_id, resume_id, language, content, created_at
 ```
 
-**companies** - 公司调研信息
+**companies** – Company research data
 ```sql
 id, name, website, description, raw_html, industry, size, researched_at
 ```
 
-**analysis_runs** - 批处理分析记录
+**analysis_runs** – Batch analysis runs
 ```sql
 id, status, sources_json, stats_json, error, started_at, completed_at
 ```
 
-## 快速开始
+## Getting Started
 
-### 前置要求
+### Prerequisites
 
 - Node.js 18+
-- OpenAI API Key（如需语义评分和求职信生成）
-- Chromium（用于爬虫，Puppeteer 会自动下载）
+- OpenAI API key (required for semantic scoring and cover letter generation)
+- Chromium (for scraping; Puppeteer will download it automatically)
 
-### 安装
+### Installation
 
 ```bash
 git clone <this-repo-url>
@@ -136,118 +138,122 @@ cd job-hunter
 npm install
 ```
 
-### 环境配置
+### Environment Configuration
 
-在项目根目录创建 `.env` 文件：
+Create a `.env` file at the project root:
 
 ```bash
-# 服务器配置
+# Server configuration
 PORT=3001
 
-# 数据库
+# Database
 DB_PATH=./data/job-hunter.sqlite
 
-# OpenAI 配置（支持自定义 Base URL）
+# OpenAI configuration (supports custom Base URL)
 OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://api.n1n.ai/v1   # 可改为 https://api.openai.com/v1
-OPENAI_CHAT_MODEL=MiniMax-M2.5         # 可改为 gpt-4o 等
+OPENAI_BASE_URL=https://api.n1n.ai/v1   # Can be changed to https://api.openai.com/v1
+OPENAI_CHAT_MODEL=MiniMax-M2.5         # Can be changed to gpt-4o, etc.
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 
-# 管理面板
+# Admin dashboard
 ADMIN_TOKEN=job-hunter-admin-2026
 
-# 匹配阈值
+# Fit threshold
 FIT_THRESHOLD=70
 ```
 
-**关于 Provider 和模型**：
-- `OPENAI_BASE_URL` 指向 AI 服务提供商的 API 地址
-- `OPENAI_CHAT_MODEL` 指定使用的聊天模型名称
-- 项目已配置为支持 n1n.ai (MiniMax-M2.5)，但可轻松切换到 OpenAI、Azure 或其他兼容 API
+**About providers and models**:
+- `OPENAI_BASE_URL` points to the AI provider’s API endpoint
+- `OPENAI_CHAT_MODEL` specifies the chat model name
+- The project is configured for n1n.ai (MiniMax-M2.5) by default but can be switched to OpenAI, Azure, or any compatible API.
 
-### 启动应用
+### Start the Application
 
 ```bash
 npm start
 ```
 
-服务器启动在 `http://localhost:3001`（或 `.env` 中配置的端口）。
+The server runs at `http://localhost:3001` (or the port configured in `.env`).
 
-### 开发模式
+### Development Mode
 
 ```bash
 npm run dev
 ```
 
-## 使用指南
+## Usage Guide
 
-### 首次使用流程
+### First-Time Setup Flow
 
-1. **配置环境变量**：设置 `.env` 文件（特别是 API Key）
-2. **启动服务器**：`npm start`
-3. **添加简历**：通过数据库或 API 添加简历数据
-4. **导入职位**：通过管理面板上传 JSON 数据或运行爬虫
-5. **运行分析**：在管理面板点击"运行分析"，系统会：
-   - 计算每个职位与简历的匹配度
-   - 生成求职信
-   - 调研公司信息
-6. **浏览职位**：访问 `/jobs` 查看匹配结果
+1. **Configure environment variables**: Set up the `.env` file (especially the API key).
+2. **Start the server**: `npm start`
+3. **Add resumes**: Add resume data via the database or API.
+4. **Import jobs**: Upload JSON via the admin dashboard or run the scraper.
+5. **Run analysis**: Click “Run Analysis” in the admin dashboard. The system will:
+   - Compute fit scores between each job and resume
+   - Generate cover letters
+   - Research company information
+6. **Browse jobs**: Visit `/jobs` to view match results.
 
-### 职位管理
+### Job Management
 
-#### 查看职位列表
-访问 `http://localhost:3001/jobs`
+#### View Job List
 
-**功能**：
-- 角色筛选（下拉菜单）
-- 来源筛选（下拉菜单）
-- 最低匹配度筛选（数字输入）
-- 职位卡片显示：标题、公司、地点、源、匹配度
+Visit `http://localhost:3001/jobs`
 
-#### 查看职位详情
-点击职位卡片进入详情页
+**Features**:
+- Role filter (dropdown)
+- Source filter (dropdown)
+- Minimum fit score filter (numeric input)
+- Job cards showing: title, company, location, source, and fit score
 
-**功能**：
-- **职位描述标签**：完整 JD、来源、发布时间、原链接
-- **匹配分析标签**：整体评分、关键词匹配、语义相似度、已匹配关键词
-- **差距分析标签**：缺失的技能关键词
-- **右侧栏**：生成的求职信、公司调研信息
+#### View Job Detail
 
-### 管理面板
+Click a job card to open the detail page.
 
-访问 `http://localhost:3001/admin?token=job-hunter-admin-2026`
+**Features**:
+- **Job description tab**: Full JD, source, posted date, original link
+- **Fit analysis tab**: Overall score, keyword overlap, semantic similarity, matched keywords
+- **Gap analysis tab**: Missing skill keywords
+- **Right sidebar**: Generated cover letter and company research information
 
-#### 运行分析
-点击"运行分析"按钮触发批处理流程：
-- 异步执行，返回运行 ID
-- 后台计算所有职位-简历对的匹配度
-- 生成求职信（如不存在）
-- 调研公司信息（如不存在）
-- 可刷新页面查看进度和结果
+### Admin Dashboard
 
-**分析流程**：
+Visit `http://localhost:3001/admin?token=job-hunter-admin-2026`
+
+#### Run Analysis
+
+Click the “Run Analysis” button to trigger the batch process:
+- Runs asynchronously and returns a run ID
+- Computes fit scores for all job–resume pairs
+- Generates cover letters (if missing)
+- Researches companies (if missing)
+- Refresh the page to see progress and results
+
+**Analysis flow**:
 ```
-1. 加载所有简历
-2. 加载所有职位
-3. 对每个职位-简历对：
-   a. 关键词匹配计算（40% 权重）
-   b. 语义相似度计算（60% 权重，需 API）
-   c. 生成求职信（如需）
-   d. 调研公司（如需）
-4. 保存结果到数据库
-5. 更新统计信息
+1. Load all resumes
+2. Load all jobs
+3. For each job–resume pair:
+   a. Compute keyword match score (40% weight)
+   b. Compute semantic similarity (60% weight, requires API)
+   c. Generate cover letter (if needed)
+   d. Perform company research (if needed)
+4. Persist results to the database
+5. Update statistics
 ```
 
-#### 上传职位数据
-通过 JSON 数组批量导入职位：
+#### Upload Job Data
 
-**格式示例**：
+Bulk-import jobs via a JSON array:
+
+**Example format**:
 ```json
 [
   {
-    "title": "高级 AI 工程师",
+    "title": "Senior AI Engineer",
     "company_name": "TechCorp",
-    "description": "负责 AI 模型开发和优化...",
+    "description": "Responsible for AI model development and optimization...",
     "role": "AI Engineer",
     "url": "https://example.com/jobs/123",
     "location": "Sydney, NSW",
@@ -257,54 +263,55 @@ npm run dev
 ]
 ```
 
-**批量导入命令**：
+**Bulk import command**:
 ```bash
 curl -X POST http://localhost:3001/admin/upload?token=job-hunter-admin-2026 \
   -H "Content-Type: application/json" \
   -d @jobs.json
 ```
 
-#### 查看统计
-管理面板显示：
-- 职位总数 / 已打分职位数
-- 匹配记录总数 / 平均匹配度
-- 高匹配职位按角色分组
+#### View Statistics
 
-### 爬虫工具
+The admin dashboard shows:
+- Total jobs / scored jobs
+- Total fit records / average fit score
+- High-fit jobs grouped by role
 
-#### APSJobs 爬取
+### Scraper Tools
+
+#### APSJobs Scraper
 
 ```bash
-# 基本使用
-npm run scrape:apsjobs -- --keywords "数据分析,产品管理" --maxPages 3
+# Basic usage
+npm run scrape:apsjobs -- --keywords "data analysis,product management" --maxPages 3
 
-# 导出 JSON
-npm run scrape:apsjobs -- --keywords "AI,软件工程" --mode json --output data/export.json
+# Export JSON
+npm run scrape:apsjobs -- --keywords "AI,software engineering" --mode json --output data/export.json
 
-# 指定位置
-npm run scrape:apsjobs -- --keywords "工程" --location "Canberra" --maxPages 5
+# Filter by location
+npm run scrape:apsjobs -- --keywords "engineering" --location "Canberra" --maxPages 5
 ```
 
-**参数说明**：
-- `--keywords`: 逗号分隔的关键词列表
-- `--location`: 地点筛选（可选）
-- `--maxPages`: 最大爬取页数，默认 3
-- `--mode`: `db`（直接写入数据库）或 `json`（导出文件）
-- `--output`: JSON 输出路径（仅在 json 模式下有效）
+**Parameters**:
+- `--keywords`: Comma-separated keyword list
+- `--location`: Location filter (optional)
+- `--maxPages`: Max number of pages to scrape (default 3)
+- `--mode`: `db` (write directly to DB) or `json` (export file)
+- `--output`: JSON output path (only for `json` mode)
 
-**注意**：
-- APSJobs 网站可能有反爬措施
-- 爬虫使用无头浏览器，需时间较长
-- 结果会自动去重（基于 external_id）
+**Notes**:
+- APSJobs may employ anti-scraping measures
+- Scraper uses a headless browser and can take some time
+- Results are de-duplicated (based on `external_id`)
 
-### API 集成
+### API Integration
 
-#### OpenAI 配置
+#### OpenAI Configuration
 
-项目使用自定义 Base URL 支持多个 AI 提供商：
+The project uses a configurable Base URL to support multiple AI providers:
 
 ```bash
-# n1n.ai (默认)
+# n1n.ai (default)
 OPENAI_BASE_URL=https://api.n1n.ai/v1
 OPENAI_CHAT_MODEL=MiniMax-M2.5
 
@@ -316,50 +323,50 @@ OPENAI_CHAT_MODEL=gpt-4o
 OPENAI_BASE_URL=https://your-resource.openai.azure.com/openai/deployments/your-deployment
 OPENAI_CHAT_MODEL=gpt-4o
 
-# 自定义 API
+# Custom API
 OPENAI_BASE_URL=https://your-api.example.com/v1
 OPENAI_CHAT_MODEL=your-model-name
 ```
 
-**关键点**：
-- `OPENAI_BASE_URL` 会自动去除末尾的 `/`
-- 所有请求使用 `Bearer` 认证
-- POST `/chat/completions` 用于聊天
-- POST `/embeddings` 用于向量计算
+**Key points**:
+- `OPENAI_BASE_URL` has any trailing `/` removed automatically
+- All requests use `Bearer` authentication
+- POST `/chat/completions` is used for chat
+- POST `/embeddings` is used for embeddings
 
-#### 匹配度算法
+#### Fit Scoring Algorithm
 
-**公式**：
+**Formula**:
 ```
-整体匹配度 = 关键词匹配 × 40% + 语义相似度 × 60%
+overall_fit_score = keyword_match_score × 40% + semantic_similarity_score × 60%
 ```
 
-**关键词匹配**：
-- 在职位描述中查找预定义关键词列表
-- 计算匹配比例 (0-100)
-- 对职位标题做额外加成（如包含 "product" 且经验有 "product"）
+**Keyword match**:
+- Searches the job description for a predefined keyword list
+- Computes match ratio (0–100)
+- Adds extra weight when title and experience both contain certain keywords (for example, “product”)
 
-**语义相似度**：
-- 使用 `text-embedding-3-small` 生成向量
-- 使用余弦相似度计算 (0-1)
-- 映射到 0-100 分
+**Semantic similarity**:
+- Uses `text-embedding-3-small` to generate embeddings
+- Computes cosine similarity (0–1)
+- Maps similarity to a 0–100 score
 
-**关键词列表**：
+**Keyword list**:
 python, javascript, node.js, node, react, tensorflow, pytorch, sql, postgresql, aws, docker, kubernetes, agile, scrum, kanban, product, product management, data analysis, machine learning, ml, nlp, natural language processing, computer vision
 
-### 求职信生成
+### Cover Letter Generation
 
-**生成逻辑**：
-- 系统提示：职业教练角色
-- 用户提示包含：
-  - 职位名称和公司
-  - 岗位关键信息（JD）
-  - 简历亮点（摘要 + 核心技能）
-  - 匹配度分数
-  - 公司调研信息（如有）
-- 要求：中文、3-5 段、<400 字、强调 AI、产品思维、跨职能沟通
+**Generation logic**:
+- System prompt: act as a career coach
+- User prompt includes:
+  - Job title and company
+  - Key information from the JD
+  - Resume highlights (summary + core skills)
+  - Fit score
+  - Company research data (if available)
+- Requirements: Chinese output, 3–5 paragraphs, <400 Chinese characters, emphasize AI, product thinking, and cross-functional communication
 
-**示例输出风格**：
+**Example style**:
 ```
 尊敬的招聘经理：
 
@@ -375,155 +382,155 @@ python, javascript, node.js, node, react, tensorflow, pytorch, sql, postgresql, 
 [姓名]
 ```
 
-### 常见任务示例
+### Common Workflows
 
-#### 场景 1: 首次部署
+#### Scenario 1: First Deployment
 
 ```bash
-# 1. 克隆项目
+# 1. Clone the project
 git clone <repo>
 cd job-hunter
 
-# 2. 安装依赖
+# 2. Install dependencies
 npm install
 
-# 3. 配置环境
+# 3. Configure environment
 cp .env.example .env
-# 编辑 .env，填入 API Key 等
+# Edit .env and fill in API keys, etc.
 
-# 4. 启动服务
+# 4. Start the server
 npm start
 
-# 5. 添加简历（通过数据库或管理面板 API）
-# 6. 上传/导入职位数据
-# 7. 运行分析
-# 8. 查看结果
+# 5. Add resumes (via DB or admin API)
+# 6. Upload/import job data
+# 7. Run analysis
+# 8. View results
 ```
 
-#### 场景 2: 日常使用
+#### Scenario 2: Day-to-Day Use
 
 ```bash
-# 1. 启动服务
+# 1. Start the server
 npm start
 
-# 2. 等待分析完成（或手动触发）
+# 2. Wait for analysis to complete (or trigger it)
 curl -X POST "http://localhost:3001/admin/run?token=job-hunter-admin-2026"
 
-# 3. 访问 http://localhost:3001/jobs 浏览职位
-# 4. 在详情页查看匹配度和求职信
+# 3. Visit http://localhost:3001/jobs to browse jobs
+# 4. Open detail pages to see fit scores and cover letters
 ```
 
-#### 场景 3: 数据更新
+#### Scenario 3: Updating Data
 
 ```bash
-# 方式 A: 爬取新职位
-npm run scrape:apsjobs -- --keywords "AI,数据分析" --maxPages 5
+# Option A: Scrape new jobs
+npm run scrape:apsjobs -- --keywords "AI,data analysis" --maxPages 5
 
-# 方式 B: 上传 JSON
+# Option B: Upload JSON
 curl -X POST http://localhost:3001/admin/upload \
   -H "Content-Type: application/json" \
   -d @new-jobs.json
 
-# 方式 C: 重新运行分析
-# 在管理面板点击按钮或调用 API
+# Option C: Re-run analysis
+# Click the button in the admin dashboard or call the API
 ```
 
-## API 参考
+## API Reference
 
-### 职位相关
+### Job Endpoints
 
-**GET /jobs** - 职位列表
-- 查询参数：
-  - `role`: 角色筛选
-  - `source`: 来源筛选
-  - `minScore`: 最低匹配度
-- 返回：渲染的 HTML 页面
+**GET /jobs** – Job list
+- Query parameters:
+  - `role`: role filter
+  - `source`: source filter
+  - `minScore`: minimum fit score
+- Returns: rendered HTML page
 
-**GET /jobs/:id** - 职位详情
-- 返回：渲染的 HTML 页面
-- 包含：职位信息、匹配度、求职信、公司信息
+**GET /jobs/:id** – Job detail
+- Returns: rendered HTML page
+- Includes: job information, fit scores, cover letter, and company data
 
-### 管理相关
+### Admin Endpoints
 
-**GET /admin** - 管理面板
-- 认证：`?token=` 或 `Authorization: Bearer <token>`
-- 返回：渲染的 HTML 页面
-- 包含：统计信息、运行状态、上传表单
+**GET /admin** – Admin dashboard
+- Auth: `?token=` or `Authorization: Bearer <token>`
+- Returns: rendered HTML page
+- Includes: statistics, run status, upload form
 
-**POST /admin/run** - 触发分析
-- 认证：同上
-- 请求体：任意（可为空）
-- 返回：`{ runId: <id> }`
-- 异步执行，可在管理面板查看进度
+**POST /admin/run** – Trigger analysis
+- Auth: same as above
+- Body: any (can be empty)
+- Returns: `{ runId: <id> }`
+- Runs asynchronously; progress visible in the admin dashboard
 
-**POST /admin/upload** - 上传职位
-- 认证：同上
-- 请求体：职位对象数组或 `{ jobs: [...] }`
-- 返回：`{ inserted: <count> }`
-- 字段映射见代码中的 `mapped` 对象
+**POST /admin/upload** – Upload jobs
+- Auth: same as above
+- Body: array of job objects or `{ jobs: [...] }`
+- Returns: `{ inserted: <count> }`
+- Field mapping is defined in the code’s `mapped` object
 
-## 开发与扩展
+## Development & Extension
 
-### 添加新字段
+### Adding New Columns
 
-1. 修改迁移文件 `src/db/migrations/xxx_add_field.sql`
-2. 更新相关 repo 文件
-3. 更新服务层
-4. 更新视图模板
-5. 运行迁移（重启服务自动执行）
+1. Modify a migration file in `src/db/migrations/xxx_add_field.sql`
+2. Update the relevant repo files
+3. Update the service layer
+4. Update view templates
+5. Run migrations (restart the server to auto-run)
 
-### 自定义评分算法
+### Customizing the Scoring Algorithm
 
-编辑 `src/services/scoringService.js`：
+Edit `src/services/scoringService.js`:
 
 ```javascript
-// 调整权重
+// Adjust weights
 const KEYWORD_WEIGHT = 0.4;
 const EMBEDDING_WEIGHT = 0.6;
 
-// 添加自定义关键词
+// Add your own keywords
 const KNOWN_KEYWORDS = [...your_keywords];
 
-// 修改评分逻辑
+// Customize scoring logic
 function scoreJobAgainstResume(job, resume) {
-  // 自定义实现
+  // Custom implementation
 }
 ```
 
-### 添加新爬虫
+### Adding a New Scraper
 
-1. 在 `src/scrapers/` 创建新文件
-2. 实现 `main()` 或导出函数
-3. 在 `package.json` 添加 npm script
-4. 参考 `apsjobsScraper.js` 的模式
+1. Create a new file under `src/scrapers/`
+2. Implement `main()` or export a function
+3. Add an npm script in `package.json`
+4. Use `apsjobsScraper.js` as a reference
 
-### 前端自定义
+### Frontend Customization
 
-**CSS**: 编辑 `public/css/main.css`
-- 主题颜色在 `:root` 中定义
-- 卡片样式：`.glass-card`
-- 按钮样式：`.btn`
+**CSS**: edit `public/css/main.css`
+- Theme colors are defined under `:root`
+- Card styles: `.glass-card`
+- Button styles: `.btn`
 
-**JavaScript**: 编辑 `public/js/main.js` 或 `admin.js`
-- Tab 切换逻辑已封装
-- 评分颜色分类函数可用
+**JavaScript**: edit `public/js/main.js` or `admin.js`
+- Tab switching logic is already encapsulated
+- Fit-score color classification helpers are available
 
-### 数据库操作
+### Database Operations
 
-使用内置的 repo 函数：
+Use the built-in repository helpers:
 
 ```javascript
 const { getJobById, getJobsWithScore } = require('./src/repositories/jobsRepo');
 const { insertManyJobs } = require('./src/repositories/jobsRepo');
 
-// 查询
+// Query
 const jobs = getJobsWithScore({ role: 'AI Engineer', minScore: 70 });
 
-// 插入
+// Insert
 insertManyJobs([...jobObjects]);
 ```
 
-**直接操作**：
+**Direct access**:
 
 ```javascript
 const { getDb } = require('./src/db/connection');
@@ -532,70 +539,70 @@ const db = getDb();
 const result = db.prepare('SELECT * FROM jobs WHERE id = ?').get(id);
 ```
 
-## 故障排除
+## Troubleshooting
 
-### 常见问题
+### Common Issues
 
-**Q: 求职信显示"未配置 OpenAI API"**
-- 检查 `.env` 中的 `OPENAI_API_KEY`
-- 确认 API Key 有效且有额度
-- 检查 `OPENAI_BASE_URL` 是否可访问
+**Q: Cover letter shows “OpenAI API not configured”**
+- Check `OPENAI_API_KEY` in `.env`
+- Confirm the API key is valid and has quota
+- Verify that `OPENAI_BASE_URL` is reachable
 
-**Q: 匹配度始终为 0 或未计算**
-- 运行管理面板的"运行分析"
-- 检查是否有简历数据
-- 检查 `.env` 中的 API 配置
+**Q: Fit scores are always 0 or missing**
+- Run “Run Analysis” from the admin dashboard
+- Confirm at least one resume exists
+- Check API configuration in `.env`
 
-**Q: 爬虫无法获取数据**
-- APSJobs 网站结构可能已变化
-- 检查网络连接和防火墙
-- 尝试减少 `--maxPages` 参数
-- 手动访问目标网站确认可用性
+**Q: Scraper cannot fetch data**
+- APSJobs structure may have changed
+- Check network connectivity and firewalls
+- Try reducing `--maxPages`
+- Manually open the site in a browser to confirm availability
 
-**Q: 数据库错误**
-- 检查 `data/` 目录权限
-- 确认 `better-sqlite3` 安装成功
-- 如需迁移：删除旧的 `.sqlite` 文件并重启
+**Q: Database errors**
+- Check permissions on the `data/` directory
+- Confirm `better-sqlite3` installed correctly
+- If necessary: delete the old `.sqlite` file and restart
 
-**Q: 端口被占用**
-- 修改 `.env` 中的 `PORT`
-- 或使用 `kill -9 $(lsof -t -i:3001)` 终止进程
+**Q: Port already in use**
+- Change `PORT` in `.env`
+- Or run `kill -9 $(lsof -t -i:3001)` to terminate the process
 
-### 调试技巧
+### Debugging Tips
 
-1. **查看日志**：
+1. **View logs**:
    ```bash
    npm start 2>&1 | tee app.log
    ```
 
-2. **检查数据库**：
+2. **Inspect the database**:
    ```bash
    sqlite3 data/job-hunter.sqlite
    sqlite> SELECT COUNT(*) FROM jobs;
    sqlite> SELECT * FROM job_fit_scores LIMIT 5;
    ```
 
-3. **测试 API**：
+3. **Test endpoints**:
    ```bash
    curl http://localhost:3001/jobs
    curl http://localhost:3001/admin?token=job-hunter-admin-2026
    ```
 
-4. **验证环境变量**：
+4. **Verify environment variables**:
    ```bash
    node -e "console.log(process.env.OPENAI_API_KEY ? 'OK' : 'MISSING')"
    ```
 
-### 性能优化
+### Performance Tuning
 
-- **数据库索引**：已创建（见迁移文件）
-- **批量插入**：使用 `db.transaction()`（已在爬虫中使用）
-- **异步分析**：使用 `setImmediate` 后台执行
-- **缓存思考**：可在 `openAIClient.js` 添加响应缓存
+- **DB indexes**: Already created (see migration files)
+- **Bulk inserts**: Use `db.transaction()` (already used in scraper)
+- **Async analysis**: Uses `setImmediate` to run in the background
+- **Caching ideas**: You can add response caching in `openAIClient.js`
 
-## 部署建议
+## Deployment
 
-### 生产环境配置
+### Production Environment Example
 
 ```bash
 # .env.production
@@ -605,7 +612,7 @@ OPENAI_API_KEY=<secure-key>
 ADMIN_TOKEN=<random-secure-token>
 ```
 
-### 使用 PM2
+### Using PM2
 
 ```bash
 npm install -g pm2
@@ -613,7 +620,7 @@ pm2 start src/server.js --name job-hunter --env production
 pm2 save
 ```
 
-### Docker（推荐）
+### Docker (Recommended)
 
 ```dockerfile
 FROM node:18-alpine
@@ -626,36 +633,37 @@ EXPOSE 3001
 CMD ["npm", "start"]
 ```
 
-### 安全提示
+### Security Notes
 
-- **更改 ADMIN_TOKEN**：使用强随机字符串
-- **HTTPS**：生产环境必用
-- **防火墙**：仅暴露必要端口
-- **API Key**：不要提交到版本控制
-- **数据备份**：定期备份 `data/` 目录
+- **Change `ADMIN_TOKEN`**: Use a strong random string
+- **HTTPS**: Required for production
+- **Firewall**: Expose only necessary ports
+- **API keys**: Never commit them to version control
+- **Backups**: Regularly back up the `data/` directory
 
-## 贡献与扩展
+## Contributing
 
-这个项目仍在积极开发中。欢迎通过以下方式贡献：
+This project is under active development. Contributions are welcome:
 
-- 反馈使用体验
-- 报告 bug
-- 提交新的爬虫适配器
-- 改进 UI/UX
-- 优化匹配算法
+- Share usage feedback
+- Report bugs
+- Add new scraper adapters
+- Improve UI/UX
+- Optimize the matching algorithm
 
-## 许可证
+## License
 
-MIT License - 详见 LICENSE 文件（如有）
+MIT License – see LICENSE file (if present).
 
 ---
 
-**注意**：这是一个实验性项目，用于学习和演示目的。生产环境使用前请充分测试并根据需求调整安全性配置。
+**Note**: This is an experimental project intended for learning and demonstration. Thoroughly test and harden the system before any production use.
 
-## 联系与支持
+## Support
 
-如有问题，请查看：
-- 项目代码注释
-- 管理面板中的提示信息
-- 浏览器开发者工具控制台
-- 服务器日志输出
+If you run into issues, check:
+- Code comments in the project
+- Messages and hints in the admin dashboard
+- Browser developer tools console
+- Server logs
+

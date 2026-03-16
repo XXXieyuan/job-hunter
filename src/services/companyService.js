@@ -33,7 +33,7 @@ async function summarizeCompany(name, htmlSnippet) {
     },
   ];
 
-  const content = await chatCompletion(messages, { max_tokens: 300 });
+  const content = await chatCompletion(messages, { max_tokens: 1500 });
   return content || '信息暂无';
 }
 
@@ -72,4 +72,3 @@ async function ensureCompanyForJob(job) {
 module.exports = {
   ensureCompanyForJob,
 };
-

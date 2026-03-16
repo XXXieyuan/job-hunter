@@ -9,6 +9,14 @@ function hasOpenAIKey() {
   return !!OPENAI_API_KEY;
 }
 
+function stripThinkTags(content) {
+  if (typeof content !== 'string') {
+    return content;
+  }
+  const stripped = content.replace(/<think>[\s\S]*?<\/think>/g, '');
+  return stripped.trim();
+}
+
 async function callOpenAI(path, body) {
   if (!OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is not set');
@@ -52,12 +60,14 @@ async function chatCompletion(messages, opts = {}) {
     model: opts.model || OPENAI_CHAT_MODEL,
     messages,
     temperature: opts.temperature ?? 0.6,
-    max_tokens: opts.max_tokens ?? 800,
+    max_tokens: opts.max_tokens ?? 4096,
   });
   const choice = json.choices && json.choices[0];
-  return choice && choice.message && choice.message.content
-    ? choice.message.content.trim()
-    : null;
+  if (!choice || !choice.message || !choice.message.content) {
+    return null;
+  }
+  const content = choice.message.content.trim();
+  return stripThinkTags(content);
 }
 
 module.exports = {
@@ -65,4 +75,3 @@ module.exports = {
   getEmbedding,
   chatCompletion,
 };
-

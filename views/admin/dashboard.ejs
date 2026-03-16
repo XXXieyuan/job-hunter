@@ -84,6 +84,77 @@
         <button type="submit" class="btn btn-secondary">上传职位数据</button>
       </form>
       <p id="upload-status" class="muted small"></p>
+
+      <hr class="section-divider" />
+
+      <h3 class="section-title small">通过文件上传职位 JSON</h3>
+      <p class="muted small">
+        选择本地 JSON 文件上传，文件内容格式与上方文本框一致（职位数组或包含 jobs 数组的对象）。
+      </p>
+      <form
+        id="upload-file-form"
+        class="mt"
+        action="/admin/jobs/upload?token=job-hunter-admin-2026"
+        method="POST"
+        enctype="multipart/form-data"
+      >
+        <input type="file" name="jobFile" accept="application/json" />
+        <button type="submit" class="btn btn-secondary">上传职位 JSON 文件</button>
+      </form>
+    </section>
+
+    <section class="glass-card stat-card">
+      <h2 class="section-title">Scraper 控制</h2>
+      <p class="muted">
+        触发 APSJobs 抓取任务，将最新职位数据写入数据库。运行在后台执行，不会阻塞管理界面。
+      </p>
+
+      <button id="trigger-scraper-btn" class="btn btn-secondary run-btn">触发 APSJobs 抓取</button>
+      <p id="scraper-status" class="muted small run-status"></p>
+
+      <h3 class="mt">最近抓取运行</h3>
+      <div class="table-wrapper">
+        <table class="table small" id="scraper-runs-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>抓取器</th>
+              <th>状态</th>
+              <th>开始时间</th>
+              <th>结束时间</th>
+              <th>新增职位</th>
+              <th>错误信息</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!scraperRuns || !scraperRuns.length) { %>
+            <tr>
+              <td colspan="7" class="muted">暂无抓取记录。</td>
+            </tr>
+            <% } else { %>
+            <% scraperRuns.forEach(function(run){ %>
+            <tr data-run-id="<%= run.id %>">
+              <td><%= run.id %></td>
+              <td><%= run.scraper_name %></td>
+              <td>
+                <% if (run.status === 'running' || run.status === 'queued') { %>
+                <span class="status-pill status-running"><%= run.status %></span>
+                <% } else if (run.status === 'success') { %>
+                <span class="status-pill status-success">成功</span>
+                <% } else { %>
+                <span class="status-pill status-failed">失败</span>
+                <% } %>
+              </td>
+              <td><%= run.started_at || '-' %></td>
+              <td><%= run.finished_at || '-' %></td>
+              <td><%= typeof run.jobs_added === 'number' ? run.jobs_added : '-' %></td>
+              <td class="small"><%= run.error_message || '-' %></td>
+            </tr>
+            <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
     </section>
   </div>
 </section>

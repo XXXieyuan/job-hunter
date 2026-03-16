@@ -38,6 +38,25 @@ function insertManyJobs(jobs) {
   insertMany(jobs);
 }
 
+function upsertManyJobs(jobs) {
+  const db = getDbInstance();
+  const upsert = db.prepare(
+    `INSERT OR REPLACE INTO jobs (
+      external_id, source, role, title, company_name, location, salary,
+      description, url, posted_at, application_status, raw_json
+    ) VALUES (
+      @external_id, @source, @role, @title, @company_name, @location, @salary,
+      @description, @url, @posted_at, @application_status, @raw_json
+    )`
+  );
+  const upsertTx = db.transaction((rows) => {
+    for (const row of rows) {
+      upsert.run(row);
+    }
+  });
+  upsertTx(jobs);
+}
+
 function getJobById(id) {
   const db = getDbInstance();
   return db.prepare('SELECT * FROM jobs WHERE id = ?').get(id);
@@ -92,8 +111,8 @@ function getJobCounts() {
 module.exports = {
   insertJob,
   insertManyJobs,
+  upsertManyJobs,
   getJobById,
   getJobsWithScore,
   getJobCounts,
 };
-

@@ -1,67 +1,98 @@
 <% layout('layout') -%>
 
-<section class="page-section admin-section">
+<section
+  class="page-section admin-section"
+  id="admin-root"
+  data-admin-token="<%= typeof adminToken !== 'undefined' ? adminToken : '' %>"
+>
   <div class="section-header admin-header">
-    <h1>管理面板</h1>
-    <p class="section-subtitle">运行分析、上传职位数据，并查看整体求职匹配统计。</p>
+    <h1><%= t('admin.dashboard.title', '管理面板') %></h1>
+    <p class="section-subtitle">
+      <%= t(
+        'admin.dashboard.subtitle',
+        '运行分析、上传职位数据，并查看整体求职匹配统计。'
+      ) %>
+    </p>
   </div>
 
   <div class="admin-grid stats-grid">
-    <section class="glass-card stat-card">
-      <h2 class="section-title">运行状态</h2>
+    <section
+      class="glass-card stat-card"
+      id="analysis-section"
+      data-i18n-triggering="<%= t('admin.analysis.status.triggering', '正在触发分析，请稍候…') %>"
+      data-i18n-started-with-id="<%= t('admin.analysis.status.startedWithId', '分析已启动，运行 ID：{runId}。请稍后刷新查看结果。') %>"
+      data-i18n-started="<%= t('admin.analysis.status.started', '分析已启动，请稍后刷新查看结果。') %>"
+      data-i18n-trigger-failed-prefix="<%= t('admin.analysis.error.triggerFailedPrefix', '触发分析失败：') %>"
+      data-i18n-network-error="<%= t('admin.analysis.error.network', '触发分析失败：网络错误或服务器不可用。') %>"
+    >
+      <h2 class="section-title"><%= t('admin.analysis.title', '运行状态') %></h2>
       <% if (!lastRun) { %>
-      <p>尚未运行过分析。</p>
+      <p><%= t('admin.analysis.none', '尚未运行过分析。') %></p>
       <% } else { %>
       <p>
-        最近一次运行 ID：<span class="tag"><%= lastRun.id %></span>
+        <%= t('admin.analysis.lastRunId', '最近一次运行 ID：') %><span class="tag"><%= lastRun.id %></span>
       </p>
       <p>
-        状态：
+        <%= t('admin.analysis.statusLabel', '状态：') %>
         <% if (lastRun.status === 'running') { %>
-        <span class="status-pill status-running">运行中</span>
+        <span class="status-pill status-running">
+          <%= t('admin.analysis.status.running', '运行中') %>
+        </span>
         <% } else if (lastRun.status === 'completed') { %>
-        <span class="status-pill status-success">完成</span>
+        <span class="status-pill status-success">
+          <%= t('admin.analysis.status.completed', '完成') %>
+        </span>
         <% } else { %>
-        <span class="status-pill status-failed">失败</span>
+        <span class="status-pill status-failed">
+          <%= t('admin.analysis.status.failed', '失败') %>
+        </span>
         <% } %>
       </p>
       <% if (lastRun.error) { %>
-      <p class="muted">错误信息：<%= lastRun.error %></p>
+      <p class="muted">
+        <%= t('admin.analysis.errorLabel', '错误信息：') %><%= lastRun.error %>
+      </p>
       <% } %>
       <% } %>
 
-      <button id="run-analysis-btn" class="btn btn-primary run-btn">运行分析</button>
+      <button id="run-analysis-btn" class="btn btn-primary run-btn">
+        <%= t('admin.analysis.runButton', '运行分析') %>
+      </button>
       <p id="run-analysis-status" class="muted small run-status"></p>
     </section>
 
     <section class="glass-card stat-card">
-      <h2 class="section-title">数据统计</h2>
+      <h2 class="section-title"><%= t('admin.stats.title', '数据统计') %></h2>
       <ul class="stats-list">
         <li>
-          <span>职位总数</span>
+          <span><%= t('admin.stats.jobsTotal', '职位总数') %></span>
           <span class="stat-value"><%= jobCounts.total %></span>
         </li>
         <li>
-          <span>已打分职位数</span>
+          <span><%= t('admin.stats.jobsWithScore', '已打分职位数') %></span>
           <span class="stat-value"><%= jobCounts.withScore %></span>
         </li>
         <li>
-          <span>匹配记录总数</span>
+          <span><%= t('admin.stats.fitTotal', '匹配记录总数') %></span>
           <span class="stat-value"><%= fitStats.total %></span>
         </li>
         <li>
-          <span>平均匹配度</span>
+          <span><%= t('admin.stats.fitAverage', '平均匹配度') %></span>
           <span class="stat-value"><%= fitStats.avg.toFixed(1) %>%</span>
         </li>
       </ul>
-      <h3 class="mt">高匹配职位数（按角色）</h3>
+      <h3 class="mt">
+        <%= t('admin.stats.highFitPerRole', '高匹配职位数（按角色）') %>
+      </h3>
       <ul class="stats-list">
         <% if (!fitStats.highFitPerRole.length) { %>
-        <li><span class="muted">暂无数据</span></li>
+        <li>
+          <span class="muted"><%= t('admin.stats.empty', '暂无数据') %></span>
+        </li>
         <% } else { %>
         <% fitStats.highFitPerRole.forEach(function(r){ %>
         <li>
-          <span><%= r.role || '未知角色' %></span>
+          <span><%= r.role || t('admin.stats.unknownRole', '未知角色') %></span>
           <span><%= r.count %></span>
         </li>
         <% }) %>
@@ -70,26 +101,38 @@
     </section>
 
     <section class="glass-card admin-section">
-      <h2 class="section-title">上传职位数据</h2>
+      <h2 class="section-title"><%= t('admin.upload.title', '上传职位数据') %></h2>
       <p class="muted">
-        接受 JSON 格式，内容为职位对象数组：包含 title, company_name, description, role, url,
-        location, salary 等字段。
+        <%= t(
+          'admin.upload.description',
+          '接受 JSON 格式，内容为职位对象数组：包含 title, company_name, description, role, url, location, salary 等字段。'
+        ) %>
       </p>
       <form id="upload-form">
         <textarea
           id="upload-json"
           rows="8"
-          placeholder='[{"title":"Senior AI Engineer", "company_name":"示例公司", "description":"...", "role":"AI Engineer"}]'
+          placeholder='<%= t(
+            "admin.upload.placeholder",
+            "[{\"title\":\"Senior AI Engineer\", \"company_name\":\"示例公司\", \"description\":\"...\", \"role\":\"AI Engineer\"}]"
+          ) %>'
         ></textarea>
-        <button type="submit" class="btn btn-secondary">上传职位数据</button>
+        <button type="submit" class="btn btn-secondary">
+          <%= t('admin.upload.submit', '上传职位数据') %>
+        </button>
       </form>
       <p id="upload-status" class="muted small"></p>
 
       <hr class="section-divider" />
 
-      <h3 class="section-title small">通过文件上传职位 JSON</h3>
+      <h3 class="section-title small">
+        <%= t('admin.upload.file.title', '通过文件上传职位 JSON') %>
+      </h3>
       <p class="muted small">
-        选择本地 JSON 文件上传，文件内容格式与上方文本框一致（职位数组或包含 jobs 数组的对象）。
+        <%= t(
+          'admin.upload.file.description',
+          '选择本地 JSON 文件上传，文件内容格式与上方文本框一致（职位数组或包含 jobs 数组的对象）。'
+        ) %>
       </p>
       <form
         id="upload-file-form"
@@ -99,37 +142,98 @@
         enctype="multipart/form-data"
       >
         <input type="file" name="jobFile" accept="application/json" />
-        <button type="submit" class="btn btn-secondary">上传职位 JSON 文件</button>
+        <button type="submit" class="btn btn-secondary">
+          <%= t('admin.upload.file.submit', '上传职位 JSON 文件') %>
+        </button>
       </form>
     </section>
 
-    <section class="glass-card stat-card">
-      <h2 class="section-title">Scraper 控制</h2>
+    <section
+      class="glass-card stat-card"
+      id="scraper-section"
+      data-i18n-triggering="<%= t('admin.scraper.status.triggering', '正在触发抓取，请稍候…') %>"
+      data-i18n-started-with-id="<%= t('admin.scraper.status.startedWithId', '抓取已启动，运行 ID：{runId}。') %>"
+      data-i18n-started="<%= t('admin.scraper.status.started', '抓取已启动。') %>"
+      data-i18n-empty-runs="<%= t('admin.scraper.empty', '暂无抓取记录。') %>"
+      data-i18n-trigger-failed-prefix="<%= t('admin.scraper.error.triggerFailedPrefix', '触发抓取失败：') %>"
+      data-i18n-network-error="<%= t('admin.scraper.error.network', '触发抓取失败：网络错误或服务器不可用。') %>"
+      data-i18n-status-running="<%= t('admin.scraper.status.running', '运行中') %>"
+      data-i18n-status-queued="<%= t('admin.scraper.status.queued', '排队中') %>"
+      data-i18n-status-success="<%= t('admin.scraper.status.success', '成功') %>"
+      data-i18n-status-failure="<%= t('admin.scraper.status.failure', '失败') %>"
+      data-i18n-status-unknown="<%= t('admin.scraper.status.unknown', '未知') %>"
+    >
+      <h2 class="section-title"><%= t('admin.scraper.title', 'Scraper 控制') %></h2>
       <p class="muted">
-        触发 APSJobs 抓取任务，将最新职位数据写入数据库。运行在后台执行，不会阻塞管理界面。
+        <%= t(
+          'admin.scraper.description',
+          '触发 APSJobs 抓取任务，将最新职位数据写入数据库。运行在后台执行，不会阻塞管理界面。'
+        ) %>
       </p>
 
-      <button id="trigger-scraper-btn" class="btn btn-secondary run-btn">触发 APSJobs 抓取</button>
+      <div class="form-grid small-gap">
+        <div class="form-group">
+          <label class="small" for="scraper-keywords">
+            <%= t('admin.scraper.options.keywords', '关键字（逗号分隔）') %>
+          </label>
+          <input
+            id="scraper-keywords"
+            type="text"
+            class="input"
+            placeholder="<%= t('admin.scraper.options.keywords.placeholder', '例如：Data,Engineer') %>"
+          />
+        </div>
+        <div class="form-group">
+          <label class="small" for="scraper-region">
+            <%= t('admin.scraper.options.region', '地区/区域') %>
+          </label>
+          <input
+            id="scraper-region"
+            type="text"
+            class="input"
+            placeholder="<%= t('admin.scraper.options.region.placeholder', '例如：Canberra,ACT') %>"
+          />
+        </div>
+        <div class="form-group">
+          <label class="small" for="scraper-max-pages">
+            <%= t('admin.scraper.options.maxPages', '最大页数') %>
+          </label>
+          <input
+            id="scraper-max-pages"
+            type="number"
+            min="1"
+            step="1"
+            class="input"
+            placeholder="<%= t('admin.scraper.options.maxPages.placeholder', '例如：3') %>"
+          />
+        </div>
+      </div>
+
+      <button id="trigger-scraper-btn" class="btn btn-secondary run-btn">
+        <%= t('admin.scraper.button.trigger', '触发 APSJobs 抓取') %>
+      </button>
       <p id="scraper-status" class="muted small run-status"></p>
 
-      <h3 class="mt">最近抓取运行</h3>
+      <h3 class="mt"><%= t('admin.scraper.recentRuns', '最近抓取运行') %></h3>
       <div class="table-wrapper">
         <table class="table small" id="scraper-runs-table">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>抓取器</th>
-              <th>状态</th>
-              <th>开始时间</th>
-              <th>结束时间</th>
-              <th>新增职位</th>
-              <th>错误信息</th>
+              <th><%= t('admin.scraper.table.header.id', 'ID') %></th>
+              <th><%= t('admin.scraper.table.header.scraper', '抓取器') %></th>
+              <th><%= t('admin.scraper.table.header.status', '状态') %></th>
+              <th><%= t('admin.scraper.table.header.startedAt', '开始时间') %></th>
+              <th><%= t('admin.scraper.table.header.finishedAt', '结束时间') %></th>
+              <th><%= t('admin.scraper.table.header.jobsAdded', '新增职位') %></th>
+              <th><%= t('admin.scraper.table.header.errorMessage', '错误信息') %></th>
             </tr>
           </thead>
           <tbody>
             <% if (!scraperRuns || !scraperRuns.length) { %>
             <tr>
-              <td colspan="7" class="muted">暂无抓取记录。</td>
+              <td colspan="7" class="muted">
+                <%= t('admin.scraper.empty', '暂无抓取记录。') %>
+              </td>
             </tr>
             <% } else { %>
             <% scraperRuns.forEach(function(run){ %>
@@ -140,9 +244,13 @@
                 <% if (run.status === 'running' || run.status === 'queued') { %>
                 <span class="status-pill status-running"><%= run.status %></span>
                 <% } else if (run.status === 'success') { %>
-                <span class="status-pill status-success">成功</span>
+                <span class="status-pill status-success">
+                  <%= t('admin.scraper.status.success', '成功') %>
+                </span>
                 <% } else { %>
-                <span class="status-pill status-failed">失败</span>
+                <span class="status-pill status-failed">
+                  <%= t('admin.scraper.status.failure', '失败') %>
+                </span>
                 <% } %>
               </td>
               <td><%= run.started_at || '-' %></td>

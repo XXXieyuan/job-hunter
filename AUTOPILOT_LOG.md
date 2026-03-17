@@ -181,3 +181,7 @@ The Planner (kind-prairie) produced a comprehensive 4-phase plan. I have auto-ap
 - Commit: c992e1c chore: commit remaining autopilot changes
 - Files included: 18 files (migrations, locales, views, CSS, JS, and logs)
 - Push: SUCCESS to origin/main
+
+### [00:16] Bug Report: favicon.ico 401 Unauthorized
+- Issue: adminRoutes middleware requireAdmin is applied to all routes, causing 401 for favicon.ico requests
+- Need to fix by restricting requireAdmin to only /admin paths

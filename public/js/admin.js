@@ -27,7 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const scraperProgressMessage = document.getElementById('scraper-progress-message');
 
   let scraperEventSource = null;
-  const scraperStreamEvents = new EventTarget();
 
   const analysisTexts = analysisSection
     ? {
@@ -67,6 +66,9 @@ document.addEventListener('DOMContentLoaded', () => {
         started:
           scraperSection.dataset.i18nStarted ||
           '抓取已启动。',
+        triggerButtonTemplate:
+          scraperSection.dataset.i18nTriggerButtonTemplate ||
+          '触发 {source} 抓取',
         emptyRuns:
           scraperSection.dataset.i18nEmptyRuns ||
           '暂无抓取记录。',
@@ -104,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
         triggering: '正在触发抓取，请稍候…',
         startedWithId: '抓取已启动，运行 ID：{runId}。',
         started: '抓取已启动。',
+        triggerButtonTemplate: '触发 {source} 抓取',
         emptyRuns: '暂无抓取记录。',
         triggerFailedPrefix: '触发抓取失败：',
         networkError: '触发抓取失败：网络错误或服务器不可用。',
@@ -117,6 +120,30 @@ document.addEventListener('DOMContentLoaded', () => {
           unknown: '未知',
         },
       };
+
+  function getSelectedScraperLabel() {
+    if (!scraperSourceInput) {
+      return 'APSJobs';
+    }
+
+    const selectedOption = scraperSourceInput.options[scraperSourceInput.selectedIndex];
+    if (selectedOption && selectedOption.textContent) {
+      return selectedOption.textContent.trim() || 'APSJobs';
+    }
+
+    return scraperSourceInput.value || 'APSJobs';
+  }
+
+  function syncScraperButtonLabel() {
+    if (!scraperBtn) {
+      return;
+    }
+
+    scraperBtn.textContent = scraperTexts.triggerButtonTemplate.replace(
+      '{source}',
+      getSelectedScraperLabel(),
+    );
+  }
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => {
@@ -276,17 +303,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     upsertScraperRunRow(snapshot);
     renderScraperProgress(snapshot);
+  }
 
-    const eventName =
-      snapshot.status === 'completed' || snapshot.status === 'failed'
-        ? 'complete'
-        : 'progress';
+  syncScraperButtonLabel();
 
-    scraperStreamEvents.dispatchEvent(
-      new CustomEvent(eventName, {
-        detail: snapshot,
-      }),
-    );
+  if (scraperSourceInput) {
+    scraperSourceInput.addEventListener('change', syncScraperButtonLabel);
   }
 
   if (runBtn && runStatus) {
@@ -401,6 +423,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const snapshot = parseSnapshot(event);
       if (snapshot) {
         handleScraperSnapshot(snapshot);
+        if (scraperStatus) {
+          if (snapshot.status === 'failed') {
+            scraperStatus.textContent =
+              snapshot.error_message || getScraperStatusLabel(snapshot.status);
+            scraperStatus.classList.add('error-message');
+          } else {
+            scraperStatus.classList.remove('error-message');
+            scraperStatus.textContent =
+              typeof snapshot.jobs_added === 'number'
+                ? `${getScraperStatusLabel(snapshot.status)}，新增职位：${snapshot.jobs_added}`
+                : getScraperStatusLabel(snapshot.status);
+          }
+        }
       }
 
       closeScraperEventSource();
@@ -431,36 +466,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     };
   }
-
-  scraperStreamEvents.addEventListener('progress', (event) => {
-    const snapshot = event.detail;
-    if (!snapshot || !scraperStatus) {
-      return;
-    }
-
-    if (snapshot.progress && snapshot.progress.message) {
-      scraperStatus.textContent = snapshot.progress.message;
-    }
-  });
-
-  scraperStreamEvents.addEventListener('complete', (event) => {
-    const snapshot = event.detail;
-    if (!snapshot || !scraperStatus) {
-      return;
-    }
-
-    if (snapshot.status === 'failed') {
-      scraperStatus.textContent = snapshot.error_message || getScraperStatusLabel(snapshot.status);
-      scraperStatus.classList.add('error-message');
-      return;
-    }
-
-    scraperStatus.classList.remove('error-message');
-    scraperStatus.textContent =
-      typeof snapshot.jobs_added === 'number'
-        ? `${getScraperStatusLabel(snapshot.status)}，新增职位：${snapshot.jobs_added}`
-        : getScraperStatusLabel(snapshot.status);
-  });
 
   if (scraperBtn && scraperStatus) {
     scraperBtn.addEventListener('click', async () => {

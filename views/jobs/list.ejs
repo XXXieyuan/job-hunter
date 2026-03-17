@@ -32,6 +32,17 @@
     </div>
 
     <div class="filter-group">
+      <label><%= t('jobs.list.filter.location') %></label>
+      <input
+        type="text"
+        name="location"
+        value="<%= filters.location || '' %>"
+        placeholder="<%= t('jobs.list.filter.placeholder.location') %>"
+        class="search-input"
+      />
+    </div>
+
+    <div class="filter-group">
       <label><%= t('jobs.list.filter.minScore') %></label>
       <input
         type="number"

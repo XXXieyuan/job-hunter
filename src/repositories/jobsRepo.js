@@ -75,6 +75,10 @@ function getJobsWithScore(filters = {}) {
     conditions.push('j.source = @source');
     params.source = filters.source;
   }
+  if (filters.location) {
+    conditions.push('j.location LIKE @location');
+    params.location = `%${filters.location}%`;
+  }
   if (typeof filters.minScore === 'number') {
     conditions.push('fs.overall_score >= @minScore');
     params.minScore = filters.minScore;

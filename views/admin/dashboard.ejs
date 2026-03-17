@@ -154,6 +154,7 @@
       data-i18n-triggering="<%= t('admin.scraper.status.triggering', '正在触发抓取，请稍候…') %>"
       data-i18n-started-with-id="<%= t('admin.scraper.status.startedWithId', '抓取已启动，运行 ID：{runId}。') %>"
       data-i18n-started="<%= t('admin.scraper.status.started', '抓取已启动。') %>"
+      data-i18n-trigger-button-template="<%= t('admin.scraper.button.trigger', '触发 {source} 抓取') %>"
       data-i18n-empty-runs="<%= t('admin.scraper.empty', '暂无抓取记录。') %>"
       data-i18n-trigger-failed-prefix="<%= t('admin.scraper.error.triggerFailedPrefix', '触发抓取失败：') %>"
       data-i18n-network-error="<%= t('admin.scraper.error.network', '触发抓取失败：网络错误或服务器不可用。') %>"
@@ -222,7 +223,10 @@
       </div>
 
       <button id="trigger-scraper-btn" class="btn btn-secondary run-btn">
-        <%= t('admin.scraper.button.trigger', '触发抓取') %>
+        <%= t('admin.scraper.button.trigger', '触发 {source} 抓取').replace(
+          '{source}',
+          t('admin.scraper.options.source.apsjobs', 'APSJobs')
+        ) %>
       </button>
       <p id="scraper-status" class="muted small run-status"></p>
       <div id="scraper-progress" class="scraper-progress" hidden>

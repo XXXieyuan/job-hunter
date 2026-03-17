@@ -16,11 +16,15 @@ router.get('/', (req, res) => {
 router.get('/jobs', (req, res) => {
   const role = req.query.role || '';
   const source = req.query.source || '';
-  const minScore = req.query.minScore ? Number(req.query.minScore) : undefined;
+  const location = req.query.location ? String(req.query.location).trim() : '';
+  const hasMinScore =
+    typeof req.query.minScore !== 'undefined' && String(req.query.minScore).trim() !== '';
+  const minScore = hasMinScore ? Number(req.query.minScore) : undefined;
 
   const jobs = getJobsWithScore({
     role: role || undefined,
     source: source || undefined,
+    location: location || undefined,
     minScore: Number.isFinite(minScore) ? minScore : undefined,
   });
 
@@ -35,6 +39,7 @@ router.get('/jobs', (req, res) => {
     filters: {
       role: role || undefined,
       source: source || undefined,
+      location: location || undefined,
       minScore: Number.isFinite(minScore) ? minScore : undefined,
     },
     jobsCount: jobs.length,
@@ -42,7 +47,12 @@ router.get('/jobs', (req, res) => {
 
   res.render('jobs/list', {
     jobs,
-    filters: { role, source, minScore: minScore || '' },
+    filters: {
+      role,
+      source,
+      location,
+      minScore: Number.isFinite(minScore) ? minScore : '',
+    },
     roles,
     sources,
   });

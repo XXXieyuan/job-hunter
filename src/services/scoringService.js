@@ -3,45 +3,8 @@ const { hasOpenAIKey, getEmbedding } = require('./openAIClient');
 const KEYWORD_WEIGHT = 0.4;
 const EMBEDDING_WEIGHT = 0.6;
 
-const KNOWN_KEYWORDS = [
-  'python',
-  'javascript',
-  'node.js',
-  'node',
-  'react',
-  'tensorflow',
-  'pytorch',
-  'sql',
-  'postgresql',
-  'aws',
-  'docker',
-  'kubernetes',
-  'agile',
-  'scrum',
-  'kanban',
-  'product',
-  'product management',
-  'data analysis',
-  'machine learning',
-  'ml',
-  'nlp',
-  'natural language processing',
-  'computer vision',
-];
-
 function normalize(text) {
   return (text || '').toLowerCase();
-}
-
-function extractKeywordsFromText(text) {
-  const lower = normalize(text);
-  const found = new Set();
-  for (const kw of KNOWN_KEYWORDS) {
-    if (lower.includes(kw)) {
-      found.add(kw);
-    }
-  }
-  return Array.from(found);
 }
 
 function cosineSimilarity(a, b) {
@@ -60,28 +23,53 @@ function cosineSimilarity(a, b) {
 
 async function scoreJobAgainstResume(job, resume) {
   const jobText = `${job.title || ''}\n${job.description || ''}`;
-  const resumeSkills = resume.skills_json ? JSON.parse(resume.skills_json) : [];
+  let resumeSkills = [];
+  try {
+    resumeSkills = resume.skills_json ? JSON.parse(resume.skills_json) : [];
+  } catch {
+    resumeSkills = [];
+  }
+  if (!Array.isArray(resumeSkills)) {
+    resumeSkills = [];
+  }
+
+  // Normalize skills into a flat list of non-empty strings
+  const normalizedSkills = resumeSkills
+    .map((s) => {
+      if (!s) return null;
+      if (typeof s === 'string') return s.trim();
+      if (typeof s === 'object') {
+        if (s.name) return String(s.name).trim();
+        if (s.skill) return String(s.skill).trim();
+      }
+      return null;
+    })
+    .filter((s) => s && s.length > 0);
+
   const experience = resume.experience_json ? JSON.parse(resume.experience_json) : [];
   const experienceText = experience
     .map((e) => `${e.title || ''} ${e.company || ''} ${e.description || ''}`)
     .join('\n');
 
-  const jobKeywords = extractKeywordsFromText(jobText);
-
   const resumeTextCombined = [
     resume.summary || '',
-    Array.isArray(resumeSkills) ? resumeSkills.join(', ') : '',
+    normalizedSkills.join(', '),
     experienceText,
   ].join('\n');
 
-  const resumeKeywords = extractKeywordsFromText(resumeTextCombined);
+  const jobTextLower = normalize(jobText);
 
-  const matchedKeywords = jobKeywords.filter((kw) =>
-    resumeKeywords.includes(kw)
-  );
-  const missingSkills = jobKeywords.filter((kw) => !resumeKeywords.includes(kw));
+  const matchedKeywords = normalizedSkills.filter((kw) => {
+    const kwLower = normalize(kw);
+    return kwLower && jobTextLower.includes(kwLower);
+  });
 
-  const totalKeywords = jobKeywords.length || 1;
+  const missingSkills = normalizedSkills.filter((kw) => {
+    const kwLower = normalize(kw);
+    return kwLower && !jobTextLower.includes(kwLower);
+  });
+
+  const totalKeywords = normalizedSkills.length || 1;
   let keywordScore = (matchedKeywords.length / totalKeywords) * 100;
 
   const jobTitleNorm = normalize(job.title || '');
@@ -132,4 +120,3 @@ async function scoreJobAgainstResume(job, resume) {
 module.exports = {
   scoreJobAgainstResume,
 };
-

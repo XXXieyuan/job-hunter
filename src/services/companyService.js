@@ -1,5 +1,8 @@
 const { getCompanyByName, upsertCompany } = require('../repositories/companiesRepo');
 const { chatCompletion, hasOpenAIKey } = require('./openAIClient');
+const { getLogger } = require('../logger');
+
+const logger = getLogger('companyService');
 
 async function fetchCompanyHtml(website) {
   if (!website) return null;
@@ -8,7 +11,11 @@ async function fetchCompanyHtml(website) {
     if (!res.ok) return null;
     const text = await res.text();
     return text;
-  } catch {
+  } catch (err) {
+    logger.warn('Failed to fetch company website HTML', {
+      website,
+      error: err && err.message,
+    });
     return null;
   }
 }

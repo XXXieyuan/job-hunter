@@ -1,0 +1,208 @@
+<% layout('layout') -%>
+
+<section class="page-section">
+  <div class="section-header detail-header">
+    <a href="/resumes" class="back-link">
+      <%= t('resumes.detail.backToList', '返回简历列表') %>
+    </a>
+    <h1 class="detail-title"><%= resume.name %></h1>
+    <p class="section-subtitle detail-meta">
+      <% if (resume.is_main) { %>
+        <span class="tag status-success">
+          <%= t('resumes.detail.isMain', '主简历') %>
+        </span>
+      <% } %>
+      <span class="meta-item">
+        <%= t('resumes.detail.fileLabel', '文件:') %>
+        <%= resume.file_name || t('resumes.detail.fileFallback', '系统预设') %>
+      </span>
+      <span class="meta-item">
+        <%= t('resumes.detail.typeLabel', '类型:') %>
+        <%= resume.file_type || 'JSON' %>
+      </span>
+      <span class="meta-item">
+        <%= t('resumes.detail.uploadedAt', '上传时间:') %>
+        <%= new Date(resume.created_at).toLocaleString() %>
+      </span>
+    </p>
+  </div>
+
+  <div class="detail-grid">
+    <div class="detail-main">
+      <!-- Summary section -->
+      <section class="glass-card detail-block">
+        <h2 class="section-title">
+          <%= t('resumes.detail.summary.title', '专业摘要') %>
+        </h2>
+        <div class="content-text">
+          <p><%= resume.summary %></p>
+        </div>
+      </section>
+
+      <!-- Experience section -->
+      <section class="glass-card detail-block">
+        <h2 class="section-title">
+          <%= t('resumes.detail.experience.title', '工作经历') %>
+        </h2>
+        <% if (experience && experience.length > 0) { %>
+          <div class="experience-list">
+            <% experience.forEach(exp => { %>
+              <div class="experience-item">
+                <div class="exp-header">
+                  <h3 class="exp-title"><%= exp.title %></h3>
+                  <span class="exp-company"><%= exp.company %></span>
+                </div>
+                <div class="exp-meta">
+                  <%= exp.start_date %> - <%= exp.end_date || t('resumes.detail.untilNow', '至今') %>
+                </div>
+                <% if (exp.description) { %>
+                  <div class="exp-description">
+                    <%= exp.description %>
+                  </div>
+                <% } %>
+              </div>
+            <% }); %>
+          </div>
+        <% } else { %>
+          <p class="muted">
+            <%= t('resumes.detail.experience.empty', '未提取到工作经历。') %>
+          </p>
+        <% } %>
+      </section>
+
+      <!-- Education section -->
+      <section class="glass-card detail-block">
+        <h2 class="section-title">
+          <%= t('resumes.detail.education.title', '教育背景') %>
+        </h2>
+        <% if (education && education.length > 0) { %>
+          <div class="education-list">
+            <% education.forEach(edu => { %>
+              <div class="education-item">
+                <div class="edu-header">
+                  <h3 class="edu-school"><%= edu.school %></h3>
+                  <span class="edu-degree"><%= edu.degree %></span>
+                </div>
+                <div class="edu-meta">
+                  <%= edu.start_date %> - <%= edu.end_date || t('resumes.detail.untilNow', '至今') %>
+                </div>
+                <% if (edu.description) { %>
+                  <div class="edu-description">
+                    <%= edu.description %>
+                  </div>
+                <% } %>
+              </div>
+            <% }); %>
+          </div>
+        <% } else { %>
+          <p class="muted">
+            <%= t('resumes.detail.education.empty', '未提取到教育背景。') %>
+          </p>
+        <% } %>
+      </section>
+    </div>
+
+    <div class="detail-sidebar">
+      <!-- Skills section -->
+      <section class="glass-card detail-block">
+        <h2 class="section-title">
+          <%= t('resumes.detail.skills.title', '技能标签') %>
+        </h2>
+        <div class="skills-cloud">
+          <% if (skills && skills.length > 0) { %>
+            <% skills.forEach(skill => { %>
+              <span class="chip"><%= skill %></span>
+            <% }); %>
+          <% } else { %>
+            <p class="muted">
+              <%= t('resumes.detail.skills.empty', '未提取到技能。') %>
+            </p>
+          <% } %>
+        </div>
+      </section>
+
+      <!-- Actions section -->
+      <section class="glass-card detail-block">
+        <h2 class="section-title">
+          <%= t('resumes.detail.actions.title', '操作') %>
+        </h2>
+        <div class="action-buttons">
+          <% if (!resume.is_main) { %>
+            <form action="/resumes/<%= resume.id %>/main" method="POST">
+              <button type="submit" class="btn btn-primary w-full">
+                <%= t('resumes.detail.actions.setMain', '设为主简历') %>
+              </button>
+            </form>
+          <% } %>
+          <form
+            action="/resumes/<%= resume.id %>/delete"
+            method="POST"
+            onsubmit="return confirm('<%= t('resumes.detail.actions.confirmDelete', '确定要删除这份简历吗？') %>');"
+            style="margin-top: 8px;"
+          >
+            <button type="submit" class="btn btn-ghost w-full danger-text">
+              <%= t('resumes.detail.actions.delete', '删除简历') %>
+            </button>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+</section>
+
+<style>
+  .w-full { width: 100%; }
+  .danger-text { color: var(--danger); border-color: rgba(249, 115, 115, 0.3); }
+  .danger-text:hover { background: rgba(249, 115, 115, 0.1); border-color: var(--danger); }
+  
+  .experience-item, .education-item {
+    margin-bottom: 24px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .experience-item:last-child, .education-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+  .exp-header, .edu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .exp-title, .edu-school {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--accent-cyan);
+  }
+  .exp-company, .edu-degree {
+    font-weight: 500;
+    color: var(--text);
+  }
+  .exp-meta, .edu-meta {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .exp-description, .edu-description {
+    margin-top: 12px;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--text-soft);
+  }
+  .skills-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .chip {
+    padding: 4px 10px;
+    background: rgba(6, 182, 212, 0.1);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    border-radius: 999px;
+    font-size: 0.85rem;
+    color: var(--accent-cyan);
+  }
+</style>

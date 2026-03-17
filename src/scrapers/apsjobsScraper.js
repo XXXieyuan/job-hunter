@@ -2,6 +2,9 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
+const { getLogger } = require('../logger');
+
+const logger = getLogger('apsjobsScraper');
 
 // Simple CLI arg parsing (supports --key value and --key=value)
 function parseArgs(argv) {
@@ -362,11 +365,15 @@ async function scrapeKeyword(page, keyword, location, maxPages) {
         page.waitForSelector('article, div[role="group"], div[role="listitem"]', { timeout: 15000 }),
       ]);
     } catch {
-      console.warn(`Timeout waiting for results on keyword "${keyword}", page ${pageIndex}`);
+      logger.warn('Timeout waiting for results', { keyword, pageIndex });
     }
 
     const jobs = await extractJobsFromPage(page);
-    console.log(`Keyword "${keyword}" page ${pageIndex}: found ${jobs.length} jobs`);
+    logger.info('Scraped jobs for page', {
+      keyword,
+      pageIndex,
+      jobsCount: jobs.length,
+    });
     allJobs.push(...jobs);
 
     const hasNext = await hasNextPage(page);
@@ -392,7 +399,7 @@ async function main() {
   const args = parseArgs(process.argv);
 
   if (!args.keywords) {
-    console.error('Error: --keywords "comma,separated,list" is required');
+    logger.error('Missing required --keywords argument');
     process.exit(1);
   }
 
@@ -402,7 +409,7 @@ async function main() {
     .filter(Boolean);
 
   if (keywords.length === 0) {
-    console.error('Error: no valid keywords parsed from --keywords');
+    logger.error('No valid keywords parsed from --keywords');
     process.exit(1);
   }
 
@@ -410,7 +417,13 @@ async function main() {
   const maxPages = args.maxPages || 3;
   const mode = args.mode === 'json' ? 'json' : 'db';
 
-  console.log(`APSJobs scraper starting. Mode=${mode}, keywords=${keywords.join(' | ')}, location="${location}", maxPages=${maxPages}`);
+  logger.info('APSJobs scraper starting', {
+    mode,
+    // Avoid logging full keyword list if large
+    keywordsCount: keywords.length,
+    location,
+    maxPages,
+  });
 
   const browser = await puppeteer.launch({
     headless: 'new',
@@ -428,12 +441,15 @@ async function main() {
 
     while (attempt < maxRetries && !success) {
       attempt += 1;
-      console.log(`Scraping keyword "${keyword}" (attempt ${attempt}/${maxRetries})`);
+      logger.info('Scraping keyword', { keyword, attempt, maxRetries });
 
       try {
         const jobs = await scrapeKeyword(page, keyword, location, maxPages);
 
-        console.log(`Keyword "${keyword}" total deduped jobs: ${jobs.length}`);
+        logger.info('Keyword scrape completed', {
+          keyword,
+          dedupedJobsCount: jobs.length,
+        });
 
         for (const job of jobs) {
           allJobsMap.set(job.external_id, job);
@@ -441,18 +457,26 @@ async function main() {
 
         success = true;
       } catch (err) {
-        console.error(`Error scraping keyword "${keyword}" on attempt ${attempt}:`, err.message || err);
+        logger.error('Error scraping keyword', {
+          keyword,
+          attempt,
+          maxRetries,
+          err,
+        });
         if (attempt >= maxRetries) {
-          console.error(`Giving up on keyword "${keyword}" after ${maxRetries} attempts.`);
+          logger.error('Giving up on keyword after max retries', {
+            keyword,
+            maxRetries,
+          });
         } else {
-          console.log(`Retrying keyword "${keyword}"...`);
+          logger.info('Retrying keyword', { keyword, nextAttempt: attempt + 1 });
         }
       }
     }
   }
 
   const allJobs = Array.from(allJobsMap.values());
-  console.log(`Scraping finished. Total unique jobs collected: ${allJobs.length}`);
+  logger.info('Scraping finished', { totalUniqueJobs: allJobs.length });
 
   if (mode === 'json') {
     const outputPath = args.output || 'jobs.json';
@@ -463,7 +487,10 @@ async function main() {
     }));
     fs.mkdirSync(path.dirname(resolved), { recursive: true });
     fs.writeFileSync(resolved, JSON.stringify(payload, null, 2), 'utf8');
-    console.log(`Wrote ${payload.length} jobs to JSON file: ${resolved}`);
+    logger.info('Wrote jobs to JSON file', {
+      jobsCount: payload.length,
+      outputPath: resolved,
+    });
   } else {
     const db = getDb();
     const stmt = prepareDbStatement(db);
@@ -480,7 +507,10 @@ async function main() {
 
     insertTransaction(allJobs);
     db.close();
-    console.log(`Upserted ${allJobs.length} jobs into SQLite database (mode=db).`);
+    logger.info('Upserted jobs into SQLite database', {
+      jobsCount: allJobs.length,
+      mode,
+    });
   }
 
   await browser.close();
@@ -488,7 +518,7 @@ async function main() {
 
 if (require.main === module) {
   main().catch((err) => {
-    console.error('Fatal error in APSJobs scraper:', err);
+    logger.error('Fatal error in APSJobs scraper', { err });
     process.exit(1);
   });
 }

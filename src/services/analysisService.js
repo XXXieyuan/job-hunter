@@ -1,4 +1,3 @@
-const { getAllResumes } = require('../repositories/resumesRepo');
 const { getJobsWithScore, getJobCounts } = require('../repositories/jobsRepo');
 const { upsertFitScore, getStats: getFitStats } = require('../repositories/fitScoresRepo');
 const { getCoverLetter, upsertCoverLetter } = require('../repositories/coverLettersRepo');
@@ -11,46 +10,65 @@ const {
 const { scoreJobAgainstResume } = require('./scoringService');
 const { generateCoverLetter } = require('./coverLetterService');
 const { ensureCompanyForJob } = require('./companyService');
+const { getPrimaryResume } = require('./resumeService');
+const { getLogger } = require('../logger');
+
+const logger = getLogger('analysisService');
 
 async function runFullAnalysisAsync(runId) {
   try {
-    const resumes = getAllResumes();
+    const primaryResume = getPrimaryResume();
+    if (!primaryResume) {
+      // No resume available – mark as completed with zero stats to avoid failing the whole run.
+      const jobCountsEmpty = getJobCounts();
+      markRunCompleted(runId, {
+        scoredPairs: 0,
+        fitStats: getFitStats(),
+        jobCounts: jobCountsEmpty,
+        resumeId: null,
+      });
+      logger.info('Analysis run completed with no primary resume', {
+        runId,
+        jobCounts: jobCountsEmpty,
+      });
+      return;
+    }
+
     const jobs = getJobsWithScore();
 
     let scoredPairs = 0;
 
     for (const job of jobs) {
-      for (const resume of resumes) {
-        const fitScore = await scoreJobAgainstResume(job, resume);
-        upsertFitScore({
+      const resume = primaryResume;
+      const fitScore = await scoreJobAgainstResume(job, resume);
+      upsertFitScore({
+        job_id: job.id,
+        resume_id: resume.id,
+        overall_score: fitScore.overall_score,
+        keyword_score: fitScore.keyword_score,
+        embedding_score: fitScore.embedding_score,
+        breakdown_json: JSON.stringify(fitScore.breakdown),
+      });
+
+      const company = await ensureCompanyForJob(job);
+
+      const existingLetter = getCoverLetter(job.id, resume.id, 'zh');
+      if (!existingLetter) {
+        const content = await generateCoverLetter({
+          job,
+          resume,
+          fitScore,
+          company,
+        });
+        upsertCoverLetter({
           job_id: job.id,
           resume_id: resume.id,
-          overall_score: fitScore.overall_score,
-          keyword_score: fitScore.keyword_score,
-          embedding_score: fitScore.embedding_score,
-          breakdown_json: JSON.stringify(fitScore.breakdown),
+          language: 'zh',
+          content,
         });
-
-        const company = await ensureCompanyForJob(job);
-
-        const existingLetter = getCoverLetter(job.id, resume.id, 'zh');
-        if (!existingLetter) {
-          const content = await generateCoverLetter({
-            job,
-            resume,
-            fitScore,
-            company,
-          });
-          upsertCoverLetter({
-            job_id: job.id,
-            resume_id: resume.id,
-            language: 'zh',
-            content,
-          });
-        }
-
-        scoredPairs += 1;
       }
+
+      scoredPairs += 1;
     }
 
     const fitStats = getFitStats();
@@ -60,10 +78,12 @@ async function runFullAnalysisAsync(runId) {
       scoredPairs,
       fitStats,
       jobCounts,
+      resumeId: primaryResume.id,
     };
 
     markRunCompleted(runId, stats);
   } catch (err) {
+    logger.error('Analysis run failed', { runId, err });
     markRunFailed(runId, err.message || String(err));
   }
 }
@@ -71,6 +91,7 @@ async function runFullAnalysisAsync(runId) {
 function triggerFullAnalysis(sources) {
   const runId = createRun(sources || {});
   setImmediate(() => {
+    logger.info('Starting full analysis run', { runId, sources });
     runFullAnalysisAsync(runId);
   });
   return runId;
@@ -84,4 +105,3 @@ module.exports = {
   triggerFullAnalysis,
   getLastAnalysisRun,
 };
-

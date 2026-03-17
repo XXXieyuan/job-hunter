@@ -1,0 +1,7 @@
+2026-03-17T14:06:30.843Z [[32minfo[39m] LinkedIn scraper starting {"module":"linkedinScraper","service":"job-hunter","mode":"db","keywordsCount":1,"location":"Sydney","maxPages":1}
+2026-03-17T14:06:31.256Z [[32minfo[39m] Scraping LinkedIn keyword {"module":"linkedinScraper","service":"job-hunter","keyword":"data analyst","attempt":1,"maxRetries":3}
+2026-03-17T14:06:31.259Z [[32minfo[39m] Navigating to LinkedIn URL {"module":"linkedinScraper","service":"job-hunter","url":"https://www.linkedin.com/jobs/search/?keywords=data+analyst&location=Sydney","keyword":"data analyst","location":"Sydney","pageIndex":1}
+2026-03-17T14:06:42.268Z [[32minfo[39m] Scraped LinkedIn jobs for page {"module":"linkedinScraper","service":"job-hunter","keyword":"data analyst","pageIndex":1,"jobsCount":65,"resultCount":0}
+2026-03-17T14:06:44.450Z [[32minfo[39m] LinkedIn keyword scrape completed {"module":"linkedinScraper","service":"job-hunter","keyword":"data analyst","dedupedJobsCount":65}
+2026-03-17T14:06:44.451Z [[32minfo[39m] LinkedIn scraping finished {"module":"linkedinScraper","service":"job-hunter","totalUniqueJobs":65,"mode":"db"}
+2026-03-17T14:06:44.492Z [[32minfo[39m] Upserted LinkedIn jobs into SQLite database {"module":"linkedinScraper","service":"job-hunter","jobsCount":65}

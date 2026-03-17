@@ -1,0 +1,20 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Dev\\api test\\job-hunter\\logs\\.ae9e7c3d7bb37927aefe9d4ea227f3ee96670199-audit.json",
+    "files": [
+        {
+            "date": 1773754645471,
+            "name": "C:\\Dev\\api test\\job-hunter\\logs\\app-2026-03-17.log",
+            "hash": "63b5a17d3fd01d146b4e3d7c588393a55f9c213ea7345e7e25d1c36b94b8e2ab"
+        },
+        {
+            "date": 1773756390817,
+            "name": "C:\\Dev\\api test\\job-hunter\\logs\\app-2026-03-18.log",
+            "hash": "a8626fdcd4782e4e596ab6f4308c729c7b51a92007276039803a38d0a1f4344b"
+        }
+    ],
+    "hashType": "sha256"
+}

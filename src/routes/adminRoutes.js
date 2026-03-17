@@ -56,6 +56,14 @@ function extractToken(req) {
 }
 
 function requireAdmin(req, res, next) {
+  const rawPath = req.path || req.originalUrl || '';
+  const pathLower = rawPath.toLowerCase();
+
+  // Only enforce admin token on /admin paths; everything else is public
+  if (!pathLower.startsWith('/admin')) {
+    return next();
+  }
+
   const token = extractToken(req);
   if (!ADMIN_TOKEN || token === ADMIN_TOKEN) {
     return next();

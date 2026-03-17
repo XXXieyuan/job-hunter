@@ -99,30 +99,6 @@ router.get('/api/jobs', (req, res) => {
   }
 });
 
-router.get('/api/jobs/:id', (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isFinite(id)) {
-    return res.status(400).json({ error: 'Invalid job id' });
-  }
-
-  const job = getJobById(id);
-  if (!job) {
-    return res.status(404).json({ error: 'Job not found' });
-  }
-
-  const payload = {
-    id: job.id,
-    title: job.title,
-    company_name: job.company_name,
-    location: job.location,
-    source: job.source,
-    is_active: 1,
-    description: job.description,
-  };
-
-  res.json(payload);
-});
-
 router.get('/api/jobs/export', (req, res) => {
   const format = (req.query.format || 'json').toString().toLowerCase();
   const db = getDb();
@@ -179,6 +155,30 @@ router.get('/api/jobs/export', (req, res) => {
 
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.json(rows);
+});
+
+router.get('/api/jobs/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    return res.status(400).json({ error: 'Invalid job id' });
+  }
+
+  const job = getJobById(id);
+  if (!job) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+
+  const payload = {
+    id: job.id,
+    title: job.title,
+    company_name: job.company_name,
+    location: job.location,
+    source: job.source,
+    is_active: 1,
+    description: job.description,
+  };
+
+  res.json(payload);
 });
 
 module.exports = router;

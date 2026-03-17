@@ -1337,3 +1337,60 @@ tbody tr:hover {
 .nav-link-highlight:hover {
   background: var(--primary-dark);
 }
+
+/* Source-specific styles */
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.source-aps {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+
+.source-seek {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.source-linkedin {
+  background: rgba(0, 119, 181, 0.15);
+  color: #0077b5;
+}
+
+/* Enhanced progress bar */
+.scraper-progress-container {
+  position: sticky;
+  top: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1rem;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.scraper-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.scraper-progress-source {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.scraper-progress-source .source-badge {
+  font-size: 0.85rem;
+  padding: 0.35rem 1rem;
+}

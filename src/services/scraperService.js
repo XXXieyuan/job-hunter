@@ -1,5 +1,6 @@
 const path = require('path');
 const { spawn } = require('child_process');
+const EventEmitter = require('events');
 const {
   createRun,
   markRunRunning,
@@ -12,21 +13,29 @@ const {
 const { getLogger } = require('../logger');
 
 const logger = getLogger('scraperService');
+const scraperRunEvents = new EventEmitter();
+scraperRunEvents.setMaxListeners(0);
 
 const INVALID_SCRAPER_OPTIONS_CODE = 'INVALID_SCRAPER_OPTIONS';
 const SCRAPER_CONFIGS = {
   apsjobs: {
     label: 'APSJobs',
+    runtime: 'node',
+    scriptDir: 'scrapers',
     scriptFile: 'apsjobsScraper.js',
     envPrefix: 'APSJOBS',
   },
   seek: {
     label: 'Seek',
-    scriptFile: 'seekScraper.js',
+    runtime: 'python',
+    scriptDir: 'root',
+    scriptFile: 'scrape_seek.py',
     envPrefix: 'SEEK',
   },
   linkedin: {
     label: 'LinkedIn',
+    runtime: 'node',
+    scriptDir: 'scrapers',
     scriptFile: 'linkedinScraper.js',
     envPrefix: 'LINKEDIN',
   },
@@ -156,9 +165,113 @@ function normalizeProgress(rawProgress, fallbackTotal) {
   return { total, current, message };
 }
 
+function parseStoredProgress(progressJson) {
+  if (!progressJson || typeof progressJson !== 'string') {
+    return undefined;
+  }
+
+  try {
+    return normalizeProgress(JSON.parse(progressJson));
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeRunStatus(status) {
+  if (!status) return 'queued';
+  if (status === 'success') return 'completed';
+  if (status === 'failure') return 'failed';
+  return status;
+}
+
+function serializeRun(row) {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: String(row.id),
+    scraper_name: row.scraper_name || null,
+    status: normalizeRunStatus(row.status),
+    progress: parseStoredProgress(row.progress_json),
+    jobs_added:
+      typeof row.jobs_added === 'number' ? row.jobs_added : undefined,
+    error_message: row.error_message || null,
+    started_at: row.started_at || null,
+    finished_at: row.finished_at || null,
+  };
+}
+
+function getScraperRunSnapshot(runId) {
+  return serializeRun(getRunById(runId));
+}
+
+function emitRunUpdate(runId) {
+  const snapshot = getScraperRunSnapshot(runId);
+  if (!snapshot) {
+    return;
+  }
+
+  scraperRunEvents.emit(String(runId), snapshot);
+}
+
+function subscribeToScraperProgress(runId, listener) {
+  const eventName = String(runId);
+  scraperRunEvents.on(eventName, listener);
+
+  return () => {
+    scraperRunEvents.off(eventName, listener);
+  };
+}
+
+function resolveScriptPath(scraperConfig) {
+  if (scraperConfig.scriptDir === 'root') {
+    return path.resolve(__dirname, '..', '..', scraperConfig.scriptFile);
+  }
+
+  return path.resolve(__dirname, '..', 'scrapers', scraperConfig.scriptFile);
+}
+
+function buildSpawnConfig(scraperConfig, scriptPath, cliArgs) {
+  if (scraperConfig.runtime === 'python') {
+    return {
+      command: process.env.PYTHON_BIN || 'python3',
+      args: ['-u', scriptPath, ...cliArgs],
+    };
+  }
+
+  return {
+    command: process.execPath,
+    args: [scriptPath, ...cliArgs],
+  };
+}
+
+function createLineBuffer(onLine) {
+  let buffer = '';
+
+  return {
+    append(chunk) {
+      buffer += chunk.toString();
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() || '';
+      lines.forEach((line) => onLine(line));
+    },
+    flush() {
+      if (!buffer.trim()) {
+        buffer = '';
+        return;
+      }
+
+      onLine(buffer);
+      buffer = '';
+    },
+  };
+}
+
 function runScraper(runId, scraperName, options) {
   try {
     markRunRunning(runId);
+    emitRunUpdate(runId);
 
     const scraperConfig = SCRAPER_CONFIGS[scraperName];
 
@@ -166,12 +279,7 @@ function runScraper(runId, scraperName, options) {
       throw new Error(`Unsupported scraper: ${scraperName}`);
     }
 
-    const scriptPath = path.resolve(
-      __dirname,
-      '..',
-      'scrapers',
-      scraperConfig.scriptFile,
-    );
+    const scriptPath = resolveScriptPath(scraperConfig);
 
     const normalizedOptions = validateAndNormalizeScraperOptions(options || {});
     const envKeywords = process.env[`${scraperConfig.envPrefix}_KEYWORDS`];
@@ -207,8 +315,7 @@ function runScraper(runId, scraperName, options) {
       });
     }
 
-    const args = [
-      scriptPath,
+    const cliArgs = [
       '--mode',
       mode,
       '--keywords',
@@ -220,86 +327,134 @@ function runScraper(runId, scraperName, options) {
     ];
 
     if (normalizedOptions.output) {
-      args.push('--output', normalizedOptions.output);
+      cliArgs.push('--output', normalizedOptions.output);
     }
 
-    const child = spawn(process.execPath, args, {
+    const childEnv = { ...process.env };
+    if (scraperConfig.runtime === 'python') {
+      childEnv.PYTHONUNBUFFERED = '1';
+    }
+
+    const spawnConfig = buildSpawnConfig(scraperConfig, scriptPath, cliArgs);
+    const child = spawn(spawnConfig.command, spawnConfig.args, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
+      env: childEnv,
     });
 
     let jobsAdded = 0;
+    const stdoutLines = createLineBuffer((rawLine) => {
+      const line = String(rawLine || '').trim();
+      if (!line) return;
+
+      if (line.startsWith('[PROGRESS]')) {
+        const jsonPart = line.slice('[PROGRESS]'.length).trim();
+        try {
+          const parsed = JSON.parse(jsonPart);
+          const normalizedProgress = normalizeProgress(
+            parsed,
+            estimatedTotalSteps,
+          );
+          if (normalizedProgress) {
+            updateRunProgress(runId, normalizedProgress);
+            emitRunUpdate(runId);
+          }
+        } catch (e) {
+          logger.warn('Failed to parse scraper progress payload', {
+            runId,
+            raw: jsonPart,
+          });
+        }
+        return;
+      }
+
+      const jobsCountMatch = line.match(/"jobsCount"\s*:\s*(\d+)/);
+      const totalUniqueMatch = line.match(/"totalUniqueJobs"\s*:\s*(\d+)/);
+      const match = jobsCountMatch || totalUniqueMatch;
+      if (match) {
+        const parsed = Number.parseInt(match[1], 10);
+        if (!Number.isNaN(parsed)) {
+          jobsAdded = parsed;
+        }
+      }
+
+      logger.info('Scraper stdout', { runId, output: line });
+    });
+
+    const stderrLines = createLineBuffer((rawLine) => {
+      const line = String(rawLine || '').trim();
+      if (!line) return;
+      logger.error('Scraper stderr', { runId, output: line });
+    });
 
     child.stdout.on('data', (data) => {
-      const text = data.toString();
-      const lines = text.split(/\r?\n/);
-
-      lines.forEach((rawLine) => {
-        const line = rawLine.trim();
-        if (!line) return;
-
-        // Progress messages from scraper: `[PROGRESS] {"total":..., "current":..., "message":"..."}`
-        if (line.startsWith('[PROGRESS]')) {
-          const jsonPart = line.slice('[PROGRESS]'.length).trim();
-          try {
-            const parsed = JSON.parse(jsonPart);
-            const normalizedProgress = normalizeProgress(
-              parsed,
-              estimatedTotalSteps
-            );
-            if (normalizedProgress) {
-              updateRunProgress(runId, normalizedProgress);
-            }
-          } catch (e) {
-            logger.warn('Failed to parse scraper progress payload', {
-              runId,
-              raw: jsonPart,
-            });
-          }
-          return;
-        }
-
-        // Attempt to infer job count from scraper logs based on JSON-ish meta.
-        // Winston console format ends with a JSON object containing metadata.
-        // Examples:
-        //  - {"totalUniqueJobs": 42}
-        //  - {"jobsCount": 42, "mode":"db"}
-        const jobsCountMatch = line.match(/"jobsCount"\s*:\s*(\d+)/);
-        const totalUniqueMatch = line.match(/"totalUniqueJobs"\s*:\s*(\d+)/);
-        const match = jobsCountMatch || totalUniqueMatch;
-        if (match) {
-          const parsed = Number.parseInt(match[1], 10);
-          if (!Number.isNaN(parsed)) {
-            jobsAdded = parsed;
-          }
-        }
-
-        logger.info('Scraper stdout', { runId, output: line });
-      });
+      stdoutLines.append(data);
     });
 
     child.stderr.on('data', (data) => {
-      const text = data.toString();
-      logger.error('Scraper stderr', { runId, output: text.trimEnd() });
+      stderrLines.append(data);
     });
 
     child.on('close', (code) => {
+      stdoutLines.flush();
+      stderrLines.flush();
+
       if (code === 0) {
+        updateRunProgress(
+          runId,
+          normalizeProgress(
+            {
+              total: estimatedTotalSteps,
+              current: estimatedTotalSteps,
+              message: `${scraperConfig.label} scraper completed.`,
+            },
+            estimatedTotalSteps,
+          ),
+        );
         logger.info('Scraper completed successfully', { runId, jobsAdded, exitCode: code });
         markRunSuccess(runId, jobsAdded);
+        emitRunUpdate(runId);
       } else {
         logger.error('Scraper exited with non-zero code', { runId, exitCode: code });
+        updateRunProgress(
+          runId,
+          normalizeProgress(
+            {
+              total:
+                getScraperRunSnapshot(runId)?.progress?.total ||
+                estimatedTotalSteps,
+              current: getScraperRunSnapshot(runId)?.progress?.current || 0,
+              message: `${scraperConfig.label} scraper failed.`,
+            },
+            estimatedTotalSteps,
+          ),
+        );
         markRunFailure(runId, `Scraper exited with code ${code}`);
+        emitRunUpdate(runId);
       }
     });
 
     child.on('error', (err) => {
       logger.error('Failed to spawn scraper child process', { runId, err });
+      updateRunProgress(
+        runId,
+        normalizeProgress(
+          {
+            total:
+              getScraperRunSnapshot(runId)?.progress?.total ||
+              estimatedTotalSteps,
+            current: getScraperRunSnapshot(runId)?.progress?.current || 0,
+            message: `${scraperConfig.label} scraper failed to start.`,
+          },
+          estimatedTotalSteps,
+        ),
+      );
       markRunFailure(runId, err.message || String(err));
+      emitRunUpdate(runId);
     });
   } catch (err) {
     logger.error('Unexpected error while running scraper', { runId, err });
     markRunFailure(runId, err.message || String(err));
+    emitRunUpdate(runId);
   }
 }
 
@@ -316,6 +471,7 @@ function triggerScrape(name, options = {}) {
   const normalizedOptions = validateAndNormalizeScraperOptions(options || {});
 
   const runId = createRun(scraperName);
+  emitRunUpdate(runId);
 
   logger.info('Scheduled scraper run', {
     runId,
@@ -339,4 +495,6 @@ module.exports = {
   triggerScrape,
   getScraperRuns,
   getRunById,
+  getScraperRunSnapshot,
+  subscribeToScraperProgress,
 };

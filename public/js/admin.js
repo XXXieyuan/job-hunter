@@ -14,9 +14,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const scraperBtn = document.getElementById('trigger-scraper-btn');
   const scraperStatus = document.getElementById('scraper-status');
   const scraperRunsTable = document.getElementById('scraper-runs-table');
+  const scraperSourceInput = document.getElementById('scraper-source');
   const scraperKeywordsInput = document.getElementById('scraper-keywords');
   const scraperRegionInput = document.getElementById('scraper-region');
   const scraperMaxPagesInput = document.getElementById('scraper-max-pages');
+  const scraperProgress = document.getElementById('scraper-progress');
+  const scraperProgressBar = document.getElementById('scraper-progress-bar');
+  const scraperProgressPercent = document.getElementById('scraper-progress-percent');
+  const scraperProgressState = document.getElementById('scraper-progress-state');
+  const scraperProgressSteps = document.getElementById('scraper-progress-steps');
+  const scraperProgressJobs = document.getElementById('scraper-progress-jobs');
+  const scraperProgressMessage = document.getElementById('scraper-progress-message');
+
+  let scraperEventSource = null;
+  const scraperStreamEvents = new EventTarget();
 
   const analysisTexts = analysisSection
     ? {
@@ -107,6 +118,177 @@ document.addEventListener('DOMContentLoaded', () => {
         },
       };
 
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => {
+      switch (char) {
+        case '&':
+          return '&amp;';
+        case '<':
+          return '&lt;';
+        case '>':
+          return '&gt;';
+        case '"':
+          return '&quot;';
+        case '\'':
+          return '&#39;';
+        default:
+          return char;
+      }
+    });
+  }
+
+  function getScraperStatusClass(status) {
+    if (status === 'running' || status === 'queued') {
+      return 'status-pill status-running';
+    }
+    if (status === 'success' || status === 'completed') {
+      return 'status-pill status-success';
+    }
+    if (status === 'failure' || status === 'failed') {
+      return 'status-pill status-failed';
+    }
+    return 'status-pill';
+  }
+
+  function getScraperStatusLabel(status) {
+    return (
+      (scraperTexts.statuses && scraperTexts.statuses[status]) ||
+      status ||
+      (scraperTexts.statuses && scraperTexts.statuses.unknown) ||
+      ''
+    );
+  }
+
+  function getScraperProgressPercent(run) {
+    if (!run) {
+      return 0;
+    }
+
+    if (run.progress && run.progress.total > 0) {
+      return Math.max(
+        0,
+        Math.min(100, Math.round((run.progress.current / run.progress.total) * 100)),
+      );
+    }
+
+    if (run.status === 'completed' || run.status === 'success') {
+      return 100;
+    }
+
+    return 0;
+  }
+
+  function renderScraperRunRow(run) {
+    const status = run.status || '';
+    const jobsAdded =
+      typeof run.jobs_added === 'number' ? run.jobs_added : '-';
+    const errorMessage = run.error_message || '-';
+    const startedAt = run.started_at || '-';
+    const finishedAt = run.finished_at || '-';
+
+    return `
+      <tr data-run-id="${escapeHtml(run.id)}">
+        <td>${escapeHtml(run.id)}</td>
+        <td>${escapeHtml(run.scraper_name || '-')}</td>
+        <td><span class="${getScraperStatusClass(status)}">${escapeHtml(getScraperStatusLabel(status))}</span></td>
+        <td>${escapeHtml(startedAt)}</td>
+        <td>${escapeHtml(finishedAt)}</td>
+        <td>${escapeHtml(jobsAdded)}</td>
+        <td class="small">${escapeHtml(errorMessage)}</td>
+      </tr>
+    `;
+  }
+
+  function upsertScraperRunRow(run) {
+    if (!scraperRunsTable || !run) return;
+
+    const tbody = scraperRunsTable.querySelector('tbody');
+    if (!tbody) return;
+
+    const existingRow = Array.from(
+      tbody.querySelectorAll('tr[data-run-id]'),
+    ).find((row) => row.dataset.runId === String(run.id));
+    const rowHtml = renderScraperRunRow(run);
+
+    if (existingRow) {
+      existingRow.outerHTML = rowHtml;
+      return;
+    }
+
+    const emptyRow = tbody.querySelector('td[colspan="7"]');
+    if (emptyRow) {
+      tbody.innerHTML = '';
+    }
+
+    tbody.insertAdjacentHTML('afterbegin', rowHtml);
+
+    while (tbody.querySelectorAll('tr[data-run-id]').length > 20) {
+      tbody.lastElementChild.remove();
+    }
+  }
+
+  function renderScraperProgress(run) {
+    if (
+      !scraperProgress ||
+      !scraperProgressBar ||
+      !scraperProgressPercent ||
+      !scraperProgressState ||
+      !scraperProgressSteps ||
+      !scraperProgressJobs ||
+      !scraperProgressMessage ||
+      !run
+    ) {
+      return;
+    }
+
+    const percent = getScraperProgressPercent(run);
+    const progress = run.progress || {};
+    const statusLabel = getScraperStatusLabel(run.status);
+
+    scraperProgress.hidden = false;
+    scraperProgress.classList.toggle('is-complete', run.status === 'completed');
+    scraperProgress.classList.toggle('is-failed', run.status === 'failed');
+    scraperProgressBar.style.width = `${percent}%`;
+    scraperProgressBar.parentElement.setAttribute('aria-valuenow', String(percent));
+    scraperProgressPercent.textContent = `${percent}%`;
+    scraperProgressState.textContent = statusLabel;
+    scraperProgressSteps.textContent =
+      typeof progress.total === 'number' && progress.total > 0
+        ? `${progress.current || 0}/${progress.total}`
+        : '';
+    scraperProgressJobs.textContent =
+      typeof run.jobs_added === 'number' ? `新增职位：${run.jobs_added}` : '';
+    scraperProgressMessage.textContent =
+      progress.message || run.error_message || '';
+  }
+
+  function closeScraperEventSource() {
+    if (scraperEventSource) {
+      scraperEventSource.close();
+      scraperEventSource = null;
+    }
+  }
+
+  function handleScraperSnapshot(snapshot) {
+    if (!snapshot || !snapshot.id) {
+      return;
+    }
+
+    upsertScraperRunRow(snapshot);
+    renderScraperProgress(snapshot);
+
+    const eventName =
+      snapshot.status === 'completed' || snapshot.status === 'failed'
+        ? 'complete'
+        : 'progress';
+
+    scraperStreamEvents.dispatchEvent(
+      new CustomEvent(eventName, {
+        detail: snapshot,
+      }),
+    );
+  }
+
   if (runBtn && runStatus) {
     runBtn.addEventListener('click', async () => {
       runBtn.disabled = true;
@@ -153,7 +335,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!scraperRunsTable) return;
 
     try {
-      const res = await fetch('/admin/scraper/runs', {
+      const query = ADMIN_TOKEN
+        ? `?token=${encodeURIComponent(ADMIN_TOKEN)}`
+        : '';
+      const res = await fetch(`/admin/scraper/runs${query}`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -175,52 +360,110 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const rowsHtml = runs
-        .map((run) => {
-          const status = run.status || '';
-          let statusClass = 'status-pill';
-          if (status === 'running' || status === 'queued') {
-            statusClass += ' status-running';
-          } else if (status === 'success' || status === 'completed') {
-            statusClass += ' status-success';
-          } else if (status === 'failure' || status === 'failed') {
-            statusClass += ' status-failed';
-          }
-
-          const statusLabel =
-            (scraperTexts.statuses && scraperTexts.statuses[status]) ||
-            status ||
-            (scraperTexts.statuses && scraperTexts.statuses.unknown) ||
-            '';
-
-          const jobsAdded =
-            typeof run.jobs_added === 'number' ? run.jobs_added : '-';
-          const errorMessage = run.error_message || '-';
-          const startedAt = run.started_at || '-';
-          const finishedAt = run.finished_at || '-';
-
-          return `
-            <tr data-run-id="${run.id}">
-              <td>${run.id}</td>
-              <td>${run.scraper_name || '-'}</td>
-              <td><span class="${statusClass}">${statusLabel}</span></td>
-              <td>${startedAt}</td>
-              <td>${finishedAt}</td>
-              <td>${jobsAdded}</td>
-              <td class="small">${errorMessage}</td>
-            </tr>
-          `;
-        })
-        .join('');
+      const rowsHtml = runs.map(renderScraperRunRow).join('');
 
       tbody.innerHTML = rowsHtml;
     } catch {
-      // Ignore polling errors; UI will show last known state.
+      // Ignore refresh errors; UI will show last known state.
     }
   }
 
+  function connectScraperProgress(runId) {
+    if (!runId || typeof EventSource === 'undefined') {
+      return;
+    }
+
+    closeScraperEventSource();
+
+    const query = ADMIN_TOKEN
+      ? `?token=${encodeURIComponent(ADMIN_TOKEN)}`
+      : '';
+    const progressUrl = `/admin/scraper/progress/${encodeURIComponent(runId)}${query}`;
+    const eventSource = new EventSource(progressUrl);
+    scraperEventSource = eventSource;
+
+    const parseSnapshot = (event) => {
+      try {
+        return JSON.parse(event.data);
+      } catch {
+        return null;
+      }
+    };
+
+    const onProgress = (event) => {
+      const snapshot = parseSnapshot(event);
+      if (snapshot) {
+        handleScraperSnapshot(snapshot);
+      }
+    };
+
+    const onComplete = (event) => {
+      const snapshot = parseSnapshot(event);
+      if (snapshot) {
+        handleScraperSnapshot(snapshot);
+      }
+
+      closeScraperEventSource();
+      refreshScraperRuns();
+    };
+
+    eventSource.addEventListener('progress', onProgress);
+    eventSource.addEventListener('complete', onComplete);
+    eventSource.addEventListener('message', (event) => {
+      const snapshot = parseSnapshot(event);
+      if (!snapshot) {
+        return;
+      }
+
+      if (snapshot.status === 'completed' || snapshot.status === 'failed') {
+        onComplete(event);
+        return;
+      }
+
+      onProgress(event);
+    });
+    eventSource.onerror = () => {
+      if (
+        eventSource.readyState === EventSource.CLOSED &&
+        scraperEventSource === eventSource
+      ) {
+        closeScraperEventSource();
+      }
+    };
+  }
+
+  scraperStreamEvents.addEventListener('progress', (event) => {
+    const snapshot = event.detail;
+    if (!snapshot || !scraperStatus) {
+      return;
+    }
+
+    if (snapshot.progress && snapshot.progress.message) {
+      scraperStatus.textContent = snapshot.progress.message;
+    }
+  });
+
+  scraperStreamEvents.addEventListener('complete', (event) => {
+    const snapshot = event.detail;
+    if (!snapshot || !scraperStatus) {
+      return;
+    }
+
+    if (snapshot.status === 'failed') {
+      scraperStatus.textContent = snapshot.error_message || getScraperStatusLabel(snapshot.status);
+      scraperStatus.classList.add('error-message');
+      return;
+    }
+
+    scraperStatus.classList.remove('error-message');
+    scraperStatus.textContent =
+      typeof snapshot.jobs_added === 'number'
+        ? `${getScraperStatusLabel(snapshot.status)}，新增职位：${snapshot.jobs_added}`
+        : getScraperStatusLabel(snapshot.status);
+  });
+
   if (scraperBtn && scraperStatus) {
-      scraperBtn.addEventListener('click', async () => {
+    scraperBtn.addEventListener('click', async () => {
       scraperStatus.textContent = '';
       scraperStatus.classList.remove('error-message');
       scraperBtn.disabled = true;
@@ -251,6 +494,11 @@ document.addEventListener('DOMContentLoaded', () => {
         options.maxPages = maxPagesValue;
       }
 
+      const scraperName =
+        scraperSourceInput && scraperSourceInput.value
+          ? scraperSourceInput.value
+          : 'apsjobs';
+
       try {
         const res = await fetch(
           `/admin/scraper/run?token=${encodeURIComponent(ADMIN_TOKEN)}`,
@@ -260,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              name: 'apsjobs',
+              name: scraperName,
               options,
             }),
           }
@@ -279,11 +527,20 @@ document.addEventListener('DOMContentLoaded', () => {
               '{runId}',
               json.runId,
             );
+            handleScraperSnapshot({
+              id: String(json.runId),
+              scraper_name: scraperName,
+              status: 'queued',
+              progress: {
+                total: 0,
+                current: 0,
+                message: scraperTexts.triggering,
+              },
+            });
+            connectScraperProgress(json.runId);
           } else {
             scraperStatus.textContent = scraperTexts.started;
           }
-          // Immediately refresh history once after triggering
-          refreshScraperRuns();
         } else {
           const message = (json && json.error) || res.statusText || '未知错误';
           scraperStatus.textContent = `${scraperTexts.triggerFailedPrefix}${message}`;
@@ -297,10 +554,6 @@ document.addEventListener('DOMContentLoaded', () => {
         scraperBtn.classList.remove('loading');
       }
     });
-
-    // Initial fetch and polling for scraper run status
-    refreshScraperRuns();
-    setInterval(refreshScraperRuns, 5000);
   }
 
   if (uploadForm && uploadTextarea && uploadStatus) {
@@ -339,4 +592,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  window.addEventListener('beforeunload', closeScraperEventSource);
 });

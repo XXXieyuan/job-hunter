@@ -12,6 +12,8 @@ const { getStats: getFitStats } = require('../repositories/fitScoresRepo');
 const {
   triggerScrape,
   getScraperRuns,
+  getScraperRunSnapshot,
+  subscribeToScraperProgress,
 } = require('../services/scraperService');
 const { upsertCompany } = require('../repositories/companiesRepo');
 const { getLogger } = require('../logger');
@@ -119,6 +121,80 @@ router.post('/admin/scraper/run', express.json({ limit: '1mb' }), (req, res) => 
 router.get('/admin/scraper/runs', (req, res) => {
   const runs = getScraperRuns(50);
   res.json({ runs });
+});
+
+function isTerminalScraperStatus(status) {
+  return status === 'completed' || status === 'failed';
+}
+
+function writeSseEvent(res, payload) {
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+router.get('/admin/scraper/progress/:runId', (req, res) => {
+  const runId = Number(req.params.runId);
+  if (!Number.isFinite(runId)) {
+    return res.status(400).json({ error: '无效的抓取运行 ID。' });
+  }
+
+  const initialSnapshot = getScraperRunSnapshot(runId);
+  if (!initialSnapshot) {
+    return res.status(404).json({ error: '抓取运行不存在。' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+
+  if (typeof res.flushHeaders === 'function') {
+    res.flushHeaders();
+  }
+
+  res.write('retry: 1000\n\n');
+
+  let isClosed = false;
+  let unsubscribe = () => {};
+  let heartbeatTimer = null;
+
+  const cleanup = () => {
+    if (isClosed) {
+      return;
+    }
+
+    isClosed = true;
+    unsubscribe();
+
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  };
+
+  const sendSnapshot = (snapshot) => {
+    if (isClosed || !snapshot) {
+      return;
+    }
+
+    writeSseEvent(res, snapshot);
+
+    if (isTerminalScraperStatus(snapshot.status)) {
+      cleanup();
+      res.end();
+    }
+  };
+
+  unsubscribe = subscribeToScraperProgress(runId, sendSnapshot);
+  heartbeatTimer = setInterval(() => {
+    if (!isClosed) {
+      res.write(': keep-alive\n\n');
+    }
+  }, 15000);
+
+  sendSnapshot(initialSnapshot);
+
+  req.on('close', () => {
+    cleanup();
+  });
 });
 
 function mapJobsPayload(payload) {

@@ -185,3 +185,9 @@ The Planner (kind-prairie) produced a comprehensive 4-phase plan. I have auto-ap
 ### [00:16] Bug Report: favicon.ico 401 Unauthorized
 - Issue: adminRoutes middleware requireAdmin is applied to all routes, causing 401 for favicon.ico requests
 - Need to fix by restricting requireAdmin to only /admin paths
+
+### [00:25] Bug Fix: favicon.ico 401 Unauthorized
+- Issue: adminRoutes middleware requireAdmin was applied to all routes, causing 401 for favicon.ico
+- Fix: Modified requireAdmin in src/routes/adminRoutes.js to skip token check for non-/admin paths
+- Commit: 8496043 fix(auth): restrict requireAdmin middleware to /admin paths only
+- Push: SUCCESS to origin/main

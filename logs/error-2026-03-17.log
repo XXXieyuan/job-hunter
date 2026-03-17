@@ -6,3 +6,7 @@
 {"exitCode":1,"level":"error","message":"Scraper exited with non-zero code","module":"scraperService","runId":3,"service":"job-hunter","timestamp":"2026-03-17T06:40:01.971Z"}
 {"err":{},"level":"error","message":"Fatal error in APSJobs scraper","module":"apsjobsScraper","service":"job-hunter","timestamp":"2026-03-17T06:40:31.168Z"}
 {"exitCode":1,"level":"error","message":"Scraper exited with non-zero code","module":"scraperService","runId":4,"service":"job-hunter","timestamp":"2026-03-17T06:40:31.172Z"}
+{"err":{},"level":"error","message":"Fatal error in APSJobs scraper","module":"apsjobsScraper","service":"job-hunter","timestamp":"2026-03-17T06:51:40.445Z"}
+{"err":{},"level":"error","message":"Fatal error in APSJobs scraper","module":"apsjobsScraper","service":"job-hunter","timestamp":"2026-03-17T06:56:08.369Z"}
+{"err":{},"level":"error","message":"Fatal error in APSJobs scraper","module":"apsjobsScraper","service":"job-hunter","timestamp":"2026-03-17T06:57:03.113Z"}
+{"err":{},"level":"error","message":"Fatal error in Seek scraper","module":"seekScraper","service":"job-hunter","timestamp":"2026-03-17T07:22:38.929Z"}

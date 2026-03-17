@@ -1,4 +1,4 @@
-const puppeteer = require('puppeteer');
+const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
@@ -459,9 +459,9 @@ async function main() {
     maxPages,
   });
 
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
   const page = await browser.newPage();
 

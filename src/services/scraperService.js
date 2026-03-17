@@ -15,7 +15,7 @@ const logger = getLogger('scraperService');
 
 const INVALID_SCRAPER_OPTIONS_CODE = 'INVALID_SCRAPER_OPTIONS';
 
-function validateAndNormalizeApsjobsOptions(rawOptions) {
+function validateAndNormalizeScraperOptions(rawOptions) {
   const options = rawOptions && typeof rawOptions === 'object' ? rawOptions : {};
   const normalized = {};
 
@@ -109,15 +109,14 @@ function normalizeProgress(rawProgress, fallbackTotal) {
   return { total, current, message };
 }
 
-function runApsjobsScraper(runId, options) {
-  const scraperName = 'apsjobs';
-
+function runScraper(runId, scraperName, options) {
   try {
     markRunRunning(runId);
 
-    const scriptPath = path.resolve(__dirname, '..', 'scrapers', 'apsjobsScraper.js');
+    const scriptFile = scraperName === 'seek' ? 'seekScraper.js' : 'apsjobsScraper.js';
+    const scriptPath = path.resolve(__dirname, '..', 'scrapers', scriptFile);
 
-    const normalizedOptions = validateAndNormalizeApsjobsOptions(options || {});
+    const normalizedOptions = validateAndNormalizeScraperOptions(options || {});
 
     const keywords =
       normalizedOptions.keywords ||
@@ -243,14 +242,14 @@ function runApsjobsScraper(runId, options) {
 function triggerScrape(name, options = {}) {
   const scraperName = name || 'apsjobs';
 
-  if (scraperName !== 'apsjobs') {
+  if (scraperName !== 'apsjobs' && scraperName !== 'seek') {
     logger.warn('Attempted to trigger unsupported scraper', { scraperName });
     throw new Error(`Unsupported scraper: ${scraperName}`);
   }
 
   // Validate and normalize user-provided options early so that HTTP
   // handlers can surface clear 400 errors for invalid input.
-  const normalizedOptions = validateAndNormalizeApsjobsOptions(options || {});
+  const normalizedOptions = validateAndNormalizeScraperOptions(options || {});
 
   const runId = createRun(scraperName);
 
@@ -262,7 +261,7 @@ function triggerScrape(name, options = {}) {
 
   // Run in background, non-blocking for HTTP request
   setImmediate(() => {
-    runApsjobsScraper(runId, normalizedOptions);
+    runScraper(runId, scraperName, normalizedOptions);
   });
 
   return runId;

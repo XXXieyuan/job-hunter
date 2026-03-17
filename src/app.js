@@ -5,6 +5,10 @@ const cookieParser = require('cookie-parser');
 const jobsRoutes = require('./routes/jobsRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const resumeRoutes = require('./routes/resumeRoutes');
+const apiScrapeRoutes = require('./routes/apiScrapeRoutes');
+const apiJobsRoutes = require('./routes/apiJobsRoutes');
+const apiResumeRoutes = require('./routes/apiResumeRoutes');
+const apiMatchRoutes = require('./routes/apiMatchRoutes');
 const { getLogger } = require('./logger');
 
 const appLogger = getLogger('http');
@@ -92,6 +96,12 @@ app.use((req, res, next) => {
   res.locals.currentPath = req.path;
   next();
 });
+
+// JSON API routes
+app.use('/', apiScrapeRoutes);
+app.use('/', apiJobsRoutes);
+app.use('/', apiResumeRoutes);
+app.use('/', apiMatchRoutes);
 
 app.use('/', jobsRoutes);
 app.use('/', adminRoutes);

@@ -7,11 +7,16 @@ function getDbInstance() {
 function createRun(scraperName) {
   const db = getDbInstance();
   const stmt = db.prepare(
-    `INSERT INTO scraper_runs (scraper_name, status)
-     VALUES (@scraper_name, 'queued')`
+    `INSERT INTO scraper_runs (scraper_name, status, progress_json)
+     VALUES (@scraper_name, 'queued', @progress_json)`
   );
   const info = stmt.run({
     scraper_name: scraperName,
+    progress_json: JSON.stringify({
+      total: 0,
+      current: 0,
+      message: 'Queued',
+    }),
   });
   return info.lastInsertRowid;
 }
@@ -26,11 +31,23 @@ function markRunRunning(id) {
   ).run({ id });
 }
 
+function updateRunProgress(id, progress) {
+  const db = getDbInstance();
+  db.prepare(
+    `UPDATE scraper_runs
+     SET progress_json = @progress_json
+     WHERE id = @id`
+  ).run({
+    id,
+    progress_json: progress ? JSON.stringify(progress) : null,
+  });
+}
+
 function markRunSuccess(id, jobsAdded) {
   const db = getDbInstance();
   db.prepare(
     `UPDATE scraper_runs
-     SET status = 'success',
+     SET status = 'completed',
          finished_at = CURRENT_TIMESTAMP,
          jobs_added = @jobs_added
      WHERE id = @id`
@@ -44,7 +61,7 @@ function markRunFailure(id, errorMessage) {
   const db = getDbInstance();
   db.prepare(
     `UPDATE scraper_runs
-     SET status = 'failure',
+     SET status = 'failed',
          finished_at = CURRENT_TIMESTAMP,
          error_message = @error_message
      WHERE id = @id`
@@ -81,8 +98,8 @@ module.exports = {
   markRunRunning,
   markRunSuccess,
   markRunFailure,
+  updateRunProgress,
   getRunById,
   getRecentRuns,
   deleteRun,
 };
-

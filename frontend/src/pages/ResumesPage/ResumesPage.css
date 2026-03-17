@@ -1,0 +1,77 @@
+.resumes-page h1 {
+  margin: 0 0 16px;
+}
+
+.resume-uploader {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px dashed var(--border-subtle);
+  background: #f9fafb;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.resume-uploader input {
+  display: none;
+}
+
+.resumes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.resume-card {
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+}
+
+.resume-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.resume-name {
+  font-weight: 600;
+}
+
+.resume-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.resume-skills {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.resume-header button {
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.resume-preview {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+

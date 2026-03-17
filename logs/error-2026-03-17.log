@@ -1,0 +1,2 @@
+{"err":{},"level":"error","message":"Fatal error in APSJobs scraper","module":"apsjobsScraper","service":"job-hunter","timestamp":"2026-03-17T06:25:31.569Z"}
+{"exitCode":1,"level":"error","message":"Scraper exited with non-zero code","module":"scraperService","runId":1,"service":"job-hunter","timestamp":"2026-03-17T06:25:31.574Z"}

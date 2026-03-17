@@ -1,0 +1,16 @@
+:root {
+  --bg: #f5f5f7;
+  --card-bg: #ffffff;
+  --primary: #2563eb;
+  --text-main: #111827;
+  --text-muted: #6b7280;
+  --border-subtle: #e5e7eb;
+  --status-running: #f97316;
+  --status-completed: #16a34a;
+  --status-failed: #dc2626;
+}
+
+body {
+  background-color: var(--bg);
+}
+

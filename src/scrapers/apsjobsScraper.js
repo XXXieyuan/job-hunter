@@ -6,6 +6,27 @@ const { getLogger } = require('../logger');
 
 const logger = getLogger('apsjobsScraper');
 
+function emitProgress(progress) {
+  try {
+    const payload = {
+      total:
+        typeof progress.total === 'number' && progress.total >= 0
+          ? progress.total
+          : 0,
+      current:
+        typeof progress.current === 'number' && progress.current >= 0
+          ? progress.current
+          : 0,
+      message: typeof progress.message === 'string' ? progress.message : '',
+    };
+    // Write a single-line marker that the parent process can parse easily.
+    // This deliberately avoids the Winston logger so the line stays clean.
+    process.stdout.write(`[PROGRESS] ${JSON.stringify(payload)}\n`);
+  } catch (err) {
+    logger.warn('Failed to emit progress', { err });
+  }
+}
+
 // Simple CLI arg parsing (supports --key value and --key=value)
 function parseArgs(argv) {
   const args = {
@@ -352,12 +373,25 @@ async function goToNextPage(page) {
   }
 }
 
-async function scrapeKeyword(page, keyword, location, maxPages) {
+async function scrapeKeyword(page, keyword, location, maxPages, progressCtx) {
   const allJobs = [];
 
   await navigateToSearch(page, keyword, location);
 
   for (let pageIndex = 1; pageIndex <= maxPages; pageIndex++) {
+    if (progressCtx && typeof progressCtx.total === 'number') {
+      const nextCurrent =
+        typeof progressCtx.current === 'number'
+          ? progressCtx.current + 1
+          : 1;
+      progressCtx.current = nextCurrent;
+      emitProgress({
+        total: progressCtx.total,
+        current: progressCtx.current,
+        message: `Scraping "${keyword}" page ${pageIndex} of ${maxPages}`,
+      });
+    }
+
     // Wait for either results or "no results" indication
     try {
       await Promise.race([
@@ -435,6 +469,12 @@ async function main() {
 
   const maxRetries = 2;
 
+  const totalSteps = keywords.length * maxPages;
+  const progressCtx = {
+    total: totalSteps,
+    current: 0,
+  };
+
   for (const keyword of keywords) {
     let attempt = 0;
     let success = false;
@@ -444,7 +484,13 @@ async function main() {
       logger.info('Scraping keyword', { keyword, attempt, maxRetries });
 
       try {
-        const jobs = await scrapeKeyword(page, keyword, location, maxPages);
+        const jobs = await scrapeKeyword(
+          page,
+          keyword,
+          location,
+          maxPages,
+          progressCtx,
+        );
 
         logger.info('Keyword scrape completed', {
           keyword,

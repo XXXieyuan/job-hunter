@@ -1,0 +1,7 @@
+{"level":"info","message":"Job Hunter listening on port 3001","module":"server","service":"job-hunter","timestamp":"2026-03-17T00:25:17.695Z"}
+{"level":"info","message":"Job Hunter listening on port 3001","module":"server","service":"job-hunter","timestamp":"2026-03-17T00:26:35.520Z"}
+{"level":"info","message":"Job Hunter listening on port 3001","module":"server","service":"job-hunter","timestamp":"2026-03-17T00:27:41.145Z"}
+{"level":"info","message":"Scheduled scraper run","module":"scraperService","options":{"keywords":"test","maxPages":1},"runId":1,"scraperName":"apsjobs","service":"job-hunter","timestamp":"2026-03-17T06:25:31.371Z"}
+{"keywordsCount":1,"level":"info","location":"true","maxPages":1,"message":"APSJobs scraper starting","mode":"db","module":"apsjobsScraper","service":"job-hunter","timestamp":"2026-03-17T06:25:31.554Z"}
+{"err":{},"level":"error","message":"Fatal error in APSJobs scraper","module":"apsjobsScraper","service":"job-hunter","timestamp":"2026-03-17T06:25:31.569Z"}
+{"exitCode":1,"level":"error","message":"Scraper exited with non-zero code","module":"scraperService","runId":1,"service":"job-hunter","timestamp":"2026-03-17T06:25:31.574Z"}

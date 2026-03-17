@@ -78,6 +78,12 @@ document.addEventListener('DOMContentLoaded', () => {
           failure:
             scraperSection.dataset.i18nStatusFailure ||
             '失败',
+          completed:
+            scraperSection.dataset.i18nStatusSuccess ||
+            '成功',
+          failed:
+            scraperSection.dataset.i18nStatusFailure ||
+            '失败',
           unknown:
             scraperSection.dataset.i18nStatusUnknown ||
             '未知',
@@ -95,6 +101,8 @@ document.addEventListener('DOMContentLoaded', () => {
           queued: '排队中',
           success: '成功',
           failure: '失败',
+          completed: '成功',
+          failed: '失败',
           unknown: '未知',
         },
       };
@@ -173,9 +181,9 @@ document.addEventListener('DOMContentLoaded', () => {
           let statusClass = 'status-pill';
           if (status === 'running' || status === 'queued') {
             statusClass += ' status-running';
-          } else if (status === 'success') {
+          } else if (status === 'success' || status === 'completed') {
             statusClass += ' status-success';
-          } else if (status === 'failure') {
+          } else if (status === 'failure' || status === 'failed') {
             statusClass += ' status-failed';
           }
 

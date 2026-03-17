@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/home/node/.openclaw/workspace/job-hunter/logs/.758254da55e1614662ec80d2d4fc5a62de9f9f96-audit.json",
+    "files": [
+        {
+            "date": 1773707117558,
+            "name": "/home/node/.openclaw/workspace/job-hunter/logs/app-2026-03-17.log",
+            "hash": "2c75eeb79368ad7ad1bde1ce6f194d7c019e1ac879ae760efe10d13c91d37f49"
+        }
+    ],
+    "hashType": "sha256"
+}

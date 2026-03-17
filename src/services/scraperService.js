@@ -5,6 +5,8 @@ const {
   markRunRunning,
   markRunSuccess,
   markRunFailure,
+  updateRunProgress,
+  getRunById,
   getRecentRuns,
 } = require('../repositories/scraperRunsRepo');
 const { getLogger } = require('../logger');
@@ -84,6 +86,29 @@ function validateAndNormalizeApsjobsOptions(rawOptions) {
   return normalized;
 }
 
+function normalizeProgress(rawProgress, fallbackTotal) {
+  if (!rawProgress || typeof rawProgress !== 'object') {
+    return null;
+  }
+
+  const total =
+    Number.isFinite(rawProgress.total) && rawProgress.total >= 0
+      ? rawProgress.total
+      : Number.isFinite(fallbackTotal) && fallbackTotal > 0
+        ? fallbackTotal
+        : 0;
+
+  const current =
+    Number.isFinite(rawProgress.current) && rawProgress.current >= 0
+      ? rawProgress.current
+      : 0;
+
+  const message =
+    typeof rawProgress.message === 'string' ? rawProgress.message : '';
+
+  return { total, current, message };
+}
+
 function runApsjobsScraper(runId, options) {
   const scraperName = 'apsjobs';
 
@@ -108,6 +133,21 @@ function runApsjobsScraper(runId, options) {
         : Number(process.env.APSJOBS_MAX_PAGES) || 3;
     const mode = options.mode || 'db';
 
+    // Estimate total progress steps as pages per keyword; used as a fallback
+    const keywordList = String(keywords)
+      .split(',')
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0);
+    const estimatedTotalSteps = keywordList.length * Number(maxPages || 0);
+
+    if (estimatedTotalSteps > 0) {
+      updateRunProgress(runId, {
+        total: estimatedTotalSteps,
+        current: 0,
+        message: 'Starting APSJobs scraper…',
+      });
+    }
+
     const args = [
       scriptPath,
       '--mode',
@@ -129,18 +169,50 @@ function runApsjobsScraper(runId, options) {
 
     child.stdout.on('data', (data) => {
       const text = data.toString();
-      // Attempt to infer job count from scraper logs
-      const upsertMatch = text.match(/Upserted\s+(\d+)\s+jobs/i);
-      const totalMatch = text.match(/Total unique jobs collected:\s+(\d+)/i);
-      const match = upsertMatch || totalMatch;
-      if (match) {
-        const parsed = Number.parseInt(match[1], 10);
-        if (!Number.isNaN(parsed)) {
-          jobsAdded = parsed;
-        }
-      }
+      const lines = text.split(/\r?\n/);
 
-      logger.info('Scraper stdout', { runId, output: text.trimEnd() });
+      lines.forEach((rawLine) => {
+        const line = rawLine.trim();
+        if (!line) return;
+
+        // Progress messages from scraper: `[PROGRESS] {"total":..., "current":..., "message":"..."}`
+        if (line.startsWith('[PROGRESS]')) {
+          const jsonPart = line.slice('[PROGRESS]'.length).trim();
+          try {
+            const parsed = JSON.parse(jsonPart);
+            const normalizedProgress = normalizeProgress(
+              parsed,
+              estimatedTotalSteps
+            );
+            if (normalizedProgress) {
+              updateRunProgress(runId, normalizedProgress);
+            }
+          } catch (e) {
+            logger.warn('Failed to parse scraper progress payload', {
+              runId,
+              raw: jsonPart,
+            });
+          }
+          return;
+        }
+
+        // Attempt to infer job count from scraper logs based on JSON-ish meta.
+        // Winston console format ends with a JSON object containing metadata.
+        // Examples:
+        //  - {"totalUniqueJobs": 42}
+        //  - {"jobsCount": 42, "mode":"db"}
+        const jobsCountMatch = line.match(/"jobsCount"\s*:\s*(\d+)/);
+        const totalUniqueMatch = line.match(/"totalUniqueJobs"\s*:\s*(\d+)/);
+        const match = jobsCountMatch || totalUniqueMatch;
+        if (match) {
+          const parsed = Number.parseInt(match[1], 10);
+          if (!Number.isNaN(parsed)) {
+            jobsAdded = parsed;
+          }
+        }
+
+        logger.info('Scraper stdout', { runId, output: line });
+      });
     });
 
     child.stderr.on('data', (data) => {
@@ -203,4 +275,5 @@ function getScraperRuns(limit) {
 module.exports = {
   triggerScrape,
   getScraperRuns,
+  getRunById,
 };

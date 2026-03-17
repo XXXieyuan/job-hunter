@@ -1,4 +1,27 @@
 <% layout('layout') -%>
+<%
+function getScraperSourceMeta(sourceName) {
+  const normalized = String(sourceName || '').trim().toLowerCase();
+
+  if (normalized === 'seek') {
+    return { label: 'Seek', icon: '🔎', className: 'source-seek' };
+  }
+
+  if (normalized === 'linkedin') {
+    return { label: 'LinkedIn', icon: '💼', className: 'source-linkedin' };
+  }
+
+  if (normalized === 'aps' || normalized === 'apsjobs') {
+    return { label: 'APS', icon: '🔍', className: 'source-aps' };
+  }
+
+  return {
+    label: sourceName || t('admin.scraper.status.unknown', '未知'),
+    icon: '',
+    className: '',
+  };
+}
+%>
 
 <section
   class="page-section admin-section"
@@ -155,6 +178,7 @@
       data-i18n-started-with-id="<%= t('admin.scraper.status.startedWithId', '抓取已启动，运行 ID：{runId}。') %>"
       data-i18n-started="<%= t('admin.scraper.status.started', '抓取已启动。') %>"
       data-i18n-trigger-button-template="<%= t('admin.scraper.button.trigger', '触发 {source} 抓取') %>"
+      data-i18n-progress-title-template="<%= t('admin.scraper.progress.title', '{source} 抓取进度') %>"
       data-i18n-empty-runs="<%= t('admin.scraper.empty', '暂无抓取记录。') %>"
       data-i18n-trigger-failed-prefix="<%= t('admin.scraper.error.triggerFailedPrefix', '触发抓取失败：') %>"
       data-i18n-network-error="<%= t('admin.scraper.error.network', '触发抓取失败：网络错误或服务器不可用。') %>"
@@ -229,10 +253,20 @@
         ) %>
       </button>
       <p id="scraper-status" class="muted small run-status"></p>
-      <div id="scraper-progress" class="scraper-progress" hidden>
+      <div id="scraper-progress" class="scraper-progress source-aps" hidden>
         <div class="scraper-progress-header">
-          <span id="scraper-progress-percent" class="scraper-progress-percent">0%</span>
-          <span id="scraper-progress-state" class="muted small"></span>
+          <div class="scraper-progress-source">
+            <span id="scraper-progress-source-badge" class="badge source-badge source-aps">
+              🔍 APS
+            </span>
+            <span id="scraper-progress-title" class="scraper-progress-title">
+              <%= t('admin.scraper.progress.title', '{source} 抓取进度').replace('{source}', 'APS') %>
+            </span>
+          </div>
+          <div class="scraper-progress-summary">
+            <span id="scraper-progress-percent" class="scraper-progress-percent">0%</span>
+            <span id="scraper-progress-state" class="muted small"></span>
+          </div>
         </div>
         <div
           class="progress-bar"
@@ -273,13 +307,18 @@
             </tr>
             <% } else { %>
             <% scraperRuns.forEach(function(run){ %>
+            <% const sourceMeta = getScraperSourceMeta(run.scraper_name); %>
             <tr data-run-id="<%= run.id %>">
               <td><%= run.id %></td>
-              <td><%= run.scraper_name %></td>
+              <td>
+                <span class="badge source-badge <%= sourceMeta.className %>">
+                  <%= sourceMeta.icon ? `${sourceMeta.icon} ${sourceMeta.label}` : sourceMeta.label %>
+                </span>
+              </td>
               <td>
                 <% if (run.status === 'running' || run.status === 'queued') { %>
                 <span class="status-pill status-running"><%= run.status %></span>
-                <% } else if (run.status === 'success') { %>
+                <% } else if (run.status === 'success' || run.status === 'completed') { %>
                 <span class="status-pill status-success">
                   <%= t('admin.scraper.status.success', '成功') %>
                 </span>

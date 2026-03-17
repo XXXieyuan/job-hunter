@@ -25,8 +25,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const scraperProgressSteps = document.getElementById('scraper-progress-steps');
   const scraperProgressJobs = document.getElementById('scraper-progress-jobs');
   const scraperProgressMessage = document.getElementById('scraper-progress-message');
+  const scraperProgressSourceBadge = document.getElementById('scraper-progress-source-badge');
+  const scraperProgressTitle = document.getElementById('scraper-progress-title');
 
   let scraperEventSource = null;
+  const scraperSourceClasses = ['source-aps', 'source-seek', 'source-linkedin'];
 
   const analysisTexts = analysisSection
     ? {
@@ -69,6 +72,9 @@ document.addEventListener('DOMContentLoaded', () => {
         triggerButtonTemplate:
           scraperSection.dataset.i18nTriggerButtonTemplate ||
           '触发 {source} 抓取',
+        progressTitleTemplate:
+          scraperSection.dataset.i18nProgressTitleTemplate ||
+          '{source} 抓取进度',
         emptyRuns:
           scraperSection.dataset.i18nEmptyRuns ||
           '暂无抓取记录。',
@@ -107,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startedWithId: '抓取已启动，运行 ID：{runId}。',
         started: '抓取已启动。',
         triggerButtonTemplate: '触发 {source} 抓取',
+        progressTitleTemplate: '{source} 抓取进度',
         emptyRuns: '暂无抓取记录。',
         triggerFailedPrefix: '触发抓取失败：',
         networkError: '触发抓取失败：网络错误或服务器不可用。',
@@ -120,6 +127,86 @@ document.addEventListener('DOMContentLoaded', () => {
           unknown: '未知',
         },
       };
+
+  function getScraperSourceMeta(sourceName) {
+    const normalized = String(sourceName == null ? '' : sourceName).trim().toLowerCase();
+
+    if (normalized === 'seek') {
+      return {
+        key: 'seek',
+        label: 'Seek',
+        icon: '🔎',
+        className: 'source-seek',
+      };
+    }
+
+    if (normalized === 'linkedin') {
+      return {
+        key: 'linkedin',
+        label: 'LinkedIn',
+        icon: '💼',
+        className: 'source-linkedin',
+      };
+    }
+
+    if (normalized === 'aps' || normalized === 'apsjobs') {
+      return {
+        key: 'aps',
+        label: 'APS',
+        icon: '🔍',
+        className: 'source-aps',
+      };
+    }
+
+    return {
+      key: 'unknown',
+      label: sourceName || 'Scraper',
+      icon: '',
+      className: '',
+    };
+  }
+
+  function formatScraperSourceLabel(sourceName) {
+    const sourceMeta = getScraperSourceMeta(sourceName);
+
+    if (!sourceMeta.icon) {
+      return sourceMeta.label;
+    }
+
+    return `${sourceMeta.icon} ${sourceMeta.label}`;
+  }
+
+  function applyScraperSourceClass(element, sourceClassName) {
+    if (!element) {
+      return;
+    }
+
+    element.classList.remove(...scraperSourceClasses);
+
+    if (sourceClassName) {
+      element.classList.add(sourceClassName);
+    }
+  }
+
+  function updateScraperProgressSource(sourceName) {
+    const sourceMeta = getScraperSourceMeta(sourceName);
+
+    applyScraperSourceClass(scraperProgress, sourceMeta.className);
+
+    if (scraperProgressSourceBadge) {
+      scraperProgressSourceBadge.className = ['badge', 'source-badge', sourceMeta.className]
+        .filter(Boolean)
+        .join(' ');
+      scraperProgressSourceBadge.textContent = formatScraperSourceLabel(sourceName);
+    }
+
+    if (scraperProgressTitle) {
+      scraperProgressTitle.textContent = scraperTexts.progressTitleTemplate.replace(
+        '{source}',
+        sourceMeta.label,
+      );
+    }
+  }
 
   function getSelectedScraperLabel() {
     if (!scraperSourceInput) {
@@ -216,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return `
       <tr data-run-id="${escapeHtml(run.id)}">
         <td>${escapeHtml(run.id)}</td>
-        <td>${escapeHtml(run.scraper_name || '-')}</td>
+        <td>${renderScraperSourceBadge(run.scraper_name)}</td>
         <td><span class="${getScraperStatusClass(status)}">${escapeHtml(getScraperStatusLabel(status))}</span></td>
         <td>${escapeHtml(startedAt)}</td>
         <td>${escapeHtml(finishedAt)}</td>
@@ -254,6 +341,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function renderScraperSourceBadge(sourceName) {
+    const sourceMeta = getScraperSourceMeta(sourceName);
+    const className = ['badge', 'source-badge', sourceMeta.className]
+      .filter(Boolean)
+      .join(' ');
+
+    return `<span class="${className}">${escapeHtml(formatScraperSourceLabel(sourceName))}</span>`;
+  }
+
   function renderScraperProgress(run) {
     if (
       !scraperProgress ||
@@ -273,8 +369,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusLabel = getScraperStatusLabel(run.status);
 
     scraperProgress.hidden = false;
-    scraperProgress.classList.toggle('is-complete', run.status === 'completed');
-    scraperProgress.classList.toggle('is-failed', run.status === 'failed');
+    updateScraperProgressSource(run.scraper_name);
+    scraperProgress.classList.toggle(
+      'is-complete',
+      run.status === 'completed' || run.status === 'success',
+    );
+    scraperProgress.classList.toggle(
+      'is-failed',
+      run.status === 'failed' || run.status === 'failure',
+    );
     scraperProgressBar.style.width = `${percent}%`;
     scraperProgressBar.parentElement.setAttribute('aria-valuenow', String(percent));
     scraperProgressPercent.textContent = `${percent}%`;

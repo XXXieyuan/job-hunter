@@ -30,19 +30,29 @@
         </button>
         <nav class="nav">
           <a
+            href="/"
+            class="nav-link <%= currentPath === '/' ? 'active' : '' %>"
+            >🏠 <%= t('nav.home') %></a
+          >
+          <a
             href="/jobs"
             class="nav-link <%= currentPath && currentPath.startsWith('/jobs') ? 'active' : '' %>"
-            ><%= t('nav.jobs') %></a
+            >💼 <%= t('nav.jobs') %></a
           >
           <a
             href="/resumes"
             class="nav-link <%= currentPath && currentPath.startsWith('/resumes') ? 'active' : '' %>"
-            ><%= t('nav.resumes') %></a
+            >📄 <%= t('nav.resumes') %></a
+          >
+          <a
+            href="/match"
+            class="nav-link <%= currentPath && currentPath.startsWith('/match') ? 'active' : '' %>"
+            >🎯 <%= t('nav.match') %></a
           >
           <a
             href="/admin?token=job-hunter-admin-2026"
-            class="nav-link <%= currentPath && currentPath.startsWith('/admin') ? 'active' : '' %>"
-            ><%= t('nav.admin') %></a
+            class="nav-link nav-link-highlight <%= currentPath && currentPath.startsWith('/admin') ? 'active' : '' %>"
+            >🕷️ <%= t('nav.scraper') %></a
           >
           <div class="lang-toggle" aria-label="<%= t('nav.language', 'Language') %>">
             <a

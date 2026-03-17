@@ -5,6 +5,8 @@
   "nav.jobs": "Jobs",
   "nav.resumes": "Resumes",
   "nav.admin": "Admin",
+  "nav.scraper": "Scraper",
+  "nav.home": "Home",
   "nav.language": "Language",
   "nav.toggle": "Toggle navigation",
 
@@ -15,6 +17,20 @@
   "footer.tagline": "AI-powered job search assistant for the Australian market.",
 
   "errors.404": "Page not found",
+
+  "home.welcome": "Welcome to Job Hunter",
+  "home.subtitle": "AI-powered job search assistant. Find your dream job today!",
+  "home.actions.jobs.title": "Browse Jobs",
+  "home.actions.jobs.desc": "View all available jobs from APS, Seek, and LinkedIn",
+  "home.actions.resumes.title": "Manage Resumes",
+  "home.actions.resumes.desc": "Upload and manage your resumes",
+  "home.actions.match.title": "AI Matching",
+  "home.actions.match.desc": "Get AI-powered job matches based on your resume",
+  "home.actions.scraper.title": "Run Scraper",
+  "home.actions.scraper.desc": "Scrape jobs from APS, Seek, and LinkedIn",
+  "home.stats.jobs": "Total Jobs",
+  "home.stats.resumes": "Resumes",
+  "home.stats.matches": "Matches",
 
   "jobs.list.title": "Job List",
   "jobs.list.subtitle": "We automatically score each job against your resume and surface the best-fit roles first.",
@@ -85,9 +101,9 @@
   "admin.scraper.status.startedWithId": "Scraper started. Run ID: {runId}.",
   "admin.scraper.status.started": "Scraper started.",
   "admin.scraper.error.triggerFailedPrefix": "Failed to trigger scraper: ",
-  "admin.scraper.error.network": "Failed to trigger scraper: network error or server unavailable."
+  "admin.scraper.error.network": "Failed to trigger scraper: network error or server unavailable.",
 
-  ,"admin.dashboard.title": "Admin Panel",
+  "admin.dashboard.title": "Admin Panel",
   "admin.dashboard.subtitle": "Run analyses, upload job data, and inspect overall matching statistics.",
 
   "admin.analysis.title": "Run Status",
@@ -175,5 +191,5 @@
   "resumes.upload.fileLabel": "Choose resume file (.docx):",
   "resumes.upload.submit": "Upload and process",
   "resumes.upload.backToList": "Back to list",
-  "resumes.upload.hint": "Maximum file size 5MB. After upload, you can set the primary resume on the “My Resumes” page."
+  "resumes.upload.hint": "Maximum file size 5MB. After upload, you can set the primary resume on the \"My Resumes\" page."
 }

@@ -14,6 +14,23 @@ const { getLogger } = require('../logger');
 const logger = getLogger('scraperService');
 
 const INVALID_SCRAPER_OPTIONS_CODE = 'INVALID_SCRAPER_OPTIONS';
+const SCRAPER_CONFIGS = {
+  apsjobs: {
+    label: 'APSJobs',
+    scriptFile: 'apsjobsScraper.js',
+    envPrefix: 'APSJOBS',
+  },
+  seek: {
+    label: 'Seek',
+    scriptFile: 'seekScraper.js',
+    envPrefix: 'SEEK',
+  },
+  linkedin: {
+    label: 'LinkedIn',
+    scriptFile: 'linkedinScraper.js',
+    envPrefix: 'LINKEDIN',
+  },
+};
 
 function validateAndNormalizeScraperOptions(rawOptions) {
   const options = rawOptions && typeof rawOptions === 'object' ? rawOptions : {};
@@ -83,6 +100,36 @@ function validateAndNormalizeScraperOptions(rawOptions) {
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(options, 'mode')) {
+    if (options.mode != null && typeof options.mode !== 'string') {
+      const err = new Error('mode must be a string if provided.');
+      err.code = INVALID_SCRAPER_OPTIONS_CODE;
+      throw err;
+    }
+
+    if (typeof options.mode === 'string') {
+      const trimmed = options.mode.trim().toLowerCase();
+      if (trimmed) {
+        normalized.mode = trimmed;
+      }
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(options, 'output')) {
+    if (options.output != null && typeof options.output !== 'string') {
+      const err = new Error('output must be a string if provided.');
+      err.code = INVALID_SCRAPER_OPTIONS_CODE;
+      throw err;
+    }
+
+    if (typeof options.output === 'string') {
+      const trimmed = options.output.trim();
+      if (trimmed) {
+        normalized.output = trimmed;
+      }
+    }
+  }
+
   return normalized;
 }
 
@@ -113,24 +160,37 @@ function runScraper(runId, scraperName, options) {
   try {
     markRunRunning(runId);
 
-    const scriptFile = scraperName === 'seek' ? 'seekScraper.js' : 'apsjobsScraper.js';
-    const scriptPath = path.resolve(__dirname, '..', 'scrapers', scriptFile);
+    const scraperConfig = SCRAPER_CONFIGS[scraperName];
+
+    if (!scraperConfig) {
+      throw new Error(`Unsupported scraper: ${scraperName}`);
+    }
+
+    const scriptPath = path.resolve(
+      __dirname,
+      '..',
+      'scrapers',
+      scraperConfig.scriptFile,
+    );
 
     const normalizedOptions = validateAndNormalizeScraperOptions(options || {});
+    const envKeywords = process.env[`${scraperConfig.envPrefix}_KEYWORDS`];
+    const envLocation = process.env[`${scraperConfig.envPrefix}_LOCATION`];
+    const envMaxPages = Number(process.env[`${scraperConfig.envPrefix}_MAX_PAGES`]);
 
     const keywords =
       normalizedOptions.keywords ||
-      process.env.APSJOBS_KEYWORDS ||
+      envKeywords ||
       'Data,Engineer';
     const location =
       Object.prototype.hasOwnProperty.call(normalizedOptions, 'location')
         ? normalizedOptions.location
-        : process.env.APSJOBS_LOCATION || '';
+        : envLocation || '';
     const maxPages =
       Object.prototype.hasOwnProperty.call(normalizedOptions, 'maxPages')
         ? normalizedOptions.maxPages
-        : Number(process.env.APSJOBS_MAX_PAGES) || 3;
-    const mode = options.mode || 'db';
+        : envMaxPages || 3;
+    const mode = normalizedOptions.mode || 'db';
 
     // Estimate total progress steps as pages per keyword; used as a fallback
     const keywordList = String(keywords)
@@ -143,7 +203,7 @@ function runScraper(runId, scraperName, options) {
       updateRunProgress(runId, {
         total: estimatedTotalSteps,
         current: 0,
-        message: 'Starting APSJobs scraper…',
+        message: `Starting ${scraperConfig.label} scraper…`,
       });
     }
 
@@ -158,6 +218,10 @@ function runScraper(runId, scraperName, options) {
       '--max-pages',
       String(maxPages),
     ];
+
+    if (normalizedOptions.output) {
+      args.push('--output', normalizedOptions.output);
+    }
 
     const child = spawn(process.execPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -240,9 +304,9 @@ function runScraper(runId, scraperName, options) {
 }
 
 function triggerScrape(name, options = {}) {
-  const scraperName = name || 'apsjobs';
+  const scraperName = name || options.source || 'apsjobs';
 
-  if (scraperName !== 'apsjobs' && scraperName !== 'seek') {
+  if (!SCRAPER_CONFIGS[scraperName]) {
     logger.warn('Attempted to trigger unsupported scraper', { scraperName });
     throw new Error(`Unsupported scraper: ${scraperName}`);
   }

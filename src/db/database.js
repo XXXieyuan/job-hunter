@@ -23,6 +23,7 @@ const SOURCE_SEEDS = Object.freeze([
 ]);
 
 let database;
+let startupLogged = false;
 
 function resolveDatabasePath() {
   const configuredPath = process.env.DATABASE_PATH || 'data/jobhunter.db';
@@ -56,7 +57,7 @@ function initDatabase() {
     return database;
   }
 
-  const databasePath = resolveDatabasePath();
+  const databasePath = path.resolve(process.cwd(), 'data/jobhunter.db');
   ensureDataDirectory(databasePath);
   database = new Database(databasePath, { timeout: 5000 });
   database.pragma('busy_timeout = 5000');
@@ -71,6 +72,8 @@ function initDatabase() {
 
   applySchema(database);
   seedSources(database);
+  process.env.DATABASE_PATH = process.env.DATABASE_PATH || path.relative(process.cwd(), databasePath);
+  writeStartupLog();
 
   return database;
 }
@@ -79,10 +82,23 @@ function getDb() {
   return initDatabase();
 }
 
-module.exports = {
-  TABLES,
-  getDb,
-  initDatabase
-};
+function writeStartupLog() {
+  if (startupLogged) {
+    return;
+  }
+
+  startupLogged = true;
+
+  try {
+    const { log } = require('../utils/logger');
+    log('info', 'SERVER_START', 'Job Hunter v2 started');
+  } catch (error) {
+    startupLogged = false;
+  }
+}
+
+module.exports.TABLES = TABLES;
+module.exports.getDb = getDb;
+module.exports.initDatabase = initDatabase;
 
 initDatabase();

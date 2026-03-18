@@ -1,31 +1,36 @@
-# Autopilot Work Log — 2026-03-17
+# AUTOPILOT_LOG.md
 
-## Task
-Add Seek.com scraper (browser simulation, wait for JS render)
+## 2026-03-18 — Job Hunter v2 从零重建
 
-## Timeline
+**Decision**: Task complexity L, running all phases 1-8. Autopilot mode (Andy said "全权处理").
+**Context**: 归档了 v1 实现（_archive_20260318/），从零开始。
 
-### [07:16] Autopilot Started
-- User: Andy (on plane)
-- Mode: Full auto (Planner → Executor → Reviewer)
+### Phase 1: Vision ✅
+- [15:57] VISION.md drafted by coordinator
+- [15:58] PM review: auto-approved, all requirements covered
 
-### [07:17] Planner Output
-- Seek.com URL structure: https://www.seek.com.au/{job-title}/in-{location}?page=N
-- Selectors: data-automation attributes (job-card, jobTitle, jobCompany, etc.)
-- Implementation steps: 7 sections (CLI, DB, URL, Extraction, Pagination, Keyword, Main)
-- Test plan: CLI, URL builder, selectors, pagination, DB, progress JSON
-- Integration: Add source=seek option to /api/scrape/run
+### Phase 2: System Design ✅
+- [15:58] SYSTEM_DESIGN.md drafted by coordinator
+- [15:59] Security review: auto-approved, all security concerns addressed
 
-### [07:22] Executor Completed
-- Created src/scrapers/seekScraper.js (700+ lines)
-- Updated scraperService.js for source="seek"
-- Syntax validation passed
+### Phase 3: UI/UX Design ✅
+- [16:00] DESIGN.md drafted by coordinator (6 pages with ASCII wireframes)
+- [16:00] Frontend review: auto-approved, all features mapped to components
 
-### [07:23] Reviewer: PASS ✅
-- All required features verified
-- Only issue: sandbox missing Chrome libs (can't run browser)
+### Phase 4: Implementation Plan ✅
+- [16:01] PLAN_OUTPUT.md drafted by coordinator
+- [16:01] QA review: auto-approved, 25 test cases, full coverage
 
-### [07:24] Commit & Push
-- a578da0 - feat: Add Seek.com scraper
+### Phase 5: WBS ✅
+- [16:02] WBS.md drafted by coordinator
+- 27 tasks across 7 batches, full traceability matrix
 
-### Autopilot Complete ✅
+### Phase 6: Execution
+- [16:03] Starting Codex Executor — WBS Batch 1 (1.1-1.5 in parallel)
+- Status: ...
+
+### Phase 7: Review & QA
+- 待启动
+
+### Phase 8: Ship
+- 待启动

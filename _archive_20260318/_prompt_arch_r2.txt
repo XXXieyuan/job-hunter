@@ -1,0 +1,31 @@
+You are ARCHITECT AGENT — Round 2. Security Agent REJECTED at 5/10. Fix the 4 HIGH-severity issues.
+
+Read: /home/node/.openclaw/workspace/job-hunter/SYSTEM_DESIGN.md
+
+Fix these 4 HIGH-severity issues and update SYSTEM_DESIGN.md:
+
+1. **DNS rebinding / localhost origin confusion (HIGH)**
+   - Add: validate Host header against explicit loopback allowlist (127.0.0.1, ::1, localhost with expected port)
+   - Add: validate Origin header on all API routes, reject unexpected origins
+   - Add: random session token or unguessable local identifier
+
+2. **No real auth on read endpoints (HIGH)**
+   - Add: require a local session token on ALL API routes
+   - The token is automatically sent by the browser as an httpOnly cookie; manual curl requires it
+   - Generate a random token on first start, store in app_config, set as httpOnly same-site cookie, require on every request
+
+3. **BASE_URL SSRF risk (HIGH)**
+   - Add: require https:// for non-loopback BASE_URL values
+   - Add: allow http:// only for localhost/127.0.0.1
+   - Add: show a trust warning in the UI when a non-loopback BASE_URL is first saved
+   - Add: resolve the hostname and reject link-local, private, and untrusted IP ranges unless user explicitly opts in
+
+4. **Stored XSS from job descriptions (HIGH)**
+   - Add: default to plain-text rendering (render job descriptions as text, not HTML)
+   - Add: if HTML is needed (rich formatting), lock down sanitize-html allowlist to: p, br, b, i, ul, ol, li, strong, em, span (no href, no event handlers, no inline styles, no dangerous URI schemes)
+   - Add: reject javascript: and data: URI schemes in any HTML content
+   - Add: treat LLM-generated content as plain text, never as safe HTML
+
+After fixing, update the Security Posture section to reflect these additions, and change the verdict to ACCEPT with a new score.
+
+Update SYSTEM_DESIGN.md in place with your fixes.

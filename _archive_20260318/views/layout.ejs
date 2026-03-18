@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="<%= locale === 'en' ? 'en' : 'zh-CN' %>">
+  <head>
+    <meta charset="UTF-8" />
+    <title><%= t('app.fullTitle') %></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/main.css" />
+  </head>
+  <body>
+    <div class="app-root container">
+      <header class="app-header navbar">
+        <div class="brand">
+          <div class="brand-orb"></div>
+          <span class="brand-title"><%= t('app.fullTitle') %></span>
+        </div>
+        <button
+          class="nav-toggle"
+          type="button"
+          aria-label="<%= t('nav.toggle', 'Toggle navigation') %>"
+          aria-expanded="false"
+        >
+          <span class="nav-toggle-bar"></span>
+          <span class="nav-toggle-bar"></span>
+        </button>
+        <nav class="nav">
+          <a
+            href="/"
+            class="nav-link <%= currentPath === '/' ? 'active' : '' %>"
+            >🏠 <%= t('nav.home') %></a
+          >
+          <a
+            href="/jobs"
+            class="nav-link <%= currentPath && currentPath.startsWith('/jobs') ? 'active' : '' %>"
+            >💼 <%= t('nav.jobs') %></a
+          >
+          <a
+            href="/resumes"
+            class="nav-link <%= currentPath && currentPath.startsWith('/resumes') ? 'active' : '' %>"
+            >📄 <%= t('nav.resumes') %></a
+          >
+          <a
+            href="/match"
+            class="nav-link <%= currentPath && currentPath.startsWith('/match') ? 'active' : '' %>"
+            >🎯 <%= t('nav.match') %></a
+          >
+          <a
+            href="/admin?token=job-hunter-admin-2026"
+            class="nav-link nav-link-highlight <%= currentPath && currentPath.startsWith('/admin') ? 'active' : '' %>"
+            >🕷️ <%= t('nav.scraper') %></a
+          >
+          <div class="lang-toggle" aria-label="<%= t('nav.language', 'Language') %>">
+            <a
+              href="/lang/zh"
+              class="lang-pill <%= locale === 'zh' ? 'active' : '' %>"
+            >
+              <%= t('lang.zh', '中') %>
+            </a>
+            <span class="lang-separator">·</span>
+            <a
+              href="/lang/en"
+              class="lang-pill <%= locale === 'en' ? 'active' : '' %>"
+            >
+              <%= t('lang.en', 'EN') %>
+            </a>
+          </div>
+        </nav>
+      </header>
+
+      <!-- Shared SVG defs for gauges / icons -->
+      <svg class="visually-hidden" aria-hidden="true" focusable="false" width="0" height="0">
+        <defs>
+          <linearGradient id="fit-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#06b6d4" />
+            <stop offset="50%" stop-color="#10b981" />
+            <stop offset="100%" stop-color="#22c55e" />
+          </linearGradient>
+        </defs>
+      </svg>
+
+      <main class="app-main">
+        <%- body %>
+      </main>
+
+      <footer>
+        <span>
+          © <%= new Date().getFullYear() %> <%= t('app.name') %>. <%= t('footer.rights') %>
+        </span>
+        <span><%= t('footer.tagline') %></span>
+      </footer>
+    </div>
+
+    <script src="/js/main.js"></script>
+    <script src="/js/admin.js"></script>
+  </body>
+</html>

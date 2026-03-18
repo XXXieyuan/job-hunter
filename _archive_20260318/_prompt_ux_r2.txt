@@ -1,0 +1,22 @@
+You are UX DESIGNER AGENT — Round 2. Fix 7 accessibility issues identified by the Accessibility Agent.
+
+Read: /home/node/.openclaw/workspace/job-hunter/UI_DESIGN.md
+
+Fix these 7 issues and update UI_DESIGN.md in place:
+
+1. **Focus coverage** — add `focus-visible` state to every interactive component that lacks it. Define minimum contrast for the ring against all backgrounds. Add focus behavior to: TopNav, SideNavRail, SegmentedControl, ToggleChipGroup, PageLimitStepper, PaginationControl, JobRowCard, ResumeDropzone.
+
+2. **Non-color encoding** — pair every score/status color with persistent text or icon labels. Add non-color encodings (patterns or text labels) for score bands. Replace the "system health dot" with a labeled status chip with text.
+
+3. **Live polling noise** — define a single summary aria-live="polite" region for meaningful milestones only. Add a user-collapsible live run rail. Keep detailed counters visual-only unless they receive focus.
+
+4. **Row keyboard model** — replace "clicking a row opens" with: use clear semantic table/list markup, provide a dedicated Open details button per row, keep row status controls separately focusable, define Enter/Space behavior explicitly.
+
+5. **ResumeDropzone keyboard** — back the dropzone with a native file input + visible button, support Enter/Space activation, expose accepted file types programmatically, announce uploading/parsing/result states through a live region.
+
+6. **Mobile focus management** — require focus trap/restore for drawers and dialogs, ensure filter chips are reachable without swipe-only interaction, verify reflow at narrow widths and high zoom, prevent sticky bars from covering actionable content.
+
+7. **Ship reduced-effects toggle from day one** — move the Reduce Effects toggle from deferred to P0. Define what each state turns off. Remove shake/starburst from core task feedback. Keep status feedback readable without animation.
+
+Update the Accessibility Review Addendum section with new scores after fixes.
+Change Verdict to ACCEPT and score to 8/10 when done.

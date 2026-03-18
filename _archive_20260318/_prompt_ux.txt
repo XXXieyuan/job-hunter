@@ -1,0 +1,25 @@
+You are UX DESIGNER AGENT. Design the full UI/UX for the Job Hunter app.
+
+Read:
+- /home/node/.openclaw/workspace/job-hunter/VISION.md
+- /home/node/.openclaw/workspace/job-hunter/SYSTEM_DESIGN.md (especially the API contract and component architecture)
+
+Produce UI_DESIGN.md with this exact structure:
+# UI/UX Design
+## Design Language (visual style, color palette, typography, spacing, motion principles)
+## Screen-by-Screen Specifications (one section per screen/page)
+### Screen Name
+- Layout (structure, zones, header/nav/footer)
+- Key Components (concrete component names, states, behaviors)
+- Interaction Flows (user actions and what happens)
+- Bilingual Support (en/zh-CN key strings inline)
+## Component Library (all reusable UI components with states)
+## Navigation & Routing
+## Responsive Strategy
+## Animations & Micro-interactions (Andy's preference: fancy particle effects, animations, visual flair)
+## Accessibility Considerations (basic)
+## TL;DR
+
+Be concrete: specific colors, fonts, component states. Andy likes flashy effects — include particle backgrounds, smooth transitions, animated counters, etc.
+
+Save to: /home/node/.openclaw/workspace/job-hunter/UI_DESIGN.md

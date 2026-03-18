@@ -1,0 +1,56 @@
+You are ENG LEAD AGENT. Create the full implementation plan (IMPL_PLAN.md) for the Job Hunter app.
+
+Read ALL of these before writing:
+- /home/node/.openclaw/workspace/job-hunter/VISION.md
+- /home/node/.openclaw/workspace/job-hunter/SYSTEM_DESIGN.md
+- /home/node/.openclaw/workspace/job-hunter/UI_DESIGN.md
+
+Produce IMPL_PLAN.md with this exact structure:
+# Implementation Plan
+## Project Structure
+(Directory tree with brief purpose per directory)
+## Tech Stack Setup
+(Specific packages to install with version pinned, devDependencies, scripts to add to package.json)
+## Phase 0: Foundation (days 1-2)
+### Task 0.1: Project scaffolding
+### Task 0.2: Linting, formatting, TypeScript config
+### Task 0.3: Database schema + migrations
+### Task 0.4: Auth middleware (session token, CSRF, CORS)
+### Task 0.5: Config loading (.env, validation)
+## Phase 1: Core API (days 3-5)
+### Task 1.1: Search run endpoint
+### Task 1.2: Job insert/deduplication
+### Task 1.3: Ranking run endpoint
+### Task 1.4: Job CRUD + filtering
+### Task 1.5: Resume upload + parsing
+### Task 1.6: Cover letter generation
+### Task 1.7: Health check
+## Phase 2: Frontend Core (days 6-9)
+### Task 2.1: Vite + React + TypeScript setup
+### Task 2.2: Routing, layout, i18n
+### Task 2.3: Global CSS, design tokens, fonts
+### Task 2.4: API client + auth
+### Task 2.5: Setup & Settings page
+### Task 2.6: Search Workspace page
+### Task 2.7: Job Detail page
+### Task 2.8: Shortlist & Cover Letter pages
+### Task 2.9: Visual effects (particles, animations, transitions)
+## Phase 3: Polish & Integration (days 10-12)
+### Task 3.1: Accessibility audit fix
+### Task 3.2: Reduced effects toggle
+### Task 3.3: Error handling + toasts
+### Task 3.4: Loading states, empty states
+### Task 3.5: Final visual polish
+### Task 3.6: E2E tests
+## Acceptance Criteria per Task
+(One-liner per task: what "done" means)
+## Test Strategy
+## Deployment Notes
+## TL;DR
+
+Each task must have:
+- Concrete file paths affected
+- Specific npm packages if needed
+- Exact acceptance criteria
+
+Save to: /home/node/.openclaw/workspace/job-hunter/IMPL_PLAN.md

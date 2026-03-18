@@ -1,0 +1,167 @@
+<% layout('layout') -%>
+
+<section class="page-section">
+  <div class="section-header detail-header">
+    <a href="/jobs" class="back-link"><%= t('jobs.detail.backToList') %></a>
+    <h1 class="detail-title"><%= job.title %></h1>
+    <p class="section-subtitle detail-meta">
+      <span class="company-name"><%= job.company_name || t('jobs.list.company.unknown') %></span>
+      <% if (job.location) { %>
+      <span class="meta-item">
+        <span class="icon-pill">
+          <svg
+            class="icon icon-location"
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              d="M10 2.5a5 5 0 0 0-5 5c0 3.25 3.28 6.74 4.47 7.93a.78.78 0 0 0 1.06 0C11.72 14.24 15 10.75 15 7.5a5 5 0 0 0-5-5Zm0 2a3 3 0 0 1 3 3c0 1.86-1.58 3.94-3 5.46-1.42-1.52-3-3.6-3-5.46a3 3 0 0 1 3-3Zm0 1.8A1.2 1.2 0 1 0 11.2 7.5 1.2 1.2 0 0 0 10 6.3Z"
+            />
+          </svg>
+          <span><%= job.location %></span>
+        </span>
+      </span>
+      <% } %>
+    </p>
+  </div>
+
+  <section class="glass-card detail-block">
+    <div class="tabs" data-tabs-root="job-detail-tabs">
+      <button class="tab-btn active" type="button" data-tab-target="tab-overview">
+        <%= t('jobs.detail.tabs.overview') %>
+      </button>
+      <button class="tab-btn" type="button" data-tab-target="tab-fit">
+        <%= t('jobs.detail.tabs.fit') %>
+      </button>
+      <button class="tab-btn" type="button" data-tab-target="tab-company">
+        <%= t('jobs.detail.tabs.company') %>
+      </button>
+      <button class="tab-btn" type="button" data-tab-target="tab-cover">
+        <%= t('jobs.detail.tabs.coverLetter') %>
+      </button>
+    </div>
+
+    <div id="job-detail-tabs" class="tab-content tab-content-root">
+      <div class="tab-pane active" data-tab-id="tab-overview">
+        <div class="section">
+          <h2 class="section-title"><%= t('jobs.detail.overview.title') %></h2>
+          <p class="muted">
+            <%= t('jobs.detail.overview.sourceLabel') %>
+            <%= job.source || t('jobs.detail.overview.sourceUnknown') %>
+            <% if (job.posted_at) { %>
+            · <%= t('jobs.detail.overview.postedAt') %> <%= job.posted_at %>
+            <% } %>
+          </p>
+          <pre class="job-description">
+<%= job.description || t('jobs.detail.overview.noDescription') %>
+          </pre>
+          <% if (job.url) { %>
+          <p class="muted">
+            <%= t('jobs.detail.overview.originalLink') %>
+            <a href="<%= job.url %>" target="_blank" rel="noopener noreferrer"><%= job.url %></a>
+          </p>
+          <% } %>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-tab-id="tab-fit">
+        <div class="section">
+          <h2 class="section-title"><%= t('jobs.detail.fit.title') %></h2>
+          <% if (!score) { %>
+          <p class="muted"><%= t('jobs.detail.fit.notCalculated') %></p>
+          <% } else { 
+            const overall = score.overall_score;
+          %>
+          <div class="score-block fit-score detail-fit-layout">
+            <div class="score-main">
+              <div class="score-circle score-circle-large">
+                <% const overallRounded = overall != null ? Math.round(overall) : null; %>
+                <% const overallCircle = overallRounded != null ? Math.max(5, Math.min(100, overallRounded)) : 0; %>
+                <% let overallClass = 'score-low'; %>
+                <% if (overallRounded !== null) { %>
+                  <% if (overallRounded > 70) overallClass = 'score-high'; else if (overallRounded >= 50) overallClass = 'score-mid'; %>
+                <% } %>
+                <svg
+                  class="progress-ring"
+                  viewBox="0 0 36 36"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <circle class="progress-ring-bg" cx="18" cy="18" r="15"></circle>
+                  <circle
+                    class="progress-ring-value <%= overallClass %>"
+                    cx="18"
+                    cy="18"
+                    r="15"
+                    stroke-dasharray="100 100"
+                    stroke-dashoffset="<%= 100 - overallCircle %>"
+                  ></circle>
+                  <text x="18" y="20.5" class="progress-ring-text">
+                    <%= overallRounded != null ? overallRounded.toFixed(0) : '–' %>
+                  </text>
+                </svg>
+                <div class="score-circle-meta">
+                  <span class="score-circle-label"><%= t('jobs.detail.fit.overallLabel') %></span>
+                  <span
+                    class="score-value"
+                    data-score="<%= overall %>"
+                  ><%= overall.toFixed(1) %>%</span>
+                </div>
+              </div>
+            </div>
+            <div class="score-breakdown detail-list">
+              <div class="detail-item">
+                <span class="muted"><%= t('jobs.detail.fit.keywordScore') %></span>
+                <span><%= score.keyword_score.toFixed(1) %>%</span>
+              </div>
+              <div class="detail-item">
+                <span class="muted"><%= t('jobs.detail.fit.embeddingScore') %></span>
+                <span>
+                  <%= score.embedding_score != null
+                    ? score.embedding_score.toFixed(1) + '%'
+                    : t('jobs.detail.fit.embeddingScore.disabled') %>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="chips-row">
+            <span class="chip">
+              <%= t('jobs.detail.fit.matchedKeywords') %>
+              <%= (breakdown.matched_keywords || []).join(locale === 'en' ? ', ' : '，') || t('jobs.detail.fit.matchedKeywords.empty') %>
+            </span>
+          </div>
+          <% } %>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-tab-id="tab-company">
+        <div class="section">
+          <h2 class="section-title"><%= t('jobs.detail.company.title') %></h2>
+          <% if (!company) { %>
+          <p class="muted"><%= t('jobs.detail.company.empty') %></p>
+          <% } else { %>
+          <p class="muted">
+            <%= company.website || t('jobs.detail.company.website.empty') %>
+          </p>
+          <p>
+            <%= company.description || t('jobs.detail.company.description.empty') %>
+          </p>
+          <% } %>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-tab-id="tab-cover">
+        <div class="section">
+          <h2 class="section-title"><%= t('jobs.detail.coverLetter.title') %></h2>
+          <% if (!coverLetter) { %>
+          <p class="muted"><%= t('jobs.detail.coverLetter.empty') %></p>
+          <% } else { %>
+          <pre class="cover-letter-content"><%= coverLetter.content %></pre>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </section>
+</section>

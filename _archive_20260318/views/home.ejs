@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= t('app.fullTitle') %></title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-orb"></div>
+        <span class="brand-title"><%= t('app.fullTitle') %></span>
+      </div>
+      <nav class="navbar">
+        <a href="/" class="nav-link active">🏠 <%= t('nav.home') %></a>
+        <a href="/jobs" class="nav-link">💼 <%= t('nav.jobs') %></a>
+        <a href="/resumes" class="nav-link">📄 <%= t('nav.resumes') %></a>
+        <a href="/match" class="nav-link">🎯 <%= t('nav.match') %></a>
+        <a href="/admin" class="nav-link">⚙️ <%= t('nav.admin') %></a>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <div class="hero-section">
+        <h1><%= t('home.welcome') %></h1>
+        <p class="hero-subtitle"><%= t('home.subtitle') %></p>
+      </div>
+
+      <div class="quick-actions">
+        <a href="/jobs" class="action-card">
+          <div class="action-icon">🔍</div>
+          <h3><%= t('home.actions.jobs.title') %></h3>
+          <p><%= t('home.actions.jobs.desc') %></p>
+        </a>
+
+        <a href="/resumes" class="action-card">
+          <div class="action-icon">📄</div>
+          <h3><%= t('home.actions.resumes.title') %></h3>
+          <p><%= t('home.actions.resumes.desc') %></p>
+        </a>
+
+        <a href="/match" class="action-card">
+          <div class="action-icon">🎯</div>
+          <h3><%= t('home.actions.match.title') %></h3>
+          <p><%= t('home.actions.match.desc') %></p>
+        </a>
+
+        <a href="/admin" class="action-card">
+          <div class="action-icon">🕷️</div>
+          <h3><%= t('home.actions.scraper.title') %></h3>
+          <p><%= t('home.actions.scraper.desc') %></p>
+        </a>
+      </div>
+
+      <div class="stats-section">
+        <div class="stat-card">
+          <div class="stat-number"><%= stats.jobs || 0 %></div>
+          <div class="stat-label"><%= t('home.stats.jobs') %></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number"><%= stats.resumes || 0 %></div>
+          <div class="stat-label"><%= t('home.stats.resumes') %></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number"><%= stats.matches || 0 %></div>
+          <div class="stat-label"><%= t('home.stats.matches') %></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

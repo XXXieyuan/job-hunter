@@ -18,13 +18,15 @@ function getDefaultAdminToken() {
 
 function getConfig() {
   const overrides = readOverrides();
+  const hasOverride = (key) => Object.prototype.hasOwnProperty.call(overrides, key);
+
   return {
-    port: Number(overrides.PORT || process.env.PORT || 3001),
-    openaiApiKey: overrides.OPENAI_API_KEY || process.env.OPENAI_API_KEY || '',
-    openaiBaseUrl: overrides.OPENAI_BASE_URL || process.env.OPENAI_BASE_URL || '',
+    port: Number(hasOverride('PORT') ? overrides.PORT : (process.env.PORT || 3001)),
+    openaiApiKey: hasOverride('OPENAI_API_KEY') ? overrides.OPENAI_API_KEY : (process.env.OPENAI_API_KEY || ''),
+    openaiBaseUrl: hasOverride('OPENAI_BASE_URL') ? overrides.OPENAI_BASE_URL : (process.env.OPENAI_BASE_URL || ''),
     adminToken: process.env.ADMIN_TOKEN || getDefaultAdminToken(),
-    databasePath: overrides.DATABASE_PATH || process.env.DATABASE_PATH
-      ? (overrides.DATABASE_PATH || process.env.DATABASE_PATH)
+    databasePath: hasOverride('DATABASE_PATH') || process.env.DATABASE_PATH
+      ? (hasOverride('DATABASE_PATH') ? overrides.DATABASE_PATH : process.env.DATABASE_PATH)
       : path.join('data', 'jobhunter.db')
   };
 }

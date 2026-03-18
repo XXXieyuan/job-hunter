@@ -1,0 +1,178 @@
+<% layout('layout') -%>
+
+<section class="page-section">
+  <div class="section-header jobs-header">
+    <h1><%= t('jobs.list.title') %></h1>
+    <p class="section-subtitle"><%= t('jobs.list.subtitle') %></p>
+  </div>
+
+  <form class="filter-bar search-box" method="get" action="/jobs">
+    <div class="filter-group">
+      <label><%= t('jobs.list.filter.role') %></label>
+      <select name="role">
+        <option value=""><%= t('jobs.list.filter.all', '全部') %></option>
+        <% roles.forEach(function(r){ %>
+        <option value="<%= r %>" <%= filters.role === r ? 'selected' : '' %>>
+          <%= r %>
+        </option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label><%= t('jobs.list.filter.source') %></label>
+      <select name="source">
+        <option value=""><%= t('jobs.list.filter.all', '全部') %></option>
+        <% sources.forEach(function(s){ %>
+        <option value="<%= s %>" <%= filters.source === s ? 'selected' : '' %>>
+          <%= s %>
+        </option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label><%= t('jobs.list.filter.location') %></label>
+      <input
+        type="text"
+        name="location"
+        value="<%= filters.location || '' %>"
+        placeholder="<%= t('jobs.list.filter.placeholder.location') %>"
+        class="search-input"
+      />
+    </div>
+
+    <div class="filter-group">
+      <label><%= t('jobs.list.filter.minScore') %></label>
+      <input
+        type="number"
+        name="minScore"
+        min="0"
+        max="100"
+        step="5"
+        value="<%= filters.minScore || '' %>"
+        placeholder="<%= t('jobs.list.filter.placeholder.minScore') %>"
+        class="search-input"
+      />
+    </div>
+
+    <div class="filter-actions">
+      <button class="btn btn-primary" type="submit"><%= t('jobs.list.filter.apply') %></button>
+    </div>
+  </form>
+
+  <div class="cards-grid jobs-list">
+    <% if (!jobs.length) { %>
+    <div class="empty-state glass-card">
+      <p><%= t('jobs.list.empty') %></p>
+    </div>
+    <% } %>
+
+    <% jobs.forEach(function(job){ 
+      const score = typeof job.overall_score === 'number' ? job.overall_score : null;
+      let scoreClass = 'score-low';
+      if (score !== null) {
+        if (score > 70) scoreClass = 'score-high';
+        else if (score >= 50) scoreClass = 'score-mid';
+      }
+    %>
+    <article class="job-card glass-card">
+      <header class="job-card-header">
+        <div>
+          <h2 class="job-title"><%= job.title %></h2>
+          <div class="job-meta">
+            <span><%= job.company_name || t('jobs.list.company.unknown') %></span>
+            <% if (job.location) { %>
+            <span class="meta-item">
+              <span class="icon-pill">
+                <svg
+                  class="icon icon-location"
+                  viewBox="0 0 20 20"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    d="M10 2.5a5 5 0 0 0-5 5c0 3.25 3.28 6.74 4.47 7.93a.78.78 0 0 0 1.06 0C11.72 14.24 15 10.75 15 7.5a5 5 0 0 0-5-5Zm0 2a3 3 0 0 1 3 3c0 1.86-1.58 3.94-3 5.46-1.42-1.52-3-3.6-3-5.46a3 3 0 0 1 3-3Zm0 1.8A1.2 1.2 0 1 0 11.2 7.5 1.2 1.2 0 0 0 10 6.3Z"
+                  />
+                </svg>
+                <span><%= job.location %></span>
+              </span>
+            </span>
+            <% } %>
+            <% if (job.role) { %>
+            <span class="tag role-tag"><%= job.role %></span>
+            <% } %>
+          </div>
+        </div>
+        <div class="job-score">
+          <% const displayScore = score !== null ? Math.round(score) : null; %>
+          <% const circleValue = displayScore !== null ? Math.max(5, Math.min(100, displayScore)) : 0; %>
+          <div class="score-circle">
+            <svg
+              class="progress-ring"
+              viewBox="0 0 36 36"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle class="progress-ring-bg" cx="18" cy="18" r="15"></circle>
+              <circle
+                class="progress-ring-value <%= scoreClass %>"
+                cx="18"
+                cy="18"
+                r="15"
+                stroke-dasharray="100 100"
+                stroke-dashoffset="<%= 100 - circleValue %>"
+              ></circle>
+              <text x="18" y="20.5" class="progress-ring-text">
+                <%= displayScore !== null ? displayScore.toFixed(0) : '–' %>
+              </text>
+            </svg>
+            <div class="score-circle-meta">
+              <span class="score-circle-label"><%= t('jobs.list.fitScoreLabel') %></span>
+              <span
+                class="score-value"
+                data-score="<%= score !== null ? score : '' %>"
+              >
+                <%= score !== null ? score.toFixed(0) + '%' : t('jobs.list.fitScore.notCalculated') %>
+              </span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <p class="job-snippet">
+        <%= (job.description || '').slice(0, 120) %><%=
+        (job.description || '').length > 120 ? '…' : '' %>
+      </p>
+
+      <footer class="job-card-footer">
+        <div class="job-tags">
+          <% if (job.source) { %>
+          <span class="tag"><%= job.source %></span>
+          <% } %>
+          <% if (job.salary) { %>
+          <span class="tag tag-soft">
+            <span class="icon-pill">
+              <svg
+                class="icon icon-salary"
+                viewBox="0 0 20 20"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  d="M4 5.5A1.5 1.5 0 0 1 5.5 4h9A1.5 1.5 0 0 1 16 5.5v9A1.5 1.5 0 0 1 14.5 16h-9A1.5 1.5 0 0 1 4 14.5v-9Zm4.9 1.25a.75.75 0 0 0-1.5 0v.27A2.5 2.5 0 0 0 7 9.25a2.4 2.4 0 0 0 1.36 2.17c.38.2.8.33 1.24.45.52.14.92.26 1.22.42.3.16.43.33.43.58 0 .34-.15.58-.42.75-.28.17-.7.28-1.24.28-.53 0-.96-.1-1.3-.3a1 1 0 0 1-.47-.86.75.75 0 0 0-1.5 0c0 .9.43 1.68 1.1 2.19.47.35 1.03.57 1.67.67v.28a.75.75 0 0 0 1.5 0v-.29c.72-.11 1.33-.32 1.8-.62.76-.49 1.17-1.24 1.17-2.16 0-.9-.43-1.58-1.14-2.03-.7-.44-1.55-.63-2.28-.82-.46-.12-.86-.23-1.16-.4-.3-.16-.44-.34-.44-.62 0-.3.13-.54.38-.7.26-.17.65-.26 1.12-.26.49 0 .9.1 1.2.3.28.18.45.46.5.82a.75.75 0 1 0 1.48-.2 2.46 2.46 0 0 0-1.05-1.7A3.5 3.5 0 0 0 10.4 7Z"
+                />
+              </svg>
+              <span><%= job.salary %></span>
+            </span>
+          </span>
+          <% } %>
+        </div>
+        <div class="job-actions">
+          <a href="/jobs/<%= job.id %>" class="btn btn-ghost"><%= t('jobs.list.viewDetail') %></a>
+        </div>
+      </footer>
+    </article>
+    <% }) %>
+  </div>
+</section>

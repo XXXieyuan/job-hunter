@@ -11,6 +11,22 @@ function errorHandler(err, req, res, next) {
 
   log('error', 'ERROR', message);
 
+  if (!req.originalUrl.startsWith('/api') && typeof res.render === 'function') {
+    return res.status(statusCode).render('layout', {
+      title: 'Job Hunter',
+      lang: res.locals.lang || 'zh',
+      activePage: '',
+      bodyPartial: 'error',
+      pageStyles: ['/css/admin.css'],
+      pageScripts: [],
+      errorState: {
+        code,
+        message,
+        statusCode
+      }
+    });
+  }
+
   res.status(statusCode).json({
     error: true,
     code,

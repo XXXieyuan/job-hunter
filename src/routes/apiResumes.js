@@ -42,6 +42,9 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
 
     if (!file && req.body && req.body.file_path) {
       const originalName = req.body.original_name || path.basename(req.body.file_path);
+      if (!validateFileType(originalName, ['docx', 'pdf'])) {
+        throw createAppError(400, 'VALIDATION_ERROR', 'Only .docx and .pdf resumes are supported');
+      }
       file = {
         originalname: originalName,
         path: path.resolve(process.cwd(), req.body.file_path)

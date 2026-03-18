@@ -1,0 +1,6 @@
+{
+  "name": "pdf-parse",
+  "version": "0.0.0-local",
+  "main": "index.js",
+  "type": "commonjs"
+}

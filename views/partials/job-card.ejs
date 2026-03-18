@@ -1,0 +1,26 @@
+<article class="job-card card">
+  <div class="job-card__top">
+    <span class="badge badge-source badge-source--<%= (job.source || 'seek').toLowerCase() %>"><%= job.source_label || job.source || 'Job' %></span>
+    <% const scoreValue = Number(job.total_score || 0); %>
+    <span class="badge badge-score badge-score--<%= scoreValue >= 70 ? 'high' : scoreValue >= 40 ? 'mid' : 'low' %>">
+      <%= lang === 'en' ? 'Match' : '匹配度' %> <%= Math.round(scoreValue) %>
+    </span>
+  </div>
+  <h3 class="job-card__title"><a href="/jobs/<%= job.id %>?lang=<%= lang || 'zh' %>"><%= job.title %></a></h3>
+  <p class="job-card__meta">
+    <span><%= job.company || (lang === 'en' ? 'Unknown company' : '未知公司') %></span>
+    <span>·</span>
+    <span><%= job.location || (lang === 'en' ? 'Australia' : '澳大利亚') %></span>
+  </p>
+  <p class="job-card__salary">
+    <% if (job.salary_min || job.salary_max) { %>
+      $<%= job.salary_min || '?' %> - $<%= job.salary_max || '?' %> <%= job.salary_currency || 'AUD' %>
+    <% } else { %>
+      <%= lang === 'en' ? 'Salary not listed' : '未提供薪资' %>
+    <% } %>
+  </p>
+  <div class="job-card__footer">
+    <span class="text-muted"><%= lang === 'en' ? 'Status' : '状态' %>: <%= job.status || 'unread' %></span>
+    <a class="btn btn-secondary" href="/jobs/<%= job.id %>?lang=<%= lang || 'zh' %>"><%= lang === 'en' ? 'View' : '查看详情' %></a>
+  </div>
+</article>

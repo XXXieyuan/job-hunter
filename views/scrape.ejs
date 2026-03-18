@@ -1,0 +1,51 @@
+<section class="scrape-layout">
+  <div class="card scrape-hero">
+    <p class="eyebrow"><%= lang === 'en' ? 'Scraper control' : '抓取控制台' %></p>
+    <h1><%= lang === 'en' ? 'Collect new roles from SEEK, LinkedIn, and APSJobs' : '从 SEEK、LinkedIn 和 APSJobs 抓取新职位' %></h1>
+  </div>
+
+  <div class="scrape-grid">
+    <form class="card scrape-form" data-scrape-form>
+      <label class="form-field">
+        <span><%= lang === 'en' ? 'Source' : '来源' %></span>
+        <select name="source">
+          <% (sources || []).forEach(function(source) { %>
+            <option value="<%= source.name %>"><%= source.label %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label class="form-field">
+        <span><%= lang === 'en' ? 'Keywords' : '关键词' %></span>
+        <input type="text" name="keywords" value="AI, machine learning, data science" />
+      </label>
+      <label class="form-field">
+        <span><%= lang === 'en' ? 'Max pages' : '最大页数' %></span>
+        <input type="number" name="maxPages" min="1" max="20" value="3" />
+      </label>
+      <button class="btn btn-primary" type="submit"><%= lang === 'en' ? 'Start scrape' : '开始抓取' %></button>
+      <div class="progress-block" hidden data-scrape-progress>
+        <div class="progress"><span class="progress__fill" data-scrape-progress-fill></span></div>
+        <p class="text-muted" data-scrape-progress-text><%= lang === 'en' ? 'Waiting...' : '等待中...' %></p>
+      </div>
+    </form>
+
+    <div class="card">
+      <div class="section-header">
+        <h2><%= lang === 'en' ? 'Recent runs' : '最近抓取历史' %></h2>
+      </div>
+      <% if ((history || []).length) { %>
+        <div class="history-list">
+          <% history.forEach(function(item) { %>
+            <article class="history-item">
+              <strong><%= item.source_label || item.source || 'Source' %></strong>
+              <span><%= item.keywords %></span>
+              <span><%= item.status %> · <%= item.jobs_found || 0 %> jobs</span>
+            </article>
+          <% }) %>
+        </div>
+      <% } else { %>
+        <p class="text-muted"><%= lang === 'en' ? 'No scrape history yet.' : '还没有抓取历史。' %></p>
+      <% } %>
+    </div>
+  </div>
+</section>

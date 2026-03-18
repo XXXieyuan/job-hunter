@@ -1,74 +1,49 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= t('app.fullTitle') %></title>
-  <link rel="stylesheet" href="/css/main.css">
-</head>
-<body>
-  <div class="app-container">
-    <header class="app-header">
-      <div class="brand">
-        <div class="brand-orb"></div>
-        <span class="brand-title"><%= t('app.fullTitle') %></span>
-      </div>
-      <nav class="navbar">
-        <a href="/" class="nav-link active">🏠 <%= t('nav.home') %></a>
-        <a href="/jobs" class="nav-link">💼 <%= t('nav.jobs') %></a>
-        <a href="/resumes" class="nav-link">📄 <%= t('nav.resumes') %></a>
-        <a href="/match" class="nav-link">🎯 <%= t('nav.match') %></a>
-        <a href="/admin" class="nav-link">⚙️ <%= t('nav.admin') %></a>
-      </nav>
-    </header>
-
-    <main class="main-content">
-      <div class="hero-section">
-        <h1><%= t('home.welcome') %></h1>
-        <p class="hero-subtitle"><%= t('home.subtitle') %></p>
-      </div>
-
-      <div class="quick-actions">
-        <a href="/jobs" class="action-card">
-          <div class="action-icon">🔍</div>
-          <h3><%= t('home.actions.jobs.title') %></h3>
-          <p><%= t('home.actions.jobs.desc') %></p>
-        </a>
-
-        <a href="/resumes" class="action-card">
-          <div class="action-icon">📄</div>
-          <h3><%= t('home.actions.resumes.title') %></h3>
-          <p><%= t('home.actions.resumes.desc') %></p>
-        </a>
-
-        <a href="/match" class="action-card">
-          <div class="action-icon">🎯</div>
-          <h3><%= t('home.actions.match.title') %></h3>
-          <p><%= t('home.actions.match.desc') %></p>
-        </a>
-
-        <a href="/admin" class="action-card">
-          <div class="action-icon">🕷️</div>
-          <h3><%= t('home.actions.scraper.title') %></h3>
-          <p><%= t('home.actions.scraper.desc') %></p>
-        </a>
-      </div>
-
-      <div class="stats-section">
-        <div class="stat-card">
-          <div class="stat-number"><%= stats.jobs || 0 %></div>
-          <div class="stat-label"><%= t('home.stats.jobs') %></div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-number"><%= stats.resumes || 0 %></div>
-          <div class="stat-label"><%= t('home.stats.resumes') %></div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-number"><%= stats.matches || 0 %></div>
-          <div class="stat-label"><%= t('home.stats.matches') %></div>
-        </div>
-      </div>
-    </main>
+<section class="home-grid">
+  <div class="hero card glow-card">
+    <p class="eyebrow"><%= lang === 'en' ? 'Welcome back' : '欢迎回来' %></p>
+    <h1><%= lang === 'en' ? 'Your AI-powered job dashboard' : '你的 AI 求职驾驶舱' %></h1>
+    <p class="text-muted">
+      <%= lang === 'en' ? `You have ${stats.jobs_total} jobs, ${stats.matched_total} analysed matches, and ${stats.high_match_jobs || 0} high-fit opportunities.` : `当前共有 ${stats.jobs_total} 个职位，${stats.matched_total} 个已分析，${stats.high_match_jobs || 0} 个高匹配机会。` %>
+    </p>
   </div>
-</body>
-</html>
+
+  <div class="quick-actions">
+    <a class="card action-card" href="/scrape?lang=<%= lang || 'zh' %>">🔍 <span><%= lang === 'en' ? 'Quick scrape' : '快速抓取' %></span></a>
+    <a class="card action-card" href="/resumes?lang=<%= lang || 'zh' %>">📄 <span><%= lang === 'en' ? 'Upload resume' : '上传简历' %></span></a>
+    <a class="card action-card" href="/jobs?lang=<%= lang || 'zh' %>">🎯 <span><%= lang === 'en' ? 'Browse matches' : '查看匹配' %></span></a>
+    <a class="card action-card" href="/admin?lang=<%= lang || 'zh' %>">⚙️ <span><%= lang === 'en' ? 'Open admin' : '打开管理台' %></span></a>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <h2><%= lang === 'en' ? 'Recent jobs' : '最近职位' %></h2>
+      <a href="/jobs?lang=<%= lang || 'zh' %>"><%= lang === 'en' ? 'See all' : '查看全部' %></a>
+    </div>
+    <% if ((recentJobs || []).length) { %>
+      <div class="job-list">
+        <% recentJobs.forEach(function(job) { %>
+          <%- include('partials/job-card', { job: job, lang: lang }) %>
+        <% }) %>
+      </div>
+    <% } else { %>
+      <div class="empty-state">
+        <h3><%= lang === 'en' ? 'No jobs yet' : '还没有职位数据' %></h3>
+        <p><%= lang === 'en' ? 'Run your first scrape and upload a primary resume to unlock matching.' : '先上传主简历并执行一次抓取，即可开始匹配分析。' %></p>
+      </div>
+    <% } %>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <h2><%= lang === 'en' ? 'Source distribution' : '抓取来源' %></h2>
+    </div>
+    <div class="source-bars">
+      <% (sourceStats || []).forEach(function(source) { %>
+        <div class="source-bar">
+          <div class="source-bar__label"><span><%= source.label %></span><span><%= source.count %></span></div>
+          <div class="progress"><span class="progress__fill progress__fill--<%= source.name %>" style="width: <%= source.percentage %>%"></span></div>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+</section>

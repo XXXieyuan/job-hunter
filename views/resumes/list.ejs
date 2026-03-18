@@ -1,106 +1,38 @@
-<% layout('layout') -%>
-
-<section class="page-section">
-  <div class="section-header">
-    <h1><%= t('resumes.list.title', '我的简历') %></h1>
-    <p class="section-subtitle">
-      <%= t(
-        'resumes.list.subtitle',
-        '上传多份简历，选择主简历用于匹配和生成 Cover Letter。'
-      ) %>
-    </p>
+<section class="resumes-layout">
+  <div class="card upload-card">
+    <p class="eyebrow"><%= lang === 'en' ? 'Resume hub' : '简历中心' %></p>
+    <h1><%= lang === 'en' ? 'Upload and manage your resumes' : '上传并管理你的简历' %></h1>
+    <form class="upload-form" data-resume-form enctype="multipart/form-data" method="post" action="/api/resumes/upload">
+      <label class="upload-dropzone" data-upload-zone>
+        <input type="file" name="file" accept=".docx,.pdf" />
+        <span><%= lang === 'en' ? 'Drop a .docx or .pdf here, or click to browse.' : '拖放 .docx / .pdf 文件到这里，或点击选择。' %></span>
+      </label>
+      <button class="btn btn-primary" type="submit"><%= lang === 'en' ? 'Upload resume' : '上传简历' %></button>
+    </form>
   </div>
 
-  <div class="glass-card">
-    <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px;">
-      <p class="muted small" style="margin:0;">
-        <%= t(
-          'resumes.list.uploadHint',
-          '支持上传 .docx 简历文件（推荐）。其他文本文件将按纯文本解析。'
-        ) %>
-      </p>
-      <a href="/resumes/upload" class="btn btn-secondary">
-        <%= t('resumes.list.uploadButton', '上传新简历') %>
-      </a>
-    </div>
-  </div>
-
-  <div class="glass-card" style="margin-top: 12px;">
-    <% if (!resumes.length) { %>
-    <div class="empty-state">
-      <p>
-        <%= t(
-          'resumes.list.empty',
-          '当前没有任何简历。可以先上传一份 .docx 简历，或使用内置示例简历。'
-        ) %>
-      </p>
-    </div>
+  <div class="resume-grid">
+    <% if ((resumes || []).length) { %>
+      <% resumes.forEach(function(resume) { %>
+        <article class="card resume-card">
+          <div class="resume-card__header">
+            <h2><%= resume.name %></h2>
+            <% if (resume.is_primary) { %><span class="badge badge-primary"><%= lang === 'en' ? 'Primary' : '主简历' %></span><% } %>
+          </div>
+          <p class="text-muted"><%= resume.file_name %></p>
+          <p><%= lang === 'en' ? 'Skills' : '技能' %>: <%= (resume.parsed_data.skills || []).slice(0, 6).join(', ') || '—' %></p>
+          <p><%= lang === 'en' ? 'Experience' : '经验' %>: <%= (resume.parsed_data.experience || []).slice(0, 2).join(' · ') || '—' %></p>
+          <div class="button-row">
+            <button class="btn btn-secondary" type="button" data-set-primary data-id="<%= resume.id %>"><%= lang === 'en' ? 'Set primary' : '设为主简历' %></button>
+            <button class="btn btn-danger" type="button" data-delete-resume data-id="<%= resume.id %>"><%= lang === 'en' ? 'Delete' : '删除' %></button>
+          </div>
+        </article>
+      <% }) %>
     <% } else { %>
-    <table class="jobs-table">
-      <thead>
-        <tr>
-          <th><%= t('resumes.list.table.id', 'ID') %></th>
-          <th><%= t('resumes.list.table.name', '名称') %></th>
-          <th><%= t('resumes.list.table.file', '文件') %></th>
-          <th><%= t('resumes.list.table.main', '主简历') %></th>
-          <th><%= t('resumes.list.table.createdAt', '创建时间') %></th>
-          <th><%= t('resumes.list.table.actions', '操作') %></th>
-        </tr>
-      </thead>
-      <tbody>
-        <% resumes.forEach(function(r){ %>
-        <tr>
-          <td><%= r.id %></td>
-          <td><%= r.name || t('resumes.list.table.unnamed', '未命名简历') %></td>
-          <td>
-            <% if (r.file_name) { %>
-            <span class="tag"><%= r.file_name %></span>
-            <% } else { %>
-            <span class="muted small">
-              <%= t('resumes.list.table.noFile', '无文件（示例数据或旧版本）') %>
-            </span>
-            <% } %>
-          </td>
-          <td>
-            <% if (r.is_main) { %>
-            <span class="badge badge-warning">
-              <%= t('resumes.list.table.currentMain', '当前主简历') %>
-            </span>
-            <% } else { %>
-            <form method="post" action="/resumes/<%= r.id %>/main" style="display:inline;">
-              <button type="submit" class="btn btn-ghost small">
-                <%= t('resumes.list.table.setMain', '设为主简历') %>
-              </button>
-            </form>
-            <% } %>
-          </td>
-          <td><%= r.created_at || '' %></td>
-          <td>
-            <a
-              href="/resumes/<%= r.id %>"
-              class="btn btn-ghost small"
-              title="<%= t('resumes.list.table.viewDetail', '查看详情') %>"
-              ><%= t('resumes.list.table.viewDetail', '查看详情') %></a
-            >
-            <form
-              method="post"
-              action="/resumes/<%= r.id %>/delete"
-              style="display:inline;"
-              onsubmit="return confirm('<%= t('resumes.list.table.confirmDelete', '确定要删除这份简历吗？此操作不可恢复。') %>');"
-            >
-              <button
-                type="submit"
-                class="btn btn-ghost small"
-                style="color:#f97373; border-color: rgba(248,113,113,0.6);"
-              >
-                <%= t('resumes.list.table.delete', '删除') %>
-              </button>
-            </form>
-          </td>
-        </tr>
-        <% }) %>
-      </tbody>
-    </table>
+      <div class="card empty-state">
+        <h2><%= lang === 'en' ? 'No resumes uploaded yet' : '还没有上传任何简历' %></h2>
+        <p><%= lang === 'en' ? 'Upload a primary resume to unlock matching and cover-letter generation.' : '上传主简历后即可启用职位匹配与 Cover Letter 生成。' %></p>
+      </div>
     <% } %>
   </div>
 </section>

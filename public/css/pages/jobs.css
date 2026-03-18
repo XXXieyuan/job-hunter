@@ -1,0 +1,62 @@
+.jobs-layout,
+.detail-layout {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.jobs-layout {
+  grid-template-columns: minmax(260px, 320px) 1fr;
+  align-items: start;
+}
+
+.jobs-content {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.pagination-row,
+.detail-header,
+.detail-grid {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.pagination-row,
+.detail-header {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.detail-grid {
+  align-items: start;
+}
+
+.detail-grid > article {
+  flex: 2;
+}
+
+.detail-sidebar {
+  flex: 1;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.inset-card {
+  background: rgba(10, 14, 26, 0.55);
+}
+
+.cover-letter-output {
+  min-height: 240px;
+}
+
+.long-copy {
+  white-space: pre-wrap;
+}
+
+@media (max-width: 960px) {
+  .jobs-layout,
+  .detail-grid {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+}

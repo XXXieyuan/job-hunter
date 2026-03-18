@@ -1,0 +1,16 @@
+<header class="site-header">
+  <div class="container nav-row">
+    <a class="brand" href="/?lang=<%= lang || 'zh' %>">🏠 Job Hunter</a>
+    <nav class="nav-links">
+      <a class="<%= activePage === 'home' ? 'is-active' : '' %>" href="/?lang=<%= lang || 'zh' %>"><%= lang === 'en' ? 'Home' : '首页' %></a>
+      <a class="<%= activePage === 'jobs' ? 'is-active' : '' %>" href="/jobs?lang=<%= lang || 'zh' %>"><%= lang === 'en' ? 'Jobs' : '职位列表' %></a>
+      <a class="<%= activePage === 'resumes' ? 'is-active' : '' %>" href="/resumes?lang=<%= lang || 'zh' %>"><%= lang === 'en' ? 'Resumes' : '简历' %></a>
+      <a class="<%= activePage === 'scrape' ? 'is-active' : '' %>" href="/scrape?lang=<%= lang || 'zh' %>"><%= lang === 'en' ? 'Scrape' : '抓取' %></a>
+      <a class="<%= activePage === 'admin' ? 'is-active' : '' %>" href="/admin?lang=<%= lang || 'zh' %>"><%= lang === 'en' ? 'Admin' : '管理' %></a>
+    </nav>
+    <button class="icon-btn" type="button" data-lang-toggle>
+      <span>🌐</span>
+      <span><%= lang === 'en' ? '中文' : 'EN' %></span>
+    </button>
+  </div>
+</header>

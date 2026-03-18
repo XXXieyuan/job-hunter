@@ -1,0 +1,42 @@
+.admin-layout,
+.admin-grid,
+.scrape-layout,
+.scrape-grid,
+.resumes-layout {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.admin-grid,
+.scrape-grid {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.stats-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.stat-card {
+  min-height: 124px;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.stat-card strong {
+  font-size: var(--text-3xl);
+}
+
+.upload-dropzone {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  border: 1px dashed rgba(129, 140, 248, 0.5);
+  border-radius: 24px;
+  background: rgba(99, 102, 241, 0.06);
+  text-align: center;
+  cursor: pointer;
+}
+
+.upload-dropzone input {
+  display: none;
+}

@@ -1,343 +1,60 @@
-<% layout('layout') -%>
-<%
-function getScraperSourceMeta(sourceName) {
-  const normalized = String(sourceName || '').trim().toLowerCase();
-
-  if (normalized === 'seek') {
-    return { label: 'Seek', icon: '🔎', className: 'source-seek' };
-  }
-
-  if (normalized === 'linkedin') {
-    return { label: 'LinkedIn', icon: '💼', className: 'source-linkedin' };
-  }
-
-  if (normalized === 'aps' || normalized === 'apsjobs') {
-    return { label: 'APS', icon: '🔍', className: 'source-aps' };
-  }
-
-  return {
-    label: sourceName || t('admin.scraper.status.unknown', '未知'),
-    icon: '',
-    className: '',
-  };
-}
-%>
-
-<section
-  class="page-section admin-section"
-  id="admin-root"
-  data-admin-token="<%= typeof adminToken !== 'undefined' ? adminToken : '' %>"
->
-  <div class="section-header admin-header">
-    <h1><%= t('admin.dashboard.title', '管理面板') %></h1>
-    <p class="section-subtitle">
-      <%= t(
-        'admin.dashboard.subtitle',
-        '运行分析、上传职位数据，并查看整体求职匹配统计。'
-      ) %>
-    </p>
+<section class="admin-layout">
+  <div class="stats-grid">
+    <article class="card stat-card"><span><%= lang === 'en' ? 'Jobs' : '职位总数' %></span><strong><%= stats.jobs_total %></strong></article>
+    <article class="card stat-card"><span><%= lang === 'en' ? 'Resumes' : '简历总数' %></span><strong><%= stats.resumes_total %></strong></article>
+    <article class="card stat-card"><span><%= lang === 'en' ? 'Matches' : '已分析' %></span><strong><%= stats.matched_total %></strong></article>
+    <article class="card stat-card"><span><%= lang === 'en' ? 'Cover letters' : 'CL 数量' %></span><strong><%= stats.cl_total %></strong></article>
   </div>
 
-  <div class="admin-grid stats-grid">
-    <section
-      class="glass-card stat-card"
-      id="analysis-section"
-      data-i18n-triggering="<%= t('admin.analysis.status.triggering', '正在触发分析，请稍候…') %>"
-      data-i18n-started-with-id="<%= t('admin.analysis.status.startedWithId', '分析已启动，运行 ID：{runId}。请稍后刷新查看结果。') %>"
-      data-i18n-started="<%= t('admin.analysis.status.started', '分析已启动，请稍后刷新查看结果。') %>"
-      data-i18n-trigger-failed-prefix="<%= t('admin.analysis.error.triggerFailedPrefix', '触发分析失败：') %>"
-      data-i18n-network-error="<%= t('admin.analysis.error.network', '触发分析失败：网络错误或服务器不可用。') %>"
-    >
-      <h2 class="section-title"><%= t('admin.analysis.title', '运行状态') %></h2>
-      <% if (!lastRun) { %>
-      <p><%= t('admin.analysis.none', '尚未运行过分析。') %></p>
-      <% } else { %>
-      <p>
-        <%= t('admin.analysis.lastRunId', '最近一次运行 ID：') %><span class="tag"><%= lastRun.id %></span>
-      </p>
-      <p>
-        <%= t('admin.analysis.statusLabel', '状态：') %>
-        <% if (lastRun.status === 'running') { %>
-        <span class="status-pill status-running">
-          <%= t('admin.analysis.status.running', '运行中') %>
-        </span>
-        <% } else if (lastRun.status === 'completed') { %>
-        <span class="status-pill status-success">
-          <%= t('admin.analysis.status.completed', '完成') %>
-        </span>
-        <% } else { %>
-        <span class="status-pill status-failed">
-          <%= t('admin.analysis.status.failed', '失败') %>
-        </span>
-        <% } %>
-      </p>
-      <% if (lastRun.error) { %>
-      <p class="muted">
-        <%= t('admin.analysis.errorLabel', '错误信息：') %><%= lastRun.error %>
-      </p>
-      <% } %>
-      <% } %>
+  <div class="admin-grid">
+    <div class="card">
+      <div class="section-header">
+        <h2><%= lang === 'en' ? 'Source distribution' : '来源分布' %></h2>
+      </div>
+      <% Object.entries(stats.by_source || {}).forEach(function(entry) { %>
+        <div class="source-bar">
+          <div class="source-bar__label"><span><%= entry[0] %></span><span><%= entry[1] %></span></div>
+          <div class="progress"><span class="progress__fill progress__fill--<%= entry[0] %>" style="width: <%= totalJobs ? (entry[1] / totalJobs) * 100 : 0 %>%"></span></div>
+        </div>
+      <% }) %>
+    </div>
 
-      <button id="run-analysis-btn" class="btn btn-primary run-btn">
-        <%= t('admin.analysis.runButton', '运行分析') %>
-      </button>
-      <p id="run-analysis-status" class="muted small run-status"></p>
-    </section>
-
-    <section class="glass-card stat-card">
-      <h2 class="section-title"><%= t('admin.stats.title', '数据统计') %></h2>
-      <ul class="stats-list">
-        <li>
-          <span><%= t('admin.stats.jobsTotal', '职位总数') %></span>
-          <span class="stat-value"><%= jobCounts.total %></span>
-        </li>
-        <li>
-          <span><%= t('admin.stats.jobsWithScore', '已打分职位数') %></span>
-          <span class="stat-value"><%= jobCounts.withScore %></span>
-        </li>
-        <li>
-          <span><%= t('admin.stats.fitTotal', '匹配记录总数') %></span>
-          <span class="stat-value"><%= fitStats.total %></span>
-        </li>
-        <li>
-          <span><%= t('admin.stats.fitAverage', '平均匹配度') %></span>
-          <span class="stat-value"><%= fitStats.avg.toFixed(1) %>%</span>
-        </li>
-      </ul>
-      <h3 class="mt">
-        <%= t('admin.stats.highFitPerRole', '高匹配职位数（按角色）') %>
-      </h3>
-      <ul class="stats-list">
-        <% if (!fitStats.highFitPerRole.length) { %>
-        <li>
-          <span class="muted"><%= t('admin.stats.empty', '暂无数据') %></span>
-        </li>
-        <% } else { %>
-        <% fitStats.highFitPerRole.forEach(function(r){ %>
-        <li>
-          <span><%= r.role || t('admin.stats.unknownRole', '未知角色') %></span>
-          <span><%= r.count %></span>
-        </li>
-        <% }) %>
-        <% } %>
-      </ul>
-    </section>
-
-    <section class="glass-card admin-section">
-      <h2 class="section-title"><%= t('admin.upload.title', '上传职位数据') %></h2>
-      <p class="muted">
-        <%= t(
-          'admin.upload.description',
-          '接受 JSON 格式，内容为职位对象数组：包含 title, company_name, description, role, url, location, salary 等字段。'
-        ) %>
-      </p>
-      <form id="upload-form">
-        <textarea
-          id="upload-json"
-          rows="8"
-          placeholder='<%= t(
-            "admin.upload.placeholder",
-            "[{\"title\":\"Senior AI Engineer\", \"company_name\":\"示例公司\", \"description\":\"...\", \"role\":\"AI Engineer\"}]"
-          ) %>'
-        ></textarea>
-        <button type="submit" class="btn btn-secondary">
-          <%= t('admin.upload.submit', '上传职位数据') %>
-        </button>
+    <div class="card">
+      <div class="section-header">
+        <h2><%= lang === 'en' ? 'OpenAI config' : 'OpenAI 配置' %></h2>
+      </div>
+      <form class="admin-config-form" data-admin-config-form>
+        <label class="form-field">
+          <span>Base URL</span>
+          <input type="url" name="openai_base_url" value="<%= publicConfig.openai_base_url || '' %>" />
+        </label>
+        <label class="form-field">
+          <span>API Key</span>
+          <input type="password" name="openai_api_key" value="" placeholder="sk-..." />
+        </label>
+        <button class="btn btn-primary" type="submit"><%= lang === 'en' ? 'Save config' : '保存配置' %></button>
       </form>
-      <p id="upload-status" class="muted small"></p>
+    </div>
+  </div>
 
-      <hr class="section-divider" />
-
-      <h3 class="section-title small">
-        <%= t('admin.upload.file.title', '通过文件上传职位 JSON') %>
-      </h3>
-      <p class="muted small">
-        <%= t(
-          'admin.upload.file.description',
-          '选择本地 JSON 文件上传，文件内容格式与上方文本框一致（职位数组或包含 jobs 数组的对象）。'
-        ) %>
-      </p>
-      <form
-        id="upload-file-form"
-        class="mt"
-        action="/admin/jobs/upload?token=job-hunter-admin-2026"
-        method="POST"
-        enctype="multipart/form-data"
-      >
-        <input type="file" name="jobFile" accept="application/json" />
-        <button type="submit" class="btn btn-secondary">
-          <%= t('admin.upload.file.submit', '上传职位 JSON 文件') %>
-        </button>
-      </form>
-    </section>
-
-    <section
-      class="glass-card stat-card"
-      id="scraper-section"
-      data-i18n-triggering="<%= t('admin.scraper.status.triggering', '正在触发抓取，请稍候…') %>"
-      data-i18n-started-with-id="<%= t('admin.scraper.status.startedWithId', '抓取已启动，运行 ID：{runId}。') %>"
-      data-i18n-started="<%= t('admin.scraper.status.started', '抓取已启动。') %>"
-      data-i18n-trigger-button-template="<%= t('admin.scraper.button.trigger', '触发 {source} 抓取') %>"
-      data-i18n-progress-title-template="<%= t('admin.scraper.progress.title', '{source} 抓取进度') %>"
-      data-i18n-empty-runs="<%= t('admin.scraper.empty', '暂无抓取记录。') %>"
-      data-i18n-trigger-failed-prefix="<%= t('admin.scraper.error.triggerFailedPrefix', '触发抓取失败：') %>"
-      data-i18n-network-error="<%= t('admin.scraper.error.network', '触发抓取失败：网络错误或服务器不可用。') %>"
-      data-i18n-status-running="<%= t('admin.scraper.status.running', '运行中') %>"
-      data-i18n-status-queued="<%= t('admin.scraper.status.queued', '排队中') %>"
-      data-i18n-status-success="<%= t('admin.scraper.status.success', '成功') %>"
-      data-i18n-status-failure="<%= t('admin.scraper.status.failure', '失败') %>"
-      data-i18n-status-unknown="<%= t('admin.scraper.status.unknown', '未知') %>"
-    >
-      <h2 class="section-title"><%= t('admin.scraper.title', 'Scraper 控制') %></h2>
-      <p class="muted">
-        <%= t(
-          'admin.scraper.description',
-          '触发 Seek、LinkedIn 或 APSJobs 抓取任务，将最新职位数据写入数据库。运行在后台执行，不会阻塞管理界面。'
-        ) %>
-      </p>
-
-      <div class="form-grid small-gap">
-        <div class="form-group">
-          <label class="small" for="scraper-source">
-            <%= t('admin.scraper.options.source', '数据源') %>
-          </label>
-          <select id="scraper-source" class="input">
-            <option value="seek"><%= t('admin.scraper.options.source.seek', 'Seek') %></option>
-            <option value="linkedin"><%= t('admin.scraper.options.source.linkedin', 'LinkedIn') %></option>
-            <option value="apsjobs" selected>
-              <%= t('admin.scraper.options.source.apsjobs', 'APSJobs') %>
-            </option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="small" for="scraper-keywords">
-            <%= t('admin.scraper.options.keywords', '关键字（逗号分隔）') %>
-          </label>
-          <input
-            id="scraper-keywords"
-            type="text"
-            class="input"
-            placeholder="<%= t('admin.scraper.options.keywords.placeholder', '例如：Data,Engineer') %>"
-          />
-        </div>
-        <div class="form-group">
-          <label class="small" for="scraper-region">
-            <%= t('admin.scraper.options.region', '地区/区域') %>
-          </label>
-          <input
-            id="scraper-region"
-            type="text"
-            class="input"
-            placeholder="<%= t('admin.scraper.options.region.placeholder', '例如：Canberra,ACT') %>"
-          />
-        </div>
-        <div class="form-group">
-          <label class="small" for="scraper-max-pages">
-            <%= t('admin.scraper.options.maxPages', '最大页数') %>
-          </label>
-          <input
-            id="scraper-max-pages"
-            type="number"
-            min="1"
-            step="1"
-            class="input"
-            placeholder="<%= t('admin.scraper.options.maxPages.placeholder', '例如：3') %>"
-          />
-        </div>
-      </div>
-
-      <button id="trigger-scraper-btn" class="btn btn-secondary run-btn">
-        <%= t('admin.scraper.button.trigger', '触发 {source} 抓取').replace(
-          '{source}',
-          t('admin.scraper.options.source.apsjobs', 'APSJobs')
-        ) %>
-      </button>
-      <p id="scraper-status" class="muted small run-status"></p>
-      <div id="scraper-progress" class="scraper-progress source-aps" hidden>
-        <div class="scraper-progress-header">
-          <div class="scraper-progress-source">
-            <span id="scraper-progress-source-badge" class="badge source-badge source-aps">
-              🔍 APS
-            </span>
-            <span id="scraper-progress-title" class="scraper-progress-title">
-              <%= t('admin.scraper.progress.title', '{source} 抓取进度').replace('{source}', 'APS') %>
-            </span>
-          </div>
-          <div class="scraper-progress-summary">
-            <span id="scraper-progress-percent" class="scraper-progress-percent">0%</span>
-            <span id="scraper-progress-state" class="muted small"></span>
-          </div>
-        </div>
-        <div
-          class="progress-bar"
-          role="progressbar"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          aria-valuenow="0"
-        >
-          <div id="scraper-progress-bar" class="progress-bar-fill"></div>
-        </div>
-        <div class="scraper-progress-meta">
-          <span id="scraper-progress-steps" class="muted small"></span>
-          <span id="scraper-progress-jobs" class="muted small"></span>
-        </div>
-        <p id="scraper-progress-message" class="muted small"></p>
-      </div>
-
-      <h3 class="mt"><%= t('admin.scraper.recentRuns', '最近抓取运行') %></h3>
-      <div class="table-wrapper">
-        <table class="table small" id="scraper-runs-table">
-          <thead>
-            <tr>
-              <th><%= t('admin.scraper.table.header.id', 'ID') %></th>
-              <th><%= t('admin.scraper.table.header.scraper', '抓取器') %></th>
-              <th><%= t('admin.scraper.table.header.status', '状态') %></th>
-              <th><%= t('admin.scraper.table.header.startedAt', '开始时间') %></th>
-              <th><%= t('admin.scraper.table.header.finishedAt', '结束时间') %></th>
-              <th><%= t('admin.scraper.table.header.jobsAdded', '新增职位') %></th>
-              <th><%= t('admin.scraper.table.header.errorMessage', '错误信息') %></th>
-            </tr>
-          </thead>
-          <tbody>
-            <% if (!scraperRuns || !scraperRuns.length) { %>
-            <tr>
-              <td colspan="7" class="muted">
-                <%= t('admin.scraper.empty', '暂无抓取记录。') %>
-              </td>
-            </tr>
-            <% } else { %>
-            <% scraperRuns.forEach(function(run){ %>
-            <% const sourceMeta = getScraperSourceMeta(run.scraper_name); %>
-            <tr data-run-id="<%= run.id %>">
-              <td><%= run.id %></td>
-              <td>
-                <span class="badge source-badge <%= sourceMeta.className %>">
-                  <%= sourceMeta.icon ? `${sourceMeta.icon} ${sourceMeta.label}` : sourceMeta.label %>
-                </span>
-              </td>
-              <td>
-                <% if (run.status === 'running' || run.status === 'queued') { %>
-                <span class="status-pill status-running"><%= run.status %></span>
-                <% } else if (run.status === 'success' || run.status === 'completed') { %>
-                <span class="status-pill status-success">
-                  <%= t('admin.scraper.status.success', '成功') %>
-                </span>
-                <% } else { %>
-                <span class="status-pill status-failed">
-                  <%= t('admin.scraper.status.failure', '失败') %>
-                </span>
-                <% } %>
-              </td>
-              <td><%= run.started_at || '-' %></td>
-              <td><%= run.finished_at || '-' %></td>
-              <td><%= typeof run.jobs_added === 'number' ? run.jobs_added : '-' %></td>
-              <td class="small"><%= run.error_message || '-' %></td>
-            </tr>
-            <% }) %>
-            <% } %>
-          </tbody>
-        </table>
-      </div>
-    </section>
+  <div class="card">
+    <div class="section-header">
+      <h2><%= lang === 'en' ? 'System logs' : '系统日志' %></h2>
+      <select data-log-filter>
+        <option value=""><%= lang === 'en' ? 'All levels' : '全部等级' %></option>
+        <option value="info">Info</option>
+        <option value="warn">Warn</option>
+        <option value="error">Error</option>
+      </select>
+    </div>
+    <div class="log-list" data-log-list>
+      <% (logs || []).forEach(function(entry) { %>
+        <article class="log-item log-item--<%= entry.level %>">
+          <strong><%= entry.action %></strong>
+          <span><%= entry.detail %></span>
+          <time><%= entry.created_at %></time>
+        </article>
+      <% }) %>
+    </div>
   </div>
 </section>

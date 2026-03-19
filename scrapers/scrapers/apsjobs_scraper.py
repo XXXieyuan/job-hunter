@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 """
-APSJobs scraper using Playwright for JavaScript-rendered SPA.
-APSJobs migrated to new URL in 2025. Must use browser automation.
+APSJobs scraper using Playwright + Salesforce Aura API interception.
+APSJobs is a Salesforce Lightning SPA — job data comes via AJAX API calls.
+We intercept the API response directly for reliable data extraction.
 """
+import json
 import re
 import sys
 import traceback
@@ -11,7 +13,6 @@ from .base_scraper import BaseScraper, main
 
 
 def _clean(text):
-    """Strip HTML tags and normalize whitespace."""
     if not text:
         return ""
     text = re.sub(r"<[^>]+>", " ", text)
@@ -21,148 +22,113 @@ def _clean(text):
 
 class APSJobsScraper(BaseScraper):
     BASE_URL = "https://www.apsjobs.gov.au"
-    SEARCH_URL = BASE_URL + "/s/job-search"  # New URL (2025), not /s/search-jobs
+    SEARCH_URL = BASE_URL + "/s/job-search"
 
     def build_url(self, page_number):
         keyword = self.keywords.replace(",", " ").strip()
-        # APSJobs uses /s/job-search with keyword + page params
-        return f"{self.SEARCH_URL}?keywords={keyword}&page={page_number}"
+        offset = (page_number - 1) * 24
+        return f"{self.SEARCH_URL}?searchString={keyword}&offset={offset}#feed"
 
-    def _try_build_form_url(self, keyword, page_number):
-        """Try form-style URL (keyword as query param)."""
-        keyword_enc = keyword.replace(",", " ").strip()
-        return f"{self.SEARCH_URL}?keywords={keyword_enc}&page={page_number}"
+    def parse_salary_from_string(self, text):
+        """Parse salary from any text string."""
+        if not text:
+            return None, None
+        # Handle $130,369 - $164,925 or similar ranges
+        amounts = re.findall(r"\$?([\d,]+)(?:\s*[-–]\s*\$?([\d,]+))?", text)
+        if not amounts:
+            return None, None
+        amounts = [(int(a[0].replace(",", "")),
+                    int(a[1].replace(",", "")) if a[1] else int(a[0].replace(",", "")))
+                   for a in amounts]
+        if len(amounts) == 1:
+            return amounts[0][0], amounts[0][0]
+        return min(a[0] for a in amounts), max(a[1] for a in amounts)
 
-    def extract_jobs_from_page(self, page):
-        """
-        Extract job links from the rendered DOM.
-        APSJobs uses <article> elements and <a href="/job/..."> links.
-        """
+    def extract_jobs_from_aura_response(self, aura_body, page_number):
+        """Extract jobs from Salesforce Aura API response."""
         jobs = []
 
-        # Strategy 1: find all links with /job/ in href
-        job_links = page.query_selector_all("a[href*='/job/'], a[href*='/jobs/']")
+        try:
+            data = json.loads(aura_body)
+            actions = data.get("actions", [])
+        except (json.JSONDecodeError, TypeError):
+            return []
 
-        seen_urls = set()
-        for link_el in job_links:
-            try:
-                href = (link_el.get_attribute("href") or "").strip()
-                if not href or href in seen_urls:
-                    continue
-                seen_urls.add(href)
-
-                # Build full URL
-                if href.startswith("http"):
-                    url = href
-                else:
-                    url = self.BASE_URL.rstrip("/") + "/" + href.lstrip("/")
-
-                # Skip non-job URLs
-                if any(skip in url for skip in ["privacy", "terms", "accessibility",
-                                                  "sitemap", "contact", "faq", "about",
-                                                  "gazette", "register", "sign-in",
-                                                  "career-pathways", "related-sites"]):
-                    continue
-
-                # Get title - use the link text or nearby heading
-                title = (link_el.text_content() or "").strip()
-                if not title or len(title) < 5:
-                    # Try getting heading inside parent article
-                    try:
-                        parent = link_el.query_selector("h1, h2, h3, h4")
-                        if parent:
-                            title = (parent.text_content() or "").strip()
-                    except Exception:
-                        pass
-
-                if not title or len(title) < 5:
-                    continue
-
-                # Get parent article/card for metadata
-                card = link_el
+        for action in actions:
+            if action.get("state") != "SUCCESS":
+                continue
+            rv = action.get("returnValue", {})
+            if isinstance(rv, str):
                 try:
-                    for _ in range(3):
-                        parent = card.evaluate("el => el.parentElement")
-                        if parent and parent.tag_name in ["ARTICLE", "DIV", "LI"]:
-                            card = parent
-                            break
+                    rv = json.loads(rv)
                 except Exception:
-                    pass
+                    continue
+            # Navigate to returnValue.returnValue.jobListings
+            rv = rv.get("returnValue", {})
+            job_listings = rv.get("jobListings", [])
+            if not job_listings:
+                continue
 
-                card_html = ""
-                try:
-                    card_html = card.inner_html() if card else ""
-                except Exception:
-                    pass
+            for item in job_listings:
+                # applicationURL is the link to apply (our job_url)
+                job_url = item.get("applicationURL", "")
+                if not job_url:
+                    job_id = item.get("jobId", "")
+                    if job_id:
+                        job_url = f"{self.BASE_URL}/job/{job_id}"
 
-                # Extract metadata from card context
-                card_text = card_html
+                if not job_url:
+                    continue
 
-                # Reference number
-                ref_match = re.search(
-                    r"(?:Reference|Job Ref|ref)[:\s#]*([A-Z0-9\-]{4,30})",
-                    card_text,
-                    re.IGNORECASE,
-                )
-                ref = (ref_match.group(1).strip() if ref_match else
-                       re.search(r"/job/([A-Za-z0-9\-]+)/?$", url).group(1)
-                       if re.search(r"/job/([A-Za-z0-9\-]+)/?$", url) else "unknown")
-                external_id = f"aps-{ref[:30]}"
+                # jobName = title
+                title = _clean(item.get("jobName", "") or item.get("jobTitle", ""))
+                if not title:
+                    continue
 
-                # Classification
-                classification = ""
-                class_match = re.search(
-                    r"\b(APS Level [0-9]|EL[0-9]|SES[0-9]|Executive Level [0-9]|"
-                    r"Classifications [A-Z][0-9]|[0-9]/[[0-9]])\b",
-                    card_text,
-                    re.IGNORECASE,
-                )
-                if class_match:
-                    classification = class_match.group(0).strip()
+                # departmentName = company
+                company = _clean(item.get("departmentName", "") or "Australian Government")
 
-                # Location
-                location = ""
-                loc_match = re.search(
-                    r"\b(ACT|NSW|VIC|QLD|WA|SA|TAS|NT|Australian Capital Territory|"
-                    r"New South Wales|Victoria|Queensland|Western Australia|"
-                    r"South Australia|Tasmania|Northern Territory)\b",
-                    card_text,
-                    re.IGNORECASE,
-                )
-                if loc_match:
-                    location = loc_match.group(1).title()
+                # jobLocation = location
+                location = _clean(item.get("jobLocation", "") or item.get("workLocation", ""))
 
-                # Salary
-                salary_match = re.search(
-                    r"\$[\d,]+(?:\s*[-–]\s*\$[\d,]+)?(?:\s*(?:k|K|per annum|p\.a\.|annum))?",
-                    card_text,
-                )
-                salary_text = salary_match.group(0) if salary_match else ""
-                salary_min, salary_max = self.parse_salary(salary_text)
+                # jobSalaryFrom / jobSalaryTo
+                salary_min = int(item.get("jobSalaryFrom", 0) or 0) or None
+                salary_max = int(item.get("jobSalaryTo", 0) or 0) or None
+
+                # jobClassification = APS level
+                classification = _clean(item.get("jobClassification", "") or "")
+
+                # jobPostedDate
+                posted_date = item.get("jobPostedDate", "") or item.get("postedDate", "") or None
+
+                # jobDuties = full job description
+                job_description = item.get("jobDuties", "") or item.get("jobDescription", "") or title
+
+                # jobId for external_id
+                job_id = item.get("jobId", "") or ""
+                external_id = job_id or item.get("vacancyNumber", "") or job_url.split("/")[-1]
 
                 job = {
-                    "external_id": external_id,
+                    "external_id": f"aps-{external_id}"[:60],
                     "title": title[:200],
-                    "company": "Australian Government",
+                    "company": company,
                     "location": location or None,
                     "salary_min": salary_min,
                     "salary_max": salary_max,
                     "salary_currency": "AUD",
-                    "job_description": title,
-                    "job_url": url,
-                    "posted_date": None,
+                    "job_description": _clean(job_description)[:5000],
+                    "job_url": job_url,
+                    "posted_date": posted_date,
                     "classification": classification or None,
                 }
 
                 if self.validate_job(job):
                     jobs.append(job)
 
-            except Exception:
-                continue
-
         return jobs
 
     def scrape(self):
+        """Main scraping method using Playwright + API interception."""
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
@@ -189,25 +155,30 @@ class APSJobsScraper(BaseScraper):
         except Exception as e:
             self.sse_emit("warning", {"message": f"Failed to launch browser: {e}"})
             self.sse_emit("done", {"jobsFound": 0, "pages": 0})
-            if browser:
-                try:
-                    browser.close()
-                except Exception:
-                    pass
-            if playwright:
-                try:
-                    playwright.stop()
-                except Exception:
-                    pass
             return
 
         total_found = 0
         pages_scraped = 0
-        error_count = 0
+        def handle_response(response):
+            """Capture Salesforce Aura API responses containing job data."""
+            url = response.url
+            if "/s/sfsites/aura" not in url:
+                return
+            try:
+                body = response.text()
+                if "jobListingCount" not in body and "jobListings" not in body:
+                    return
+                aura_job_data.append(body)
+            except Exception:
+                pass
+
+        page.on("response", handle_response)
 
         try:
             for page_number in range(1, max(self.max_pages, 1) + 1):
-                url = self._try_build_form_url(self.keywords.replace(",", " ").strip(), page_number)
+                url = self.build_url(page_number)
+                aura_job_data.clear()
+
                 self.sse_emit("progress", {
                     "page": page_number,
                     "jobsFound": total_found,
@@ -217,61 +188,31 @@ class APSJobsScraper(BaseScraper):
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=30000)
                 except Exception as e:
-                    self.sse_emit("warning", {"message": f"Failed to navigate to page {page_number}: {e}"})
-                    error_count += 1
-                    if error_count >= 2:
+                    self.sse_emit("warning", {
+                        "message": f"Failed to navigate to page {page_number}: {e}"
+                    })
+                    break
+
+                # Poll for job data to arrive (Salesforce makes async API calls)
+                import time
+                deadline = time.time() + 30
+                while time.time() < deadline:
+                    if aura_job_data:
                         break
-                    continue
+                    time.sleep(0.5)
+                else:
+                    self.sse_emit("progress", {
+                        "page": page_number,
+                        "jobsFound": total_found,
+                        "message": "No API response received within timeout"
+                    })
 
-                # If first page with keywords, try submitting search form
-                if page_number == 1 and self.keywords:
-                    try:
-                        # Find and fill the search input
-                        search_input = None
-                        for selector in [
-                            'input[name="Keywords"]',
-                            'input[name="keywords"]',
-                            'input[id*="keyword"]',
-                            'input[placeholder*="Keyword" i]',
-                            'input[placeholder*="Search" i]',
-                            'input[aria-label*="keyword" i]',
-                            'input[aria-label*="Search" i]',
-                        ]:
-                            inp = page.query_selector(selector)
-                            if inp:
-                                search_input = inp
-                                break
+                if not aura_job_data:
+                    break
 
-                        if search_input:
-                            search_input.fill(self.keywords.replace(",", " ").strip())
-                            # Find and click search button
-                            for selector in [
-                                'button[type="submit"]',
-                                'button:has-text("Search")',
-                                'input[type="submit"]',
-                                'a:has-text("Search")',
-                            ]:
-                                btn = page.query_selector(selector)
-                                if btn:
-                                    btn.click()
-                                    break
-                            page.wait_for_timeout(3000)
-                    except Exception as e:
-                        self.sse_emit("progress", {
-                            "page": page_number,
-                            "jobsFound": total_found,
-                            "message": f"Form interaction skipped: {e}"
-                        })
-
-                # Wait for job results to load
-                try:
-                    page.wait_for_timeout(3000)
-                    page.wait_for_load_state("networkidle", timeout=10000)
-                except Exception:
-                    pass
-
-                # Try to find job links
-                jobs_on_page = self.extract_jobs_from_page(page)
+                jobs_on_page = self.extract_jobs_from_aura_response(
+                    aura_job_data[0], page_number
+                )
                 pages_scraped += 1
 
                 if not jobs_on_page:
@@ -280,11 +221,6 @@ class APSJobsScraper(BaseScraper):
                         "jobsFound": total_found,
                         "message": f"No jobs found on page {page_number}"
                     })
-                    # If no jobs and first page, the URL format may be wrong
-                    if page_number == 1:
-                        self.sse_emit("warning", {
-                            "message": "No jobs found. APSJobs may have changed URL format."
-                        })
                     break
 
                 for job in jobs_on_page:
@@ -299,21 +235,6 @@ class APSJobsScraper(BaseScraper):
                 })
 
                 if page_number >= self.max_pages:
-                    break
-
-                # Check for next page
-                next_btn = page.query_selector(
-                    'a:has-text("Next"), button:has-text("Next"), '
-                    'a[aria-label="Next"], a[title="Next"]'
-                )
-                if not next_btn:
-                    break
-
-                try:
-                    next_btn.click()
-                    page.wait_for_timeout(2000)
-                    page.wait_for_load_state("domcontentloaded", timeout=15000)
-                except Exception:
                     break
 
         except Exception as e:

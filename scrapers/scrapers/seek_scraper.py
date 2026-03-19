@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import json
 import re
 import sys
@@ -11,7 +11,7 @@ class SeekScraper(BaseScraper):
     BASE_URL = "https://www.seek.com.au"
 
     def build_url(self, keyword, page_number):
-        slug = quote_plus(keyword.replace(",", " ").strip()).replace("+", "-")
+        slug = "-".join(keyword.replace(",", " ").split()).lower()
         return f"{self.BASE_URL}/{slug}/jobs?sortmode=ListedDate&page={page_number}"
 
     def extract_external_id(self, job_url):

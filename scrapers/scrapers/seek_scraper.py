@@ -12,7 +12,7 @@ class SeekScraper(BaseScraper):
 
     def build_url(self, keyword, page_number):
         slug = "-".join(keyword.replace(",", " ").split()).lower()
-        return f"{self.BASE_URL}/{slug}/jobs?sortmode=ListedDate&page={page_number}"
+        return f"{self.BASE_URL}/{slug}-jobs?sortmode=ListedDate&page={page_number}"
 
     def extract_external_id(self, job_url):
         parsed = urlparse(job_url)

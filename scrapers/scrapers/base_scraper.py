@@ -12,10 +12,20 @@ PARENT_DIR = os.path.dirname(CURRENT_DIR)
 if PARENT_DIR not in sys.path:
     sys.path.insert(0, PARENT_DIR)
 
-import requests
+try:
+    from curl_cffi import requests as curl_requests
+
+    USING_CURL_CFFI = True
+except ImportError:
+    import requests as curl_requests
+
+    USING_CURL_CFFI = False
 
 
 class BaseScraper:
+    REQUEST_TIMEOUT = 30
+    IMPERSONATE_BROWSER = "chrome110"
+
     def __init__(self, source, keywords, max_pages, history_id):
         self.source = source
         self.keywords = keywords
@@ -54,19 +64,41 @@ class BaseScraper:
         content = re.sub(r"\s+", " ", content)
         return content.strip()
 
+    def get_default_headers(self):
+        return {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/123.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "en-AU,en;q=0.9",
+        }
+
+    def build_request_kwargs(self, timeout=None, **kwargs):
+        request_kwargs = dict(kwargs)
+        request_kwargs.setdefault("timeout", timeout or self.REQUEST_TIMEOUT)
+        if USING_CURL_CFFI:
+            request_kwargs.setdefault("impersonate", self.IMPERSONATE_BROWSER)
+        return request_kwargs
+
     def get_session(self):
-        session = requests.Session()
-        session.headers.update(
-            {
-                "User-Agent": (
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/123.0.0.0 Safari/537.36"
-                ),
-                "Accept-Language": "en-AU,en;q=0.9",
-            }
-        )
+        session = curl_requests.Session()
+        session.headers.update(self.get_default_headers())
         return session
+
+    def session_get(self, session, url, timeout=None, **kwargs):
+        return session.get(url, **self.build_request_kwargs(timeout=timeout, **kwargs))
+
+    def session_post(self, session, url, timeout=None, **kwargs):
+        return session.post(url, **self.build_request_kwargs(timeout=timeout, **kwargs))
+
+    def http_get(self, url, timeout=None, **kwargs):
+        session = self.get_session()
+        return self.session_get(session, url, timeout=timeout, **kwargs)
+
+    def http_post(self, url, timeout=None, **kwargs):
+        session = self.get_session()
+        return self.session_post(session, url, timeout=timeout, **kwargs)
 
     def validate_job(self, job):
         required_fields = ["title", "job_url", "job_description"]

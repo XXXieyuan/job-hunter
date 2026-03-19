@@ -47,7 +47,7 @@ class LinkedInScraper(BaseScraper):
 
     def fetch_job_detail(self, job_url):
         try:
-            response = self.get_session().get(job_url, timeout=10)
+            response = self.http_get(job_url, timeout=30)
         except Exception as error:
             self.sse_emit("warning", {"message": f"LinkedIn detail fetch failed: {error}"})
             return ""
@@ -78,7 +78,7 @@ class LinkedInScraper(BaseScraper):
             self.rate_limit(2.0)
 
             try:
-                response = session.get(self.build_url(page_number), timeout=10)
+                response = self.session_get(session, self.build_url(page_number), timeout=30)
             except Exception as error:
                 self.sse_emit("warning", {"message": f"LinkedIn request failed: {error}"})
                 break

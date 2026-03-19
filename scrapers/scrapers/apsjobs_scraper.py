@@ -60,8 +60,11 @@ class APSJobsScraper(BaseScraper):
 
     def fetch_job_detail(self, job_url):
         try:
-            response = self.get_session().get(job_url, timeout=10)
+            response = self.http_get(job_url, timeout=30)
         except Exception:
+            return ""
+
+        if response.status_code >= 400:
             return ""
 
         detail_match = re.search(
@@ -82,7 +85,7 @@ class APSJobsScraper(BaseScraper):
         for page_number in range(1, max(self.max_pages, 1) + 1):
             self.rate_limit(1.0)
             try:
-                response = session.get(self.build_url(page_number), timeout=10)
+                response = self.session_get(session, self.build_url(page_number), timeout=30)
             except Exception as error:
                 self.sse_emit("warning", {"message": f"APSJobs request failed: {error}"})
                 break

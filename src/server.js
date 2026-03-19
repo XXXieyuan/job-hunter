@@ -20,9 +20,9 @@ const { log } = require('./utils/logger');
 initDatabase();
 
 function checkPythonAvailability() {
-  const result = spawnSync('python3', ['--version'], { encoding: 'utf8' });
+  const result = spawnSync('python', ['--version'], { encoding: 'utf8' });
   if (result.error || result.status !== 0) {
-    log('warn', 'PYTHON_CHECK', 'python3 is not available; scraper features will be unavailable');
+    log('warn', 'PYTHON_CHECK', 'python is not available; scraper features will be unavailable');
     return false;
   }
 

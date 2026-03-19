@@ -169,7 +169,7 @@ function runScraper(source, keywords, maxPages, historyId) {
     String(historyId)
   ];
 
-  const processHandle = spawn('python3', args, {
+  const processHandle = spawn('python', args, {
     cwd: process.cwd(),
     env: process.env
   });

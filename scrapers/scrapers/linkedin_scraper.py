@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import random
 import re
 import sys
 from urllib.parse import quote_plus
@@ -33,6 +34,9 @@ def _extract_div_cards(html):
 
 class LinkedInScraper(BaseScraper):
     BASE_URL = "https://www.linkedin.com/jobs/search/"
+    LISTING_DELAY_SECONDS = (3.0, 7.0)
+    DETAIL_DELAY_SECONDS = (3.0, 7.0)
+    RETRY_BACKOFF_SECONDS = (5.0, 10.0)
 
     def build_url(self, page_number):
         start = max(page_number - 1, 0) * 25
@@ -41,10 +45,51 @@ class LinkedInScraper(BaseScraper):
             f"&location=Australia&start={start}"
         )
 
+    def get_retry_after_seconds(self, response):
+        retry_after = response.headers.get("Retry-After") if response else None
+        if not retry_after:
+            return None
+
+        try:
+            return max(float(retry_after), 0.0)
+        except (TypeError, ValueError):
+            return None
+
+    def session_get_with_backoff(self, session, url, timeout, delay, label):
+        wait_seconds = random.uniform(*delay) if isinstance(delay, tuple) else delay
+        response = None
+
+        for attempt in range(len(self.RETRY_BACKOFF_SECONDS) + 1):
+            if wait_seconds:
+                self.rate_limit(wait_seconds)
+
+            response = self.session_get(session, url, timeout=timeout)
+            if response.status_code != 429:
+                return response
+
+            if attempt >= len(self.RETRY_BACKOFF_SECONDS):
+                return response
+
+            wait_seconds = (
+                self.get_retry_after_seconds(response)
+                or self.RETRY_BACKOFF_SECONDS[attempt]
+            )
+            self.sse_emit(
+                "progress",
+                {
+                    "message": (
+                        f"LinkedIn {label} hit HTTP 429; "
+                        f"retrying in {int(wait_seconds)}s"
+                    )
+                },
+            )
+
+        return response
+
     def extract_cards(self, html):
         return _extract_div_cards(html)
 
-    def extract_job(self, card_html):
+    def extract_job(self, session, card_html):
         # Job ID from data-entity-urn="urn:li:jobPosting:123456789"
         job_id_m = re.search(r'data-entity-urn="urn:li:jobPosting:(\d+)"', card_html)
         external_id = job_id_m.group(1) if job_id_m else ""
@@ -86,7 +131,7 @@ class LinkedInScraper(BaseScraper):
             return None
 
         # Description: fetch detail page, but don't let it break the whole card
-        description = self.fetch_job_detail(job_url) if job_url else ""
+        description = self.fetch_job_detail(session, job_url) if job_url else ""
 
         return {
             "external_id": external_id or (
@@ -105,15 +150,24 @@ class LinkedInScraper(BaseScraper):
             "classification": None,
         }
 
-    def fetch_job_detail(self, job_url):
+    def fetch_job_detail(self, session, job_url):
         try:
-            response = self.http_get(job_url, timeout=30)
+            response = self.session_get_with_backoff(
+                session,
+                job_url,
+                timeout=30,
+                delay=self.DETAIL_DELAY_SECONDS,
+                label="detail request",
+            )
         except Exception as error:
             self.sse_emit("warning", {"message": f"LinkedIn detail fetch failed: {error}"})
             return ""
 
         if response.status_code >= 400:
-            self.sse_emit("warning", {"message": f"LinkedIn returned HTTP {response.status_code}"})
+            self.sse_emit(
+                "warning",
+                {"message": f"LinkedIn detail returned HTTP {response.status_code}"},
+            )
             return ""
 
         # LinkedIn always has a sign-in modal overlay on public pages - ignore it.
@@ -143,16 +197,23 @@ class LinkedInScraper(BaseScraper):
         total_found = 0
 
         for page_number in range(1, max(self.max_pages, 1) + 1):
-            self.rate_limit(2.0)
-
             try:
-                response = self.session_get(session, self.build_url(page_number), timeout=30)
+                response = self.session_get_with_backoff(
+                    session,
+                    self.build_url(page_number),
+                    timeout=30,
+                    delay=self.LISTING_DELAY_SECONDS,
+                    label="listing request",
+                )
             except Exception as error:
                 self.sse_emit("warning", {"message": f"LinkedIn request failed: {error}"})
                 break
 
             if response.status_code >= 400:
-                self.sse_emit("warning", {"message": f"LinkedIn returned HTTP {response.status_code}"})
+                self.sse_emit(
+                    "warning",
+                    {"message": f"LinkedIn listing returned HTTP {response.status_code}"},
+                )
                 break
 
             cards = self.extract_cards(response.text)
@@ -163,7 +224,7 @@ class LinkedInScraper(BaseScraper):
                 break
 
             for card in cards:
-                job = self.extract_job(card)
+                job = self.extract_job(session, card)
                 if not job or not self.validate_job(job):
                     continue
                 self.jobs.append(job)

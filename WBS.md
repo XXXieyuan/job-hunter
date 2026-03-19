@@ -166,7 +166,7 @@ Batch 7 (Wire & Test)
 **Input**: SYSTEM_DESIGN.md Component Architecture, API Contract (Scrape APIs)
 **Steps**:
 1. `runScraper(source, keywords, maxPages, historyId)`: spawn Python subprocess
-   - Command: `python3 scrapers/run_scraper.py --source {source} --keywords "{keywords}" --max_pages {maxPages} --history_id {historyId}`
+   - Command: `python scrapers/run_scraper.py --source {source} --keywords "{keywords}" --max_pages {maxPages} --history_id {historyId}`
    - Capture stdout line by line (each line is SSE format: `data: {...}\n\n`)
    - Parse each JSON line → emit to SSE clients
    - Capture stderr → log error
@@ -219,7 +219,7 @@ Batch 7 (Wire & Test)
    - `validate_job(job)`: check required fields (title, job_url, job_description)
 2. `main()` function: parse args, instantiate scraper, call `scrape()`, exit(0) or exit(1)
 **Output**: base_scraper.py
-**Verify**: `python3 scrapers/scrapers/base_scraper.py --help` shows usage
+**Verify**: `python scrapers/scrapers/base_scraper.py --help` shows usage
 **Depends on**: WBS 2.2
 **Complexity**: M
 
@@ -242,7 +242,7 @@ Batch 7 (Wire & Test)
 2. Use Playwright for JS-rendered content (headless Chrome)
 3. Output JSON job objects to stdout for Node.js to parse
 **Output**: seek_scraper.py
-**Verify**: `python3 scrapers/run_scraper.py --source seek --keywords "AI Engineer" --max_pages 1 2>&1 | head -20`
+**Verify**: `python scrapers/run_scraper.py --source seek --keywords "AI Engineer" --max_pages 1 2>&1 | head -20`
 **Depends on**: WBS 3.1
 **Complexity**: L
 
@@ -260,7 +260,7 @@ Batch 7 (Wire & Test)
    - No JS rendering needed (static HTML)
 2. Reuse parsing logic from v1 archived scraper (adapt to base_scraper SSE format)
 **Output**: apsjobs_scraper.py
-**Verify**: `python3 scrapers/run_scraper.py --source apsjobs --keywords "AI" --max_pages 1 2>&1 | head -20`
+**Verify**: `python scrapers/run_scraper.py --source apsjobs --keywords "AI" --max_pages 1 2>&1 | head -20`
 **Depends on**: WBS 3.1
 **Complexity**: M
 
@@ -279,7 +279,7 @@ Batch 7 (Wire & Test)
 2. Fallback: if blocked, return partial results with warning
 3. Note: LinkedIn requires login for full JD — implement with cookie warning
 **Output**: linkedin_scraper.py
-**Verify**: `python3 scrapers/run_scraper.py --source linkedin --keywords "Data Scientist" --max_pages 1 2>&1 | head -20`
+**Verify**: `python scrapers/run_scraper.py --source linkedin --keywords "Data Scientist" --max_pages 1 2>&1 | head -20`
 **Depends on**: WBS 3.1
 **Complexity**: M
 

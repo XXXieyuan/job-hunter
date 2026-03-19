@@ -39,7 +39,7 @@ Read: APSJOBS_REWRITE.md, scrapers/scrapers/apsjobs_scraper.py, scrapers/scraper
   4. Keep SSE event emitting (sse_emit) for progress feedback
   5. Handle errors gracefully with try/except + fallback message
 **Output**: Updated apsjobs_scraper.py
-**Verify**: `python3 scrapers/run_scraper.py --source apsjobs --keywords "data" --max_pages 2` → jobs printed
+**Verify**: `python scrapers/run_scraper.py --source apsjobs --keywords "data" --max_pages 2` → jobs printed
 **Depends on**: WBS 1
 
 ---
@@ -49,7 +49,7 @@ Read: APSJOBS_REWRITE.md, scrapers/scrapers/apsjobs_scraper.py, scrapers/scraper
 **Where**: scrapers/scrapers/linkedin_scraper.py
 **Steps**:
   1. Read linkedin_scraper.py to understand URL generation pattern
-  2. Run: `python3 scrapers/run_scraper.py --source linkedin --keywords "data scientist" --max_pages 1 2>&1 | head -50`
+  2. Run: `python scrapers/run_scraper.py --source linkedin --keywords "data scientist" --max_pages 1 2>&1 | head -50`
   3. Capture generated job URLs from output
   4. For each URL, run: `curl -sI -L -o /dev/null -w "%{http_code}" <url>` to check HTTP status
   5. Report which URLs are 200/403/404/dead

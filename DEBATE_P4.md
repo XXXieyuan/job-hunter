@@ -10,7 +10,7 @@ Replace all HTTP libraries in Python scrapers with `curl_cffi` for reliable job 
 - Add: `curl_cffi>=0.7.0`
 
 ### File: `scrapers/run_scraper.py`
-- Change shebang: `python3` → `python`
+- Set shebang to `python`
 - Change imports (SEEK uses `from scrapers.` which may need `sys.path` fix)
 
 ### File: `scrapers/scrapers/apsjobs_scraper.py`

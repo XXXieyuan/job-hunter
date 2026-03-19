@@ -346,13 +346,9 @@ class SeekScraper(BaseScraper):
         if response.status_code >= 400:
             return ""
 
-        detail_match = re.search(
-            r'(<[^>]+data-automation="jobAdDetails"[^>]*>.*?</[^>]+>)',
-            response.text,
-            re.I | re.S,
-        )
-        if detail_match:
-            return self.clean_text(detail_match.group(1))
+        detail_html = self.extract_detail_block(response.text)
+        if detail_html:
+            return self.clean_text(detail_html)
 
         postings = self.extract_jobs_from_jsonld(response.text)
         if postings:
@@ -364,6 +360,33 @@ class SeekScraper(BaseScraper):
 
         paragraphs = re.findall(r"<p[^>]*>(.*?)</p>", response.text, re.I | re.S)
         return self.clean_text(" ".join(paragraphs[:8]))
+
+    def extract_detail_block(self, html):
+        match = re.search(r'<div[^>]+data-automation="jobAdDetails"[^>]*>', html, re.I)
+        if not match:
+            return ""
+
+        start = match.start()
+        pos = match.end()
+        depth = 1
+        open_tag = re.compile(r"<div(?:\s|>)", re.I)
+        close_tag = re.compile(r"</div>", re.I)
+
+        while depth > 0 and pos < len(html):
+            next_open = open_tag.search(html, pos)
+            next_close = close_tag.search(html, pos)
+
+            if not next_close:
+                return html[start:]
+
+            if next_open and next_open.start() < next_close.start():
+                depth += 1
+                pos = next_open.end()
+            else:
+                depth -= 1
+                pos = next_close.end()
+
+        return html[start:pos]
 
     def fetch_page_jobs(self, keyword, page_number):
         response = self.http_get(self.build_url(keyword, page_number), timeout=30)
@@ -390,11 +413,10 @@ class SeekScraper(BaseScraper):
             deduped_jobs.append(job)
 
         enriched_jobs = []
-        for index, job in enumerate(deduped_jobs):
-            if index < 10:
-                description = self.fetch_job_detail(job["job_url"])
-                if description:
-                    job["job_description"] = description
+        for job in deduped_jobs:
+            description = self.fetch_job_detail(job["job_url"])
+            if description:
+                job["job_description"] = description
 
             job["job_description"] = job.get("job_description") or job["title"]
             enriched_jobs.append(job)

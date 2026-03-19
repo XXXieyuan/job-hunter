@@ -7,8 +7,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "scrape:seek": "python3 scrapers/run_scraper.py --source seek --keywords \"AI Engineer\" --max_pages 1",
-    "scrape:apsjobs": "python3 scrapers/run_scraper.py --source apsjobs --keywords \"AI\" --max_pages 1"
+    "scrape:seek": "python scrapers/run_scraper.py --source seek --keywords \"AI Engineer\" --max_pages 1",
+    "scrape:apsjobs": "python scrapers/run_scraper.py --source apsjobs --keywords \"AI\" --max_pages 1",
+    "verify:descriptions": "node scripts/verifyScraperDescriptions.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",

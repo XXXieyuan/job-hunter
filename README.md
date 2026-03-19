@@ -152,7 +152,7 @@ npm start
 
 ```bash
 # Run scraper manually
-python3 scrapers/run_scraper.py --source seek --keywords "AI,ML" --max_pages 3
+python scrapers/run_scraper.py --source seek --keywords "AI,ML" --max_pages 3
 
 # View database
 sqlite3 data/jobhunter.db "SELECT COUNT(*) FROM jobs; SELECT * FROM jobs LIMIT 3;"

@@ -128,94 +128,209 @@ class APSJobsScraper(BaseScraper):
         return jobs
 
     def scrape(self):
-        """Main scraping method using Playwright + API interception."""
+        """Main scraping method using curl_cffi + Salesforce Aura API."""
         try:
-            from playwright.sync_api import sync_playwright
-        except ImportError:
+            from curl_cffi import requests as curl_requests
+            from urllib.parse import quote_plus
+        except ImportError as error:
             self.sse_emit("warning", {
-                "message": "Playwright not installed. Run: pip install playwright && python -m playwright install chromium"
+                "message": f"curl_cffi not installed: {error}"
             })
             self.sse_emit("done", {"jobsFound": 0, "pages": 0})
             return
 
-        playwright = None
-        browser = None
-        try:
-            playwright = sync_playwright().start()
-            browser = playwright.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                ],
-            )
-            page = browser.new_page(viewport={"width": 1280, "height": 800})
-        except Exception as e:
-            self.sse_emit("warning", {"message": f"Failed to launch browser: {e}"})
-            self.sse_emit("done", {"jobsFound": 0, "pages": 0})
-            return
+        def normalize_aura_body(raw_body):
+            body = (raw_body or "").strip()
+            for prefix in ("while(1);", "for(;;);"):
+                if body.startswith(prefix):
+                    body = body[len(prefix):].lstrip()
+            return body
 
+        def extract_total_count(aura_body):
+            try:
+                data = json.loads(aura_body)
+            except (json.JSONDecodeError, TypeError):
+                return None
+
+            for action in data.get("actions", []):
+                if action.get("state") != "SUCCESS":
+                    continue
+
+                return_value = action.get("returnValue", {})
+                if isinstance(return_value, str):
+                    try:
+                        return_value = json.loads(return_value)
+                    except Exception:
+                        continue
+
+                if not isinstance(return_value, dict):
+                    continue
+
+                return_value = return_value.get("returnValue", {})
+                if not isinstance(return_value, dict):
+                    continue
+
+                job_listing_count = return_value.get("jobListingCount")
+                if job_listing_count is None:
+                    continue
+
+                try:
+                    return int(job_listing_count)
+                except (TypeError, ValueError):
+                    continue
+
+            return None
+
+        keyword = self.keywords.replace(",", " ").strip()
         total_found = 0
         pages_scraped = 0
-        def handle_response(response):
-            """Capture Salesforce Aura API responses containing job data."""
-            url = response.url
-            if "/s/sfsites/aura" not in url:
-                return
-            try:
-                body = response.text()
-                if "jobListingCount" not in body and "jobListings" not in body:
-                    return
-                aura_job_data.append(body)
-            except Exception:
-                pass
+        known_total = None
+        page_size = 24
+        aura_url = f"{self.BASE_URL}/s/sfsites/aura?r=5&aura.ApexAction.execute=1"
+        session = None
 
-        page.on("response", handle_response)
+        self.sse_emit("progress", {
+            "page": 0,
+            "jobsFound": 0,
+            "message": "Initializing APSJobs session..."
+        })
 
         try:
+            session = curl_requests.Session(impersonate="chrome120")
+            session.headers.update(self.get_default_headers())
+
+            main_response = session.get(self.SEARCH_URL, timeout=self.REQUEST_TIMEOUT)
+            if main_response.status_code >= 400:
+                self.sse_emit("warning", {
+                    "message": f"APSJobs main page returned HTTP {main_response.status_code}"
+                })
+                self.sse_emit("done", {"jobsFound": 0, "pages": 0})
+                return
+
+            html = main_response.text
+            fwuid_match = re.search(r'"fwuid"\s*:\s*"([^"]+)"', html)
+            app_id_match = re.search(
+                r'"APPLICATION@markup://siteforce:communityApp"\s*:\s*"([^"]+)"',
+                html,
+            )
+
+            if not fwuid_match or not app_id_match:
+                self.sse_emit("warning", {
+                    "message": "Failed to extract APSJobs Aura metadata from main page"
+                })
+                self.sse_emit("done", {"jobsFound": 0, "pages": 0})
+                return
+
+            fwuid = fwuid_match.group(1)
+            app_id = app_id_match.group(1)
+
+            self.sse_emit("progress", {
+                "page": 0,
+                "jobsFound": 0,
+                "message": "Aura metadata extracted; fetching job pages..."
+            })
+
             for page_number in range(1, max(self.max_pages, 1) + 1):
-                url = self.build_url(page_number)
-                aura_job_data.clear()
+                offset = (page_number - 1) * page_size
+                if known_total is not None and offset >= known_total:
+                    break
+
+                filter_payload = {
+                    "searchString": keyword,
+                    "salaryFrom": None,
+                    "salaryTo": None,
+                    "closingDate": None,
+                    "positionInitiative": None,
+                    "classification": None,
+                    "securityClearance": None,
+                    "officeArrangement": None,
+                    "duration": None,
+                    "department": None,
+                    "category": None,
+                    "opportunityType": None,
+                    "employmentStatus": None,
+                    "state": None,
+                    "sortBy": None,
+                    "offset": offset,
+                    "offsetIsLimit": False,
+                    "lastVisitedId": None,
+                    "daysInPast": None,
+                    "name": None,
+                    "type": None,
+                    "notificationsEnabled": None,
+                    "savedSearchId": None,
+                }
+                message_payload = {
+                    "actions": [
+                        {
+                            "id": f"{123 + page_number};a",
+                            "descriptor": "aura://ApexActionController/ACTION$execute",
+                            "callingDescriptor": "UNKNOWN",
+                            "params": {
+                                "namespace": "",
+                                "classname": "aps_jobSearchController",
+                                "method": "retrieveJobListings",
+                                "params": {
+                                    "filter": json.dumps(filter_payload, separators=(",", ":")),
+                                    "cacheable": False,
+                                    "isContinuation": False,
+                                },
+                            },
+                        }
+                    ]
+                }
+                aura_context = {
+                    "mode": "PROD",
+                    "fwuid": fwuid,
+                    "app": "siteforce:communityApp",
+                    "loaded": {
+                        "APPLICATION@markup://siteforce:communityApp": app_id,
+                    },
+                    "dn": [],
+                    "globals": {},
+                    "uad": True,
+                }
+                page_uri = (
+                    f"/s/job-search?searchString={quote_plus(keyword)}"
+                    f"&offset={offset}#feed"
+                )
 
                 self.sse_emit("progress", {
                     "page": page_number,
                     "jobsFound": total_found,
-                    "message": f"Loading page {page_number}..."
+                    "message": f"Fetching APSJobs page {page_number} (offset {offset})..."
                 })
 
-                try:
-                    page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                except Exception as e:
-                    self.sse_emit("warning", {
-                        "message": f"Failed to navigate to page {page_number}: {e}"
-                    })
-                    break
-
-                # Poll for job data to arrive (Salesforce makes async API calls)
-                import time
-                deadline = time.time() + 30
-                while time.time() < deadline:
-                    if aura_job_data:
-                        break
-                    time.sleep(0.5)
-                else:
-                    self.sse_emit("progress", {
-                        "page": page_number,
-                        "jobsFound": total_found,
-                        "message": "No API response received within timeout"
-                    })
-
-                if not aura_job_data:
-                    break
-
-                jobs_on_page = self.extract_jobs_from_aura_response(
-                    aura_job_data[0], page_number
+                response = session.post(
+                    aura_url,
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                        "Origin": self.BASE_URL,
+                        "Referer": f"{self.SEARCH_URL}?searchString={quote_plus(keyword)}&offset={offset}",
+                    },
+                    data={
+                        "message": json.dumps(message_payload, separators=(",", ":")),
+                        "aura.context": json.dumps(aura_context, separators=(",", ":")),
+                        "aura.pageURI": page_uri,
+                        "aura.token": "null",
+                    },
+                    timeout=self.REQUEST_TIMEOUT,
                 )
+
+                if response.status_code >= 400:
+                    self.sse_emit("warning", {
+                        "message": f"APSJobs Aura API returned HTTP {response.status_code} on page {page_number}"
+                    })
+                    break
+
+                aura_body = normalize_aura_body(response.text)
+                page_total = extract_total_count(aura_body)
+                if page_total is not None:
+                    known_total = page_total
+                jobs_on_page = self.extract_jobs_from_aura_response(aura_body, page_number)
                 pages_scraped += 1
 
-                if not jobs_on_page:
+                if known_total == 0 or not jobs_on_page:
                     self.sse_emit("progress", {
                         "page": page_number,
                         "jobsFound": total_found,
@@ -228,27 +343,27 @@ class APSJobsScraper(BaseScraper):
                     total_found += 1
                     self.sse_emit("job_found", {"job": job, "page": page_number})
 
+                total_label = f" of {known_total}" if known_total is not None else ""
                 self.sse_emit("page_done", {
                     "page": page_number,
                     "total_found": total_found,
-                    "message": f"Page {page_number}: found {len(jobs_on_page)} jobs"
+                    "message": f"Page {page_number}: found {len(jobs_on_page)} jobs (total {total_found}{total_label})"
                 })
 
-                if page_number >= self.max_pages:
+                if known_total is not None and offset + page_size >= known_total:
                     break
 
-        except Exception as e:
-            tb = traceback.format_exc()
-            self.sse_emit("warning", {"message": f"Scraping error: {e}"})
+                self.rate_limit(0.5)
+
+        except Exception as error:
+            traceback.format_exc()
+            self.sse_emit("warning", {"message": f"Scraping error: {error}"})
         finally:
-            try:
-                browser.close()
-            except Exception:
-                pass
-            try:
-                playwright.stop()
-            except Exception:
-                pass
+            if session is not None:
+                try:
+                    session.close()
+                except Exception:
+                    pass
 
         self.sse_emit("done", {"jobsFound": len(self.jobs), "pages": pages_scraped})
 

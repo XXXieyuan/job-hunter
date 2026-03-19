@@ -6,6 +6,31 @@ from urllib.parse import quote_plus
 from .base_scraper import BaseScraper, main
 
 
+def _extract_div_cards(html):
+    """Extract job cards from LinkedIn HTML using depth-counting for nested divs.
+
+    LinkedIn uses <div class="...base-card..."> elements (not <li>).
+    Non-greedy .*? breaks on nested divs, so we use explicit depth counting.
+    """
+    cards = []
+    for m in re.finditer(r'<div\s+class="[^"]*base-card[^"]*"[^>]*>', html, re.I):
+        start = m.start()
+        depth = 1
+        pos = html.find('>', start) + 1
+        while depth > 0 and pos < len(html):
+            snippet = html[pos:pos+5]
+            if snippet in ('<div ', '<div>'):
+                depth += 1
+                pos = html.find('>', pos) + 1
+            elif html[pos:pos+6] == '</div>':
+                depth -= 1
+                pos += 6
+            else:
+                pos += 1
+        cards.append(html[start:pos])
+    return cards
+
+
 class LinkedInScraper(BaseScraper):
     BASE_URL = "https://www.linkedin.com/jobs/search/"
 
@@ -17,31 +42,66 @@ class LinkedInScraper(BaseScraper):
         )
 
     def extract_cards(self, html):
-        return re.findall(r"(<li[^>]+class=\"[^\"]*base-card[^\"]*\"[^>]*>.*?</li>)", html, re.I | re.S)
+        return _extract_div_cards(html)
 
     def extract_job(self, card_html):
-        link_match = re.search(r'href="([^"]+/jobs/view/[^"]+)"', card_html, re.I)
-        title_match = re.search(r'class="[^"]*base-search-card__title[^"]*"[^>]*>(.*?)<', card_html, re.I | re.S)
-        company_match = re.search(r'class="[^"]*base-search-card__subtitle[^"]*"[^>]*>(.*?)<', card_html, re.I | re.S)
-        location_match = re.search(r'class="[^"]*job-search-card__location[^"]*"[^>]*>(.*?)<', card_html, re.I | re.S)
-        posted_match = re.search(r'<time[^>]*datetime="([^"]+)"', card_html, re.I)
+        # Job ID from data-entity-urn="urn:li:jobPosting:123456789"
+        job_id_m = re.search(r'data-entity-urn="urn:li:jobPosting:(\d+)"', card_html)
+        external_id = job_id_m.group(1) if job_id_m else ""
 
-        if not link_match or not title_match:
+        # Title: <h3 class="...base-search-card__title...">text</h3>
+        title_m = re.search(
+            r'<h3[^>]+class="[^"]*base-search-card__title[^"]*"[^>]*>([\s\S]*?)</h3>',
+            card_html,
+        )
+        title = self.clean_text(title_m.group(1)) if title_m else ""
+
+        # Company: <h4 class="...base-search-card__subtitle...">text</h4>
+        company_m = re.search(
+            r'<h4[^>]+class="[^"]*base-search-card__subtitle[^"]*"[^>]*>([\s\S]*?)</h4>',
+            card_html,
+        )
+        company = self.clean_text(company_m.group(1)) if company_m else None
+
+        # Location: <span class="...job-search-card__location...">text</span>
+        loc_m = re.search(
+            r'<span[^>]+class="[^"]*job-search-card__location[^"]*"[^>]*>([\s\S]{0,300}?)</span>',
+            card_html,
+        )
+        location = self.clean_text(loc_m.group(1)) if loc_m else None
+
+        # Posted date: <time datetime="2026-03-17">
+        posted_m = re.search(r'<time[^>]*datetime="([^"]+)"', card_html)
+        posted_date = posted_m.group(1) if posted_m else None
+
+        # Job URL: href on the base-card__full-link anchor
+        url_m = re.search(r'href="(https://au\.linkedin\.com/jobs/view/[^"]+)"', card_html)
+        if not url_m:
+            url_m = re.search(r'href="(/jobs/view/[^"]+)"', card_html)
+        job_url = url_m.group(1).replace("&amp;", "&") if url_m else ""
+        if job_url.startswith("/"):
+            job_url = "https://au.linkedin.com" + job_url
+
+        if not title:
             return None
 
-        description = self.fetch_job_detail(link_match.group(1))
+        # Description: fetch detail page, but don't let it break the whole card
+        description = self.fetch_job_detail(job_url) if job_url else ""
 
         return {
-            "external_id": link_match.group(1).rstrip("/").split("/")[-1],
-            "title": self.clean_text(title_match.group(1)),
-            "company": self.clean_text(company_match.group(1)) if company_match else None,
-            "location": self.clean_text(location_match.group(1)) if location_match else None,
+            "external_id": external_id or (
+                job_url.rstrip("/").split("/")[-1].split("?")[0]
+                if job_url else ""
+            ),
+            "title": title,
+            "company": company,
+            "location": location,
             "salary_min": None,
             "salary_max": None,
             "salary_currency": "AUD",
             "job_description": description or self.clean_text(card_html),
-            "job_url": link_match.group(1),
-            "posted_date": posted_match.group(1) if posted_match else None,
+            "job_url": job_url,
+            "posted_date": posted_date,
             "classification": None,
         }
 
@@ -56,10 +116,18 @@ class LinkedInScraper(BaseScraper):
             self.sse_emit("warning", {"message": f"LinkedIn returned HTTP {response.status_code}"})
             return ""
 
-        if "sign in" in response.text.lower() or "captcha" in response.text.lower():
-            self.sse_emit("warning", {"message": "LinkedIn may require login cookies for full job descriptions"})
+        # LinkedIn always has a sign-in modal overlay on public pages - ignore it.
+        # Only block on genuine captcha challenges (not just the word in data attributes).
+        captcha_blocks = [
+            "g-recaptcha-response",
+            "recaptcha-challenge",
+            "captcha-form",
+        ]
+        if any(block in response.text for block in captcha_blocks):
+            self.sse_emit("warning", {"message": "LinkedIn blocked with captcha challenge"})
             return ""
 
+        # Try to extract description from structured HTML
         detail_match = re.search(
             r'(<div[^>]+class="[^"]*(?:show-more-less-html__markup|description__text)[^"]*"[^>]*>.*?</div>)',
             response.text,
@@ -89,8 +157,9 @@ class LinkedInScraper(BaseScraper):
 
             cards = self.extract_cards(response.text)
             if not cards:
-                if "captcha" in response.text.lower():
-                    self.sse_emit("warning", {"message": "LinkedIn blocked the request; returning partial results"})
+                # Check for real captcha (not the sign-in modal)
+                if any(b in response.text for b in ["g-recaptcha", "captcha-form"]):
+                    self.sse_emit("warning", {"message": "LinkedIn blocked with captcha; returning partial results"})
                 break
 
             for card in cards:

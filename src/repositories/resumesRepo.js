@@ -9,9 +9,23 @@ function getAllResumes() {
   return db.prepare('SELECT * FROM resumes ORDER BY created_at DESC').all();
 }
 
+function getResumesByUser(user_id) {
+  const db = getDbInstance();
+  return db
+    .prepare('SELECT * FROM resumes WHERE user_id = ? ORDER BY created_at DESC')
+    .all(user_id);
+}
+
 function getResumeById(id) {
   const db = getDbInstance();
   return db.prepare('SELECT * FROM resumes WHERE id = ?').get(id);
+}
+
+function getResumeByIdAndUser(id, user_id) {
+  const db = getDbInstance();
+  return db
+    .prepare('SELECT * FROM resumes WHERE id = ? AND user_id = ?')
+    .get(id, user_id);
 }
 
 function getResumeCount() {
@@ -24,71 +38,132 @@ function insertResume(resume) {
   const db = getDbInstance();
   const stmt = db.prepare(
     `INSERT INTO resumes (
-      name,
-      summary,
-      skills_json,
-      experience_json,
-      education_json,
-      raw_json,
-      file_name,
-      file_type,
-      storage_path,
-      is_main,
-      parsed_data
+      user_id, name, file_path, file_type, summary,
+      skills_json, experience_json, education_json,
+      certifications_json, raw_text, is_confirmed
     )
     VALUES (
-      @name,
-      @summary,
-      @skills_json,
-      @experience_json,
-      @education_json,
-      @raw_json,
-      @file_name,
-      @file_type,
-      @storage_path,
-      @is_main,
-      @parsed_data
+      @user_id, @name, @file_path, @file_type, @summary,
+      @skills_json, @experience_json, @education_json,
+      @certifications_json, @raw_text, @is_confirmed
     )`
   );
-  const info = stmt.run(resume);
+  const info = stmt.run({
+    user_id: resume.user_id,
+    name: resume.name,
+    file_path: resume.file_path || null,
+    file_type: resume.file_type || null,
+    summary: resume.summary || null,
+    skills_json: resume.skills_json || null,
+    experience_json: resume.experience_json || null,
+    education_json: resume.education_json || null,
+    certifications_json: resume.certifications_json || null,
+    raw_text: resume.raw_text || null,
+    is_confirmed: resume.is_confirmed || 0,
+  });
   return info.lastInsertRowid;
 }
 
-function deleteResume(id) {
+function updateExtractedData(id, user_id, data) {
   const db = getDbInstance();
-  const stmt = db.prepare('DELETE FROM resumes WHERE id = ?');
-  const info = stmt.run(id);
+  const stmt = db.prepare(
+    `UPDATE resumes SET
+      summary = @summary,
+      skills_json = @skills_json,
+      experience_json = @experience_json,
+      education_json = @education_json,
+      certifications_json = @certifications_json,
+      is_confirmed = @is_confirmed,
+      updated_at = CURRENT_TIMESTAMP
+     WHERE id = @id AND user_id = @user_id`
+  );
+  const info = stmt.run({
+    id,
+    user_id,
+    summary: data.summary || null,
+    skills_json: data.skills_json || null,
+    experience_json: data.experience_json || null,
+    education_json: data.education_json || null,
+    certifications_json: data.certifications_json || null,
+    is_confirmed: data.is_confirmed || 0,
+  });
   return info.changes;
 }
 
-function clearMainResume() {
+function updateEmbedding(id, embedding, embedding_model) {
   const db = getDbInstance();
-  const stmt = db.prepare('UPDATE resumes SET is_main = 0 WHERE is_main != 0');
-  stmt.run();
+  const info = db
+    .prepare(
+      'UPDATE resumes SET embedding = ?, embedding_model = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    )
+    .run(embedding, embedding_model, id);
+  return info.changes;
+}
+
+function deleteResume(id, user_id) {
+  const db = getDbInstance();
+  // Cascade-delete dependent records to avoid FK constraint errors
+  db.prepare('DELETE FROM job_fit_scores WHERE resume_id = ?').run(id);
+  db.prepare('DELETE FROM cover_letters WHERE resume_id = ?').run(id);
+  if (user_id !== undefined) {
+    return db
+      .prepare('DELETE FROM resumes WHERE id = ? AND user_id = ?')
+      .run(id, user_id).changes;
+  }
+  return db.prepare('DELETE FROM resumes WHERE id = ?').run(id).changes;
+}
+
+function getConfirmedResumeForUser(user_id) {
+  const db = getDbInstance();
+  return db
+    .prepare(
+      'SELECT * FROM resumes WHERE user_id = ? AND is_confirmed = 1 ORDER BY updated_at DESC LIMIT 1'
+    )
+    .get(user_id);
+}
+
+// Legacy compatibility: kept for existing code that may call these
+function clearMainResume() {
+  // no-op in new schema (is_main replaced by is_confirmed)
 }
 
 function setMainResume(id) {
   const db = getDbInstance();
-  clearMainResume();
-  const stmt = db.prepare('UPDATE resumes SET is_main = 1 WHERE id = ?');
-  const info = stmt.run(id);
-  return info.changes;
+  return db
+    .prepare('UPDATE resumes SET is_confirmed = 1 WHERE id = ?')
+    .run(id).changes;
 }
 
 function getMainResume() {
   const db = getDbInstance();
   return db
-    .prepare('SELECT * FROM resumes WHERE is_main = 1 ORDER BY created_at DESC LIMIT 1')
+    .prepare(
+      'SELECT * FROM resumes WHERE is_confirmed = 1 ORDER BY updated_at DESC LIMIT 1'
+    )
     .get();
+}
+
+function countUsersWithResume() {
+  const db = getDbInstance();
+  const row = db.prepare(
+    'SELECT COUNT(DISTINCT user_id) AS c FROM resumes WHERE user_id IS NOT NULL'
+  ).get();
+  return row ? row.c : 0;
 }
 
 module.exports = {
   getAllResumes,
+  getResumesByUser,
   getResumeById,
+  getResumeByIdAndUser,
   getResumeCount,
   insertResume,
+  updateExtractedData,
+  updateEmbedding,
   deleteResume,
+  getConfirmedResumeForUser,
   clearMainResume,
   setMainResume,
   getMainResume,
+  countUsersWithResume,
 };

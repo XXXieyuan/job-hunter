@@ -1,0 +1,163 @@
+<%
+  /**
+   * FilterBar partial
+   * Expects locals (all optional, pulled from query string):
+   *   filters: { keyword, location, source, workType, visa, minScore, salaryMin, salaryMax }
+   *   filterMeta: { visaPercent, apsPercent } — conditional rendering thresholds
+   *   user: current user (optional — min score slider auth only)
+   */
+  var _filters = typeof filters !== 'undefined' ? filters : {};
+  var _keyword = _filters.keyword || '';
+  var _location = _filters.location || '';
+  var _source = _filters.source || '';
+  var _sources = Array.isArray(_source) ? _source : (_source ? [_source] : []);
+  var _workType = _filters.workType || '';
+  var _visa = _filters.visa || '';
+  var _minScore = _filters.minScore || 0;
+  var _salaryMin = _filters.salaryMin || '';
+  var _salaryMax = _filters.salaryMax || '';
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _filterMeta = typeof filterMeta !== 'undefined' ? filterMeta : {};
+  var _visaPercent = _filterMeta.visaPercent || 0;
+  var _apsPercent = _filterMeta.apsPercent || 0;
+  var _user = typeof user !== 'undefined' ? user : null;
+%>
+<button class="filter-bar-toggle" type="button" aria-expanded="false" aria-controls="filter-bar-form">
+  <%= _t('filter.toggle', 'Filters') %>
+</button>
+<form class="filter-bar" id="filter-bar-form" method="GET" action="/jobs" role="search" aria-label="Filter jobs">
+  <div class="filter-group">
+    <label for="filter-keyword"><%= _t('filter.keyword', 'Keyword') %></label>
+    <input
+      type="text"
+      id="filter-keyword"
+      name="keyword"
+      placeholder="<%= _t('filter.keywordPlaceholder', 'e.g. software engineer') %>"
+      value="<%= _keyword %>"
+    />
+  </div>
+
+  <div class="filter-group">
+    <label for="filter-location"><%= _t('filter.location', 'Location') %></label>
+    <input
+      type="text"
+      id="filter-location"
+      name="location"
+      placeholder="<%= _t('filter.locationPlaceholder', 'e.g. Sydney, Melbourne') %>"
+      value="<%= _location %>"
+    />
+  </div>
+
+  <div class="filter-group">
+    <label><%= _t('filter.source', 'Source') %></label>
+    <div class="source-checkboxes">
+      <label class="source-checkbox">
+        <input type="checkbox" name="source" value="seek" <%= _sources.indexOf('seek') !== -1 ? 'checked' : '' %> />
+        Seek
+      </label>
+      <label class="source-checkbox">
+        <input type="checkbox" name="source" value="linkedin" <%= _sources.indexOf('linkedin') !== -1 ? 'checked' : '' %> />
+        LinkedIn
+      </label>
+      <label class="source-checkbox">
+        <input type="checkbox" name="source" value="apsjobs" <%= _sources.indexOf('apsjobs') !== -1 ? 'checked' : '' %> />
+        APSJobs
+      </label>
+    </div>
+  </div>
+
+  <div class="filter-group">
+    <label for="filter-work-type"><%= _t('filter.workType', 'Work Type') %></label>
+    <select id="filter-work-type" name="workType">
+      <option value="">All</option>
+      <option value="full-time" <%= _workType === 'full-time' ? 'selected' : '' %>>Full-time</option>
+      <option value="part-time" <%= _workType === 'part-time' ? 'selected' : '' %>>Part-time</option>
+      <option value="contract" <%= _workType === 'contract' ? 'selected' : '' %>>Contract</option>
+    </select>
+  </div>
+
+  <div class="filter-group">
+    <label><%= _t('filter.salaryRange', 'Salary Range') %></label>
+    <div class="salary-range">
+      <input
+        type="number"
+        name="salaryMin"
+        placeholder="Min"
+        value="<%= _salaryMin %>"
+        min="0"
+        step="1000"
+      />
+      <span class="salary-range-sep">–</span>
+      <input
+        type="number"
+        name="salaryMax"
+        placeholder="Max"
+        value="<%= _salaryMax %>"
+        min="0"
+        step="1000"
+      />
+    </div>
+  </div>
+
+  <% if (_visaPercent >= 10) { %>
+  <div class="filter-group">
+    <label for="filter-visa"><%= _t('filter.visa', 'Visa Eligibility') %></label>
+    <select id="filter-visa" name="visa">
+      <option value="">All</option>
+      <option value="visa_holders_welcome" <%= _visa === 'visa_holders_welcome' ? 'selected' : '' %>>Visa holders welcome</option>
+      <option value="pr_required" <%= _visa === 'pr_required' ? 'selected' : '' %>>PR required</option>
+      <option value="citizens_only" <%= _visa === 'citizens_only' ? 'selected' : '' %>>Citizens only</option>
+    </select>
+  </div>
+  <% } %>
+
+  <% if (_user) { %>
+  <div class="filter-group">
+    <label for="filter-min-score">
+      <%= _t('filter.minScore', 'Min Score') %>: <span id="min-score-value"><%= _minScore %></span>%
+    </label>
+    <input
+      type="range"
+      id="filter-min-score"
+      name="minScore"
+      class="score-slider"
+      min="0"
+      max="100"
+      step="5"
+      value="<%= _minScore %>"
+    />
+  </div>
+  <% } %>
+
+  <div class="filter-actions">
+    <button type="submit" class="btn btn-primary btn-sm">
+      <%= _t('filter.apply', 'Apply Filters') %>
+    </button>
+    <a href="/jobs" class="btn btn-ghost btn-sm">
+      <%= _t('filter.clear', 'Clear') %>
+    </a>
+  </div>
+</form>
+
+<% /* Active filter pills */ %>
+<%
+  var _activeFilters = [];
+  if (_keyword) _activeFilters.push({ key: 'keyword', label: 'Keyword: ' + _keyword });
+  if (_location) _activeFilters.push({ key: 'location', label: 'Location: ' + _location });
+  if (_sources.length > 0) _activeFilters.push({ key: 'source', label: 'Source: ' + _sources.join(', ') });
+  if (_workType) _activeFilters.push({ key: 'workType', label: 'Type: ' + _workType });
+  if (_salaryMin) _activeFilters.push({ key: 'salaryMin', label: 'Min salary: $' + _salaryMin });
+  if (_salaryMax) _activeFilters.push({ key: 'salaryMax', label: 'Max salary: $' + _salaryMax });
+  if (_visa) _activeFilters.push({ key: 'visa', label: 'Visa: ' + _visa.replace(/_/g, ' ') });
+  if (_minScore > 0) _activeFilters.push({ key: 'minScore', label: 'Min Score: ' + _minScore + '%' });
+%>
+<% if (_activeFilters.length > 0) { %>
+<div class="filter-pills" aria-label="Active filters">
+  <% _activeFilters.forEach(function(f) { %>
+  <span class="filter-pill">
+    <%= f.label %>
+    <button class="filter-pill-remove" type="button" data-filter-key="<%= f.key %>" aria-label="Remove filter: <%= f.label %>">&times;</button>
+  </span>
+  <% }); %>
+</div>
+<% } %>

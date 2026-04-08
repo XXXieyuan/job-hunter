@@ -2,19 +2,61 @@ require('dotenv').config();
 const app = require('./app');
 const { PORT } = require('./config');
 const { runMigrations } = require('./db/migrate');
+const { closeDb } = require('./db/connection');
 const { ensureSampleResumeSeeded } = require('./services/resumeService');
+const backgroundQueue = require('./services/backgroundQueue');
+const sessionsRepo = require('./repositories/sessionsRepo');
 const { getLogger } = require('./logger');
 
 const logger = getLogger('server');
 
 async function start() {
   try {
+    // Run all pending migrations (includes 004_rebuild.sql, 004a_migrate_data.sql)
     runMigrations();
+
+    // Clean up expired sessions on startup
+    const expiredCount = sessionsRepo.deleteExpired();
+    if (expiredCount > 0) {
+      logger.info(`Cleaned up ${expiredCount} expired sessions on startup`);
+    }
+
+    // Seed sample resume if needed
     await ensureSampleResumeSeeded();
 
-    app.listen(PORT, () => {
+    // Register background queue handlers
+    // These are self-registering on require (scraperService, analysisService)
+    require('./services/scraperService');
+    require('./services/analysisService');
+    logger.info('Background queue handlers registered');
+
+    const server = app.listen(PORT, () => {
       logger.info(`Job Hunter listening on port ${PORT}`);
     });
+
+    // Graceful shutdown
+    function shutdown(signal) {
+      logger.info(`Received ${signal}, shutting down gracefully...`);
+      server.close(() => {
+        logger.info('HTTP server closed');
+        try {
+          closeDb();
+          logger.info('Database connection closed');
+        } catch (err) {
+          // DB may not have been opened
+        }
+        process.exit(0);
+      });
+
+      // Force shutdown after 10 seconds
+      setTimeout(() => {
+        logger.error('Forced shutdown after timeout');
+        process.exit(1);
+      }, 10000);
+    }
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
   } catch (err) {
     logger.error('Failed to start Job Hunter', { err });
     process.exit(1);

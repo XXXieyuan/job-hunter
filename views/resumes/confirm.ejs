@@ -1,0 +1,268 @@
+<% layout('layout') -%>
+
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _resume = typeof resume !== 'undefined' ? resume : {};
+
+  // Parse JSON fields
+  var _skills = [];
+  var _experience = [];
+  var _education = [];
+  var _certifications = [];
+  try { _skills = typeof _resume.skills_json === 'string' ? JSON.parse(_resume.skills_json) : (_resume.skills_json || []); } catch(e) {}
+  try { _experience = typeof _resume.experience_json === 'string' ? JSON.parse(_resume.experience_json) : (_resume.experience_json || []); } catch(e) {}
+  try { _education = typeof _resume.education_json === 'string' ? JSON.parse(_resume.education_json) : (_resume.education_json || []); } catch(e) {}
+  try { _certifications = typeof _resume.certifications_json === 'string' ? JSON.parse(_resume.certifications_json) : (_resume.certifications_json || []); } catch(e) {}
+%>
+
+<section class="page-section" style="max-width: 800px; margin: 0 auto; padding: 24px 16px 48px;">
+  <div class="section-header">
+    <h1><%= _t('resumes.confirm.title', 'Review Extracted Data') %></h1>
+    <p class="section-subtitle">
+      <%= _t('resumes.confirm.subtitle', 'Review and edit the information extracted from your resume. Click Confirm when you are satisfied.') %>
+    </p>
+  </div>
+
+  <form id="confirm-form" style="display: flex; flex-direction: column; gap: 20px;">
+
+    <!-- Summary -->
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px;">
+      <h3 style="font-size: 15px; font-weight: 500; color: var(--text, #1A1D23); margin-bottom: 8px;">Summary</h3>
+      <textarea id="confirm-summary" rows="4"
+                style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 6px; font-size: 14px; line-height: 1.6; color: var(--text, #1A1D23); resize: vertical;"
+      ><%= _resume.summary || '' %></textarea>
+    </div>
+
+    <!-- Skills -->
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px;">
+      <h3 style="font-size: 15px; font-weight: 500; color: var(--text, #1A1D23); margin-bottom: 12px;">Skills</h3>
+      <div id="skills-container" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;">
+        <% _skills.forEach(function(sk, idx) { %>
+          <%
+            var skName = typeof sk === 'object' ? sk.name : sk;
+            var skCat = typeof sk === 'object' ? (sk.category || 'technical') : 'technical';
+            var skProf = typeof sk === 'object' ? (sk.proficiency || '') : '';
+            var catColor = skCat === 'soft' ? '#ecfdf5; color: #059669' : (skCat === 'domain' ? '#f5f3ff; color: #7c3aed' : '#eff6ff; color: #2563EB');
+          %>
+          <span class="skill-tag" data-idx="<%= idx %>" data-name="<%= skName %>" data-category="<%= skCat %>" data-proficiency="<%= skProf %>"
+                style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 12px; border-radius: 20px; background: <%= catColor %>; cursor: default;">
+            <%= skName %>
+            <% if (skProf) { %><span style="font-size: 10px; opacity: 0.7;">(<%= skProf %>)</span><% } %>
+            <button type="button" class="skill-remove" data-idx="<%= idx %>"
+                    style="background: none; border: none; cursor: pointer; font-size: 14px; padding: 0 2px; opacity: 0.6;">&times;</button>
+          </span>
+        <% }); %>
+      </div>
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <input type="text" id="add-skill-input" placeholder="Add a skill..."
+               style="flex: 1; padding: 6px 10px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 6px; font-size: 13px;" />
+        <button type="button" class="btn btn-ghost btn-sm" id="add-skill-btn">Add</button>
+      </div>
+    </div>
+
+    <!-- Experience -->
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px;">
+      <h3 style="font-size: 15px; font-weight: 500; color: var(--text, #1A1D23); margin-bottom: 12px;">Experience</h3>
+      <div id="experience-container" style="display: flex; flex-direction: column; gap: 12px;">
+        <% _experience.forEach(function(exp, idx) { %>
+          <div class="experience-card" data-idx="<%= idx %>" style="padding: 12px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 8px;">
+            <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+              <input type="text" class="exp-title" value="<%= exp.title || '' %>" placeholder="Job Title"
+                     style="flex: 1; min-width: 120px; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 4px; font-size: 13px;" />
+              <input type="text" class="exp-employer" value="<%= exp.employer || '' %>" placeholder="Employer"
+                     style="flex: 1; min-width: 120px; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 4px; font-size: 13px;" />
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+              <input type="text" class="exp-start" value="<%= exp.start_date || '' %>" placeholder="Start Date"
+                     style="width: 100px; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 4px; font-size: 13px;" />
+              <input type="text" class="exp-end" value="<%= exp.end_date || '' %>" placeholder="End Date"
+                     style="width: 100px; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 4px; font-size: 13px;" />
+            </div>
+            <textarea class="exp-description" rows="2" placeholder="Description"
+                      style="width: 100%; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 4px; font-size: 13px; resize: vertical;"><%= exp.description || '' %></textarea>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+
+    <!-- Education -->
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px;">
+      <h3 style="font-size: 15px; font-weight: 500; color: var(--text, #1A1D23); margin-bottom: 12px;">Education</h3>
+      <div id="education-container" style="display: flex; flex-direction: column; gap: 12px;">
+        <% _education.forEach(function(edu, idx) { %>
+          <div class="education-card" data-idx="<%= idx %>" style="padding: 12px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 8px;">
+            <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+              <input type="text" class="edu-degree" value="<%= edu.degree || '' %>" placeholder="Degree"
+                     style="flex: 1; min-width: 100px; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 4px; font-size: 13px;" />
+              <input type="text" class="edu-field" value="<%= edu.field || '' %>" placeholder="Field"
+                     style="flex: 1; min-width: 100px; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 4px; font-size: 13px;" />
+            </div>
+            <input type="text" class="edu-institution" value="<%= edu.institution || '' %>" placeholder="Institution"
+                   style="width: 100%; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 4px; font-size: 13px; margin-bottom: 8px;" />
+            <div style="display: flex; gap: 8px;">
+              <input type="text" class="edu-start" value="<%= edu.start_date || '' %>" placeholder="Start"
+                     style="width: 80px; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 4px; font-size: 13px;" />
+              <input type="text" class="edu-end" value="<%= edu.end_date || '' %>" placeholder="End"
+                     style="width: 80px; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 4px; font-size: 13px;" />
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+
+    <!-- Certifications -->
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px;">
+      <h3 style="font-size: 15px; font-weight: 500; color: var(--text, #1A1D23); margin-bottom: 12px;">Certifications</h3>
+      <div id="certifications-container" style="display: flex; flex-direction: column; gap: 8px;">
+        <% _certifications.forEach(function(cert, idx) { %>
+          <div class="cert-card" data-idx="<%= idx %>" style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" class="cert-name" value="<%= cert.name || '' %>" placeholder="Name"
+                   style="flex: 2; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 4px; font-size: 13px;" />
+            <input type="text" class="cert-issuer" value="<%= cert.issuer || '' %>" placeholder="Issuer"
+                   style="flex: 1; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 4px; font-size: 13px;" />
+            <input type="text" class="cert-date" value="<%= cert.date || '' %>" placeholder="Date"
+                   style="width: 80px; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 4px; font-size: 13px;" />
+          </div>
+        <% }); %>
+      </div>
+    </div>
+
+    <!-- Confirm button -->
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <button type="submit" class="btn btn-primary" id="confirm-btn">
+        <%= _t('resumes.confirm.confirmBtn', 'Confirm Resume') %>
+      </button>
+      <a href="/resumes" class="btn btn-ghost">Back to Resumes</a>
+      <span id="confirm-spinner" style="display: none; font-size: 13px; color: var(--text-secondary, #4B5563);">
+        Saving and generating embedding...
+      </span>
+    </div>
+  </form>
+</section>
+
+<script>
+(function() {
+  var resumeId = '<%= _resume.id %>';
+  var form = document.getElementById('confirm-form');
+  var confirmBtn = document.getElementById('confirm-btn');
+  var spinner = document.getElementById('confirm-spinner');
+
+  // Skill removal
+  document.querySelectorAll('.skill-remove').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var tag = btn.closest('.skill-tag');
+      if (tag) tag.remove();
+    });
+  });
+
+  // Add skill
+  var addSkillBtn = document.getElementById('add-skill-btn');
+  var addSkillInput = document.getElementById('add-skill-input');
+  if (addSkillBtn && addSkillInput) {
+    function addSkill() {
+      var name = addSkillInput.value.trim();
+      if (!name) return;
+      var container = document.getElementById('skills-container');
+      var span = document.createElement('span');
+      span.className = 'skill-tag';
+      span.setAttribute('data-name', name);
+      span.setAttribute('data-category', 'technical');
+      span.setAttribute('data-proficiency', '');
+      span.style.cssText = 'display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 12px; border-radius: 20px; background: #eff6ff; color: #2563EB; cursor: default;';
+      span.innerHTML = name + ' <button type="button" class="skill-remove" style="background: none; border: none; cursor: pointer; font-size: 14px; padding: 0 2px; opacity: 0.6;">&times;</button>';
+      span.querySelector('.skill-remove').addEventListener('click', function() { span.remove(); });
+      container.appendChild(span);
+      addSkillInput.value = '';
+    }
+    addSkillBtn.addEventListener('click', addSkill);
+    addSkillInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); addSkill(); }
+    });
+  }
+
+  // Collect form data and submit
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      confirmBtn.disabled = true;
+      if (spinner) spinner.style.display = 'inline';
+
+      // Gather skills
+      var skills = [];
+      document.querySelectorAll('.skill-tag').forEach(function(tag) {
+        skills.push({
+          name: tag.getAttribute('data-name'),
+          category: tag.getAttribute('data-category') || 'technical',
+          proficiency: tag.getAttribute('data-proficiency') || '',
+        });
+      });
+
+      // Gather experience
+      var experience = [];
+      document.querySelectorAll('.experience-card').forEach(function(card) {
+        experience.push({
+          title: card.querySelector('.exp-title').value,
+          employer: card.querySelector('.exp-employer').value,
+          start_date: card.querySelector('.exp-start').value,
+          end_date: card.querySelector('.exp-end').value,
+          description: card.querySelector('.exp-description').value,
+        });
+      });
+
+      // Gather education
+      var education = [];
+      document.querySelectorAll('.education-card').forEach(function(card) {
+        education.push({
+          degree: card.querySelector('.edu-degree').value,
+          field: card.querySelector('.edu-field').value,
+          institution: card.querySelector('.edu-institution').value,
+          start_date: card.querySelector('.edu-start').value,
+          end_date: card.querySelector('.edu-end').value,
+        });
+      });
+
+      // Gather certifications
+      var certifications = [];
+      document.querySelectorAll('.cert-card').forEach(function(card) {
+        certifications.push({
+          name: card.querySelector('.cert-name').value,
+          issuer: card.querySelector('.cert-issuer').value,
+          date: card.querySelector('.cert-date').value,
+        });
+      });
+
+      var payload = {
+        summary: document.getElementById('confirm-summary').value,
+        skills_json: skills,
+        experience_json: experience,
+        education_json: education,
+        certifications_json: certifications,
+        is_confirmed: true,
+      };
+
+      fetch('/api/resumes/' + resumeId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then(function(res) { return res.json().then(function(d) { return { ok: res.ok, data: d }; }); })
+        .then(function(result) {
+          if (result.ok) {
+            if (window.Toast) window.Toast.show('Resume confirmed!', 'success');
+            window.location.href = '/resumes';
+          } else {
+            confirmBtn.disabled = false;
+            if (spinner) spinner.style.display = 'none';
+            var msg = result.data && result.data.error ? result.data.error.message : 'Failed to confirm resume.';
+            if (window.Toast) window.Toast.show(msg, 'error');
+          }
+        })
+        .catch(function(err) {
+          confirmBtn.disabled = false;
+          if (spinner) spinner.style.display = 'none';
+          if (window.Toast) window.Toast.show('Failed to confirm resume.', 'error');
+        });
+    });
+  }
+})();
+</script>

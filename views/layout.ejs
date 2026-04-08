@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="<%= locale === 'en' ? 'en' : 'zh-CN' %>">
+<html lang="<%= typeof locale !== 'undefined' && locale === 'zh' ? 'zh-CN' : 'en' %>">
   <head>
     <meta charset="UTF-8" />
-    <title><%= t('app.fullTitle') %></title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%= typeof t === 'function' ? t('app.fullTitle') : 'Job Hunter' %></title>
+    <meta name="description" content="AI-powered job matching across Seek, LinkedIn, and APSJobs" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -11,64 +12,32 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/css/main.css" />
+    <% if (typeof csrfToken !== 'undefined') { %>
+    <meta name="csrf-token" content="<%= csrfToken %>" />
+    <% } %>
   </head>
   <body>
-    <div class="app-root container">
-      <header class="app-header navbar">
-        <div class="brand">
-          <div class="brand-orb"></div>
-          <span class="brand-title"><%= t('app.fullTitle') %></span>
-        </div>
-        <button
-          class="nav-toggle"
-          type="button"
-          aria-label="<%= t('nav.toggle', 'Toggle navigation') %>"
-          aria-expanded="false"
-        >
-          <span class="nav-toggle-bar"></span>
-          <span class="nav-toggle-bar"></span>
-        </button>
-        <nav class="nav">
-          <a
-            href="/jobs"
-            class="nav-link <%= currentPath && currentPath.startsWith('/jobs') ? 'active' : '' %>"
-            ><%= t('nav.jobs') %></a
-          >
-          <a
-            href="/resumes"
-            class="nav-link <%= currentPath && currentPath.startsWith('/resumes') ? 'active' : '' %>"
-            ><%= t('nav.resumes') %></a
-          >
-          <a
-            href="/admin?token=job-hunter-admin-2026"
-            class="nav-link <%= currentPath && currentPath.startsWith('/admin') ? 'active' : '' %>"
-            ><%= t('nav.admin') %></a
-          >
-          <div class="lang-toggle" aria-label="<%= t('nav.language', 'Language') %>">
-            <a
-              href="/lang/zh"
-              class="lang-pill <%= locale === 'zh' ? 'active' : '' %>"
-            >
-              <%= t('lang.zh', '中') %>
-            </a>
-            <span class="lang-separator">·</span>
-            <a
-              href="/lang/en"
-              class="lang-pill <%= locale === 'en' ? 'active' : '' %>"
-            >
-              <%= t('lang.en', 'EN') %>
-            </a>
-          </div>
-        </nav>
-      </header>
+    <div class="app-root">
+      <%- include('partials/nav') %>
 
-      <!-- Shared SVG defs for gauges / icons -->
+      <!-- Shared SVG defs for score indicator gradients -->
       <svg class="visually-hidden" aria-hidden="true" focusable="false" width="0" height="0">
         <defs>
-          <linearGradient id="fit-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#06b6d4" />
-            <stop offset="50%" stop-color="#10b981" />
-            <stop offset="100%" stop-color="#22c55e" />
+          <linearGradient id="score-gradient-excellent" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#059669" />
+            <stop offset="100%" stop-color="#10B981" />
+          </linearGradient>
+          <linearGradient id="score-gradient-good" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#0891B2" />
+            <stop offset="100%" stop-color="#06B6D4" />
+          </linearGradient>
+          <linearGradient id="score-gradient-fair" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#D97706" />
+            <stop offset="100%" stop-color="#F59E0B" />
+          </linearGradient>
+          <linearGradient id="score-gradient-low" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#DC2626" />
+            <stop offset="100%" stop-color="#EF4444" />
           </linearGradient>
         </defs>
       </svg>
@@ -77,15 +46,22 @@
         <%- body %>
       </main>
 
-      <footer>
-        <span>
-          © <%= new Date().getFullYear() %> <%= t('app.name') %>. <%= t('footer.rights') %>
-        </span>
-        <span><%= t('footer.tagline') %></span>
-      </footer>
+      <%- include('partials/footer') %>
+
+      <%- include('partials/toast') %>
+
+      <% if (typeof user !== 'undefined' && user) { %>
+        <%- include('partials/onboarding') %>
+      <% } %>
     </div>
 
     <script src="/js/main.js"></script>
+    <script src="/js/components.js"></script>
+    <% if (typeof user !== 'undefined' && user) { %>
+    <script src="/js/onboarding.js"></script>
+    <% } %>
+    <% if (typeof currentPath !== 'undefined' && currentPath && currentPath.startsWith('/admin')) { %>
     <script src="/js/admin.js"></script>
+    <% } %>
   </body>
 </html>

@@ -1,38 +1,144 @@
 <% layout('layout') -%>
 
-<section class="page-section">
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+%>
+
+<section class="page-section" style="max-width: 600px; margin: 0 auto; padding: 24px 16px 48px;">
   <div class="section-header">
-    <h1><%= t('resumes.upload.title', '上传简历') %></h1>
+    <h1><%= _t('resumes.upload.title', 'Upload Resume') %></h1>
     <p class="section-subtitle">
-      <%= t(
-        'resumes.upload.subtitle',
-        '上传 .docx 简历文件，系统会自动提取关键信息并用于职位匹配和 Cover Letter 生成。'
-      ) %>
+      <%= _t('resumes.upload.subtitle', 'Upload a .docx resume file. The system will extract key information for matching and cover letter generation.') %>
     </p>
   </div>
 
-  <div class="glass-card">
-    <form method="post" action="/resumes/upload" enctype="multipart/form-data" style="display:flex; flex-direction: column; gap: 12px;">
-      <div class="filter-group">
-        <label for="resume">
-          <%= t('resumes.upload.fileLabel', '选择简历文件 (.docx)：') %>
-        </label>
-        <input type="file" id="resume" name="resume" accept=".docx,.txt" required />
-      </div>
+  <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 24px;">
+    <form method="post" action="/resumes/upload" enctype="multipart/form-data" id="resume-upload-form" style="display: flex; flex-direction: column; gap: 16px;">
+
+      <!-- Resume name -->
       <div>
-        <button type="submit" class="btn btn-primary">
-          <%= t('resumes.upload.submit', '上传并解析') %>
+        <label for="resume-name" style="display: block; font-size: 13px; font-weight: 500; color: var(--text-secondary, #4B5563); margin-bottom: 4px;">
+          Resume Name
+        </label>
+        <input type="text" id="resume-name" name="name" placeholder="e.g. Data Analyst Resume v2"
+               style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 6px; font-size: 14px; color: var(--text, #1A1D23);" />
+      </div>
+
+      <!-- Drag and drop zone -->
+      <div id="drop-zone" class="resume-drop-zone"
+           style="border: 2px dashed var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 32px 16px; text-align: center; cursor: pointer; transition: border-color 0.2s, background-color 0.2s;">
+        <div style="font-size: 32px; margin-bottom: 8px; color: var(--text-muted, #6B7280);">&#128196;</div>
+        <p style="font-size: 14px; color: var(--text-secondary, #4B5563); margin-bottom: 4px;">
+          Drop your .docx file here or click to browse
+        </p>
+        <p style="font-size: 12px; color: var(--text-muted, #6B7280);">
+          DOCX only, max 10MB
+        </p>
+        <input type="file" id="resume-file" name="resume" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+               style="display: none;" required />
+      </div>
+
+      <!-- File info (shown after selection) -->
+      <div id="file-info" style="display: none; padding: 8px 12px; background: var(--bg-subtle, #F1F3F5); border-radius: 8px; font-size: 13px; color: var(--text-secondary, #4B5563);">
+        <span id="file-name"></span>
+        <span id="file-size" style="margin-left: 8px; color: var(--text-muted, #6B7280);"></span>
+      </div>
+
+      <!-- Validation feedback -->
+      <div id="upload-error" style="display: none; padding: 8px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; font-size: 13px; color: #DC2626;"></div>
+
+      <!-- Privacy notice -->
+      <div style="padding: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; font-size: 12px; color: #166534; line-height: 1.5;">
+        <%= _t('resumes.upload.privacyNotice', 'Your resume is stored securely and never shared with employers. Data is used only for match scoring and cover letter generation. You can delete it at any time.') %>
+      </div>
+
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button type="submit" class="btn btn-primary" id="upload-submit-btn" disabled>
+          <%= _t('resumes.upload.submit', 'Upload and Process') %>
         </button>
-        <a href="/resumes" class="btn btn-ghost" style="margin-left:8px;">
-          <%= t('resumes.upload.backToList', '返回列表') %>
+        <a href="/resumes" class="btn btn-ghost">
+          <%= _t('resumes.upload.backToList', 'Back to List') %>
         </a>
       </div>
-      <p class="muted small">
-        <%= t(
-          'resumes.upload.hint',
-          '文件大小限制 5MB。上传后可在「我的简历」页面设置哪一份为主简历。'
-        ) %>
-      </p>
+
+      <!-- Parsing spinner (hidden by default) -->
+      <div id="parsing-spinner" style="display: none; text-align: center; padding: 16px;">
+        <p style="font-size: 14px; color: var(--text-secondary, #4B5563);">Parsing your resume... This may take a moment.</p>
+      </div>
     </form>
   </div>
 </section>
+
+<script>
+(function() {
+  var dropZone = document.getElementById('drop-zone');
+  var fileInput = document.getElementById('resume-file');
+  var fileInfo = document.getElementById('file-info');
+  var fileName = document.getElementById('file-name');
+  var fileSize = document.getElementById('file-size');
+  var errorDiv = document.getElementById('upload-error');
+  var submitBtn = document.getElementById('upload-submit-btn');
+  var form = document.getElementById('resume-upload-form');
+  var spinner = document.getElementById('parsing-spinner');
+  var MAX_SIZE = 10 * 1024 * 1024;
+
+  if (dropZone && fileInput) {
+    dropZone.addEventListener('click', function() { fileInput.click(); });
+
+    dropZone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      dropZone.style.borderColor = 'var(--accent-primary, #2563EB)';
+      dropZone.style.backgroundColor = '#eff6ff';
+    });
+
+    dropZone.addEventListener('dragleave', function() {
+      dropZone.style.borderColor = 'var(--border-subtle, #E2E6EA)';
+      dropZone.style.backgroundColor = '';
+    });
+
+    dropZone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      dropZone.style.borderColor = 'var(--border-subtle, #E2E6EA)';
+      dropZone.style.backgroundColor = '';
+      if (e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        validateFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', function() {
+      if (fileInput.files.length > 0) validateFile(fileInput.files[0]);
+    });
+  }
+
+  function validateFile(file) {
+    errorDiv.style.display = 'none';
+    fileInfo.style.display = 'none';
+    submitBtn.disabled = true;
+
+    if (!file.name.endsWith('.docx')) {
+      errorDiv.textContent = 'Only .docx files are accepted.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+    if (file.size > MAX_SIZE) {
+      errorDiv.textContent = 'File exceeds 10MB limit.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    fileName.textContent = file.name;
+    fileSize.textContent = '(' + (file.size / 1024 / 1024).toFixed(2) + ' MB)';
+    fileInfo.style.display = 'block';
+    submitBtn.disabled = false;
+  }
+
+  if (form) {
+    form.addEventListener('submit', function() {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Uploading...';
+      if (spinner) spinner.style.display = 'block';
+    });
+  }
+})();
+</script>

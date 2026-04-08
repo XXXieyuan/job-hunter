@@ -1,106 +1,168 @@
 <% layout('layout') -%>
 
-<section class="page-section">
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _resumes = typeof resumes !== 'undefined' && Array.isArray(resumes) ? resumes : [];
+%>
+
+<section class="page-section" style="max-width: 900px; margin: 0 auto; padding: 24px 16px 48px;">
   <div class="section-header">
-    <h1><%= t('resumes.list.title', '我的简历') %></h1>
+    <h1><%= _t('resumes.list.title', 'My Resumes') %></h1>
     <p class="section-subtitle">
-      <%= t(
-        'resumes.list.subtitle',
-        '上传多份简历，选择主简历用于匹配和生成 Cover Letter。'
-      ) %>
+      <%= _t('resumes.list.subtitle', 'Upload multiple resumes and choose a primary one for matching and cover letter generation.') %>
     </p>
   </div>
 
-  <div class="glass-card">
-    <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px;">
-      <p class="muted small" style="margin:0;">
-        <%= t(
-          'resumes.list.uploadHint',
-          '支持上传 .docx 简历文件（推荐）。其他文本文件将按纯文本解析。'
-        ) %>
-      </p>
-      <a href="/resumes/upload" class="btn btn-secondary">
-        <%= t('resumes.list.uploadButton', '上传新简历') %>
-      </a>
-    </div>
+  <!-- Upload button + privacy notice -->
+  <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+    <p style="font-size: 13px; color: var(--text-secondary, #4B5563); margin: 0;">
+      <%= _t('resumes.list.privacyNote', 'Your resume is stored securely and never shared with employers. You can delete it at any time.') %>
+    </p>
+    <a href="/resumes/upload" class="btn btn-primary btn-sm">
+      <%= _t('resumes.list.uploadButton', 'Upload New Resume') %>
+    </a>
   </div>
 
-  <div class="glass-card" style="margin-top: 12px;">
-    <% if (!resumes.length) { %>
-    <div class="empty-state">
-      <p>
-        <%= t(
-          'resumes.list.empty',
-          '当前没有任何简历。可以先上传一份 .docx 简历，或使用内置示例简历。'
-        ) %>
+  <% if (_resumes.length === 0) { %>
+    <!-- Empty state -->
+    <div style="text-align: center; padding: 48px 16px; background: var(--bg-elevated, #fff); border-radius: 12px; border: 1px solid var(--border-subtle, #E2E6EA);">
+      <p style="color: var(--text-secondary, #4B5563); margin-bottom: 16px;">
+        <%= _t('resumes.list.empty', 'No resumes yet. Upload a .docx resume to get started.') %>
       </p>
+      <a href="/resumes/upload" class="btn btn-primary"><%= _t('resumes.list.uploadButton', 'Upload New Resume') %></a>
     </div>
-    <% } else { %>
-    <table class="jobs-table">
-      <thead>
-        <tr>
-          <th><%= t('resumes.list.table.id', 'ID') %></th>
-          <th><%= t('resumes.list.table.name', '名称') %></th>
-          <th><%= t('resumes.list.table.file', '文件') %></th>
-          <th><%= t('resumes.list.table.main', '主简历') %></th>
-          <th><%= t('resumes.list.table.createdAt', '创建时间') %></th>
-          <th><%= t('resumes.list.table.actions', '操作') %></th>
-        </tr>
-      </thead>
-      <tbody>
-        <% resumes.forEach(function(r){ %>
-        <tr>
-          <td><%= r.id %></td>
-          <td><%= r.name || t('resumes.list.table.unnamed', '未命名简历') %></td>
-          <td>
-            <% if (r.file_name) { %>
-            <span class="tag"><%= r.file_name %></span>
-            <% } else { %>
-            <span class="muted small">
-              <%= t('resumes.list.table.noFile', '无文件（示例数据或旧版本）') %>
-            </span>
-            <% } %>
-          </td>
-          <td>
-            <% if (r.is_main) { %>
-            <span class="badge badge-warning">
-              <%= t('resumes.list.table.currentMain', '当前主简历') %>
-            </span>
-            <% } else { %>
-            <form method="post" action="/resumes/<%= r.id %>/main" style="display:inline;">
-              <button type="submit" class="btn btn-ghost small">
-                <%= t('resumes.list.table.setMain', '设为主简历') %>
+  <% } else { %>
+    <!-- Resume cards -->
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <% _resumes.forEach(function(r) { %>
+        <%
+          var skills = [];
+          try { skills = typeof r.skills_json === 'string' ? JSON.parse(r.skills_json) : (r.skills_json || []); } catch(e) {}
+          var certs = [];
+          try { certs = typeof r.certifications_json === 'string' ? JSON.parse(r.certifications_json) : (r.certifications_json || []); } catch(e) {}
+          var isConfirmed = r.is_confirmed === 1 || r.is_confirmed === true;
+          var scoringInProgress = r.scoring_in_progress === true;
+        %>
+        <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <h3 style="font-size: 16px; font-weight: 500; color: var(--text, #1A1D23); margin: 0;">
+                  <%= r.name || _t('resumes.list.table.unnamed', 'Untitled Resume') %>
+                </h3>
+                <% if (isConfirmed) { %>
+                  <span style="padding: 2px 8px; font-size: 11px; border-radius: 12px; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; font-weight: 500;">
+                    Confirmed
+                  </span>
+                <% } else { %>
+                  <a href="/resumes/<%= r.id %>/confirm" style="padding: 2px 8px; font-size: 11px; border-radius: 12px; background: #fffbeb; color: #D97706; border: 1px solid #fde68a; font-weight: 500; text-decoration: none;">
+                    Needs Review
+                  </a>
+                <% } %>
+                <% if (scoringInProgress) { %>
+                  <span style="padding: 2px 8px; font-size: 11px; border-radius: 12px; background: #eff6ff; color: #2563EB; border: 1px solid #bfdbfe; font-weight: 500;">
+                    Scoring...
+                  </span>
+                <% } %>
+              </div>
+
+              <!-- Skills summary -->
+              <% if (skills.length > 0) { %>
+                <div style="margin-bottom: 8px;">
+                  <span style="font-size: 12px; color: var(--text-muted, #6B7280);"><%= skills.length %> skills extracted</span>
+                  <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
+                    <% skills.slice(0, 5).forEach(function(sk) { %>
+                      <span style="padding: 2px 8px; font-size: 11px; border-radius: 12px; background: var(--bg-subtle, #F1F3F5); color: var(--text-secondary, #4B5563);">
+                        <%= typeof sk === 'object' ? sk.name : sk %>
+                      </span>
+                    <% }); %>
+                    <% if (skills.length > 5) { %>
+                      <span style="padding: 2px 8px; font-size: 11px; color: var(--text-muted, #6B7280);">+<%= skills.length - 5 %> more</span>
+                    <% } %>
+                  </div>
+                </div>
+              <% } %>
+
+              <% if (certs.length > 0) { %>
+                <span style="font-size: 12px; color: var(--text-muted, #6B7280);"><%= certs.length %> certifications</span>
+              <% } %>
+
+              <div style="font-size: 12px; color: var(--text-muted, #6B7280); margin-top: 4px;">
+                Uploaded: <%= r.created_at || '' %>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div style="display: flex; flex-direction: column; gap: 6px; align-items: flex-end;">
+              <% if (isConfirmed && !scoringInProgress) { %>
+                <button type="button" class="btn btn-ghost btn-sm score-all-btn" data-resume-id="<%= r.id %>">
+                  Score All Jobs
+                </button>
+              <% } %>
+              <button type="button" class="btn btn-ghost btn-sm delete-resume-btn" data-resume-id="<%= r.id %>"
+                      style="color: #DC2626; border-color: #fecaca;">
+                <%= _t('resumes.list.table.delete', 'Delete') %>
               </button>
-            </form>
-            <% } %>
-          </td>
-          <td><%= r.created_at || '' %></td>
-          <td>
-            <a
-              href="/resumes/<%= r.id %>"
-              class="btn btn-ghost small"
-              title="<%= t('resumes.list.table.viewDetail', '查看详情') %>"
-              ><%= t('resumes.list.table.viewDetail', '查看详情') %></a
-            >
-            <form
-              method="post"
-              action="/resumes/<%= r.id %>/delete"
-              style="display:inline;"
-              onsubmit="return confirm('<%= t('resumes.list.table.confirmDelete', '确定要删除这份简历吗？此操作不可恢复。') %>');"
-            >
-              <button
-                type="submit"
-                class="btn btn-ghost small"
-                style="color:#f97373; border-color: rgba(248,113,113,0.6);"
-              >
-                <%= t('resumes.list.table.delete', '删除') %>
-              </button>
-            </form>
-          </td>
-        </tr>
-        <% }) %>
-      </tbody>
-    </table>
-    <% } %>
-  </div>
+            </div>
+          </div>
+        </div>
+      <% }); %>
+    </div>
+  <% } %>
 </section>
+
+<script>
+(function() {
+  // Score All Jobs
+  document.querySelectorAll('.score-all-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var resumeId = btn.getAttribute('data-resume-id');
+      btn.disabled = true;
+      btn.textContent = 'Queuing...';
+      fetch('/api/resumes/' + resumeId + '/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data.status === 'queued') {
+            btn.textContent = 'Scoring ' + (data.job_count || '') + ' jobs...';
+            if (window.Toast) window.Toast.show('Scoring against ' + (data.job_count || 'all') + ' jobs...', 'success');
+          } else {
+            btn.textContent = 'Score All Jobs';
+            btn.disabled = false;
+          }
+        })
+        .catch(function() {
+          btn.textContent = 'Score All Jobs';
+          btn.disabled = false;
+          if (window.Toast) window.Toast.show('Failed to start scoring.', 'error');
+        });
+    });
+  });
+
+  // Delete resume
+  document.querySelectorAll('.delete-resume-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var resumeId = btn.getAttribute('data-resume-id');
+      if (!confirm('Delete this resume? This will also delete all match scores and cover letters generated with this resume.')) return;
+      fetch('/api/resumes/' + resumeId, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      })
+        .then(function(res) {
+          if (res.ok) {
+            var card = btn.closest('[style*="background"]');
+            if (card) card.remove();
+            if (window.Toast) window.Toast.show('Resume deleted.', 'success');
+          } else {
+            if (window.Toast) window.Toast.show('Failed to delete resume.', 'error');
+          }
+        })
+        .catch(function() {
+          if (window.Toast) window.Toast.show('Failed to delete resume.', 'error');
+        });
+    });
+  });
+})();
+</script>

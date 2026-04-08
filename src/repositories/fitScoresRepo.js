@@ -4,7 +4,18 @@ function getDbInstance() {
   return getDb();
 }
 
-function upsertFitScore({ job_id, resume_id, overall_score, keyword_score, embedding_score, breakdown_json }) {
+function upsertFitScore({
+  job_id,
+  resume_id,
+  overall_score,
+  semantic_score,
+  keyword_score,
+  role_alignment_score,
+  location_score,
+  breakdown_json,
+  skill_gaps_json,
+  visa_match,
+}) {
   const db = getDbInstance();
   const existing = db
     .prepare(
@@ -15,19 +26,43 @@ function upsertFitScore({ job_id, resume_id, overall_score, keyword_score, embed
   if (existing) {
     db.prepare(
       `UPDATE job_fit_scores
-       SET overall_score = ?, keyword_score = ?, embedding_score = ?, breakdown_json = ?
+       SET overall_score = ?, semantic_score = ?, keyword_score = ?,
+           role_alignment_score = ?, location_score = ?,
+           breakdown_json = ?, skill_gaps_json = ?, visa_match = ?
        WHERE id = ?`
-    ).run(overall_score, keyword_score, embedding_score, breakdown_json, existing.id);
+    ).run(
+      overall_score,
+      semantic_score || null,
+      keyword_score || null,
+      role_alignment_score || null,
+      location_score || null,
+      breakdown_json || null,
+      skill_gaps_json || null,
+      visa_match !== undefined ? visa_match : null,
+      existing.id
+    );
     return existing.id;
   }
 
   const info = db
     .prepare(
       `INSERT INTO job_fit_scores
-       (job_id, resume_id, overall_score, keyword_score, embedding_score, breakdown_json)
-       VALUES (?, ?, ?, ?, ?, ?)`
+       (job_id, resume_id, overall_score, semantic_score, keyword_score,
+        role_alignment_score, location_score, breakdown_json, skill_gaps_json, visa_match)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(job_id, resume_id, overall_score, keyword_score, embedding_score, breakdown_json);
+    .run(
+      job_id,
+      resume_id,
+      overall_score,
+      semantic_score || null,
+      keyword_score || null,
+      role_alignment_score || null,
+      location_score || null,
+      breakdown_json || null,
+      skill_gaps_json || null,
+      visa_match !== undefined ? visa_match : null
+    );
   return info.lastInsertRowid;
 }
 
@@ -49,6 +84,35 @@ function getBestFitScoreForJob(jobId) {
     .get(jobId);
 }
 
+/**
+ * Get all scores for a user's resumes, joined with job data.
+ */
+function getScoresForUser(user_id, { minScore, limit, offset } = {}) {
+  const db = getDbInstance();
+  const conditions = ['r.user_id = @user_id'];
+  const params = { user_id };
+
+  if (typeof minScore === 'number') {
+    conditions.push('fs.overall_score >= @minScore');
+    params.minScore = minScore;
+  }
+
+  params.limit = limit || 50;
+  params.offset = offset || 0;
+
+  const where = conditions.join(' AND ');
+  const sql = `
+    SELECT fs.*, j.title, j.company_name, j.location, j.source
+    FROM job_fit_scores fs
+    JOIN resumes r ON r.id = fs.resume_id
+    JOIN jobs j ON j.id = fs.job_id
+    WHERE ${where}
+    ORDER BY fs.overall_score DESC
+    LIMIT @limit OFFSET @offset
+  `;
+  return db.prepare(sql).all(params);
+}
+
 function getStats() {
   const db = getDbInstance();
   const total = db.prepare('SELECT COUNT(*) AS c FROM job_fit_scores').get().c;
@@ -68,10 +132,24 @@ function getStats() {
   return { total, avg, highFitPerRole };
 }
 
+/**
+ * Get score for a specific job + resume combination.
+ * Returns full score row with all sub-scores and breakdown_json.
+ */
+function getScoreForJobAndResume(jobId, resumeId) {
+  const db = getDbInstance();
+  return db
+    .prepare(
+      'SELECT * FROM job_fit_scores WHERE job_id = ? AND resume_id = ?'
+    )
+    .get(jobId, resumeId);
+}
+
 module.exports = {
   upsertFitScore,
   getFitScore,
   getBestFitScoreForJob,
+  getScoreForJobAndResume,
+  getScoresForUser,
   getStats,
 };
-

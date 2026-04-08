@@ -1,0 +1,78 @@
+<%
+  /**
+   * OnboardingOverlay partial
+   * 3-step first-run educational overlay per DESIGN.md OnboardingOverlay spec.
+   * Trigger: shown on first visit after account creation.
+   * Dismissal stored in localStorage('jh-onboarding-completed').
+   */
+%>
+<div class="onboarding-overlay" id="onboarding-overlay" hidden aria-modal="true" role="dialog" aria-label="Welcome to Job Hunter">
+  <div class="onboarding-backdrop" id="onboarding-backdrop"></div>
+  <div class="onboarding-card">
+    <!-- Step indicators -->
+    <div class="onboarding-dots" aria-label="Step indicator">
+      <span class="onboarding-dot active" data-step="0"></span>
+      <span class="onboarding-dot" data-step="1"></span>
+      <span class="onboarding-dot" data-step="2"></span>
+    </div>
+
+    <!-- Step 1: How Match Scores Work -->
+    <div class="onboarding-step active" data-onboarding-step="0">
+      <div class="onboarding-illustration" aria-hidden="true">
+        <svg viewBox="0 0 120 80" width="120" height="80">
+          <circle cx="60" cy="40" r="30" fill="none" stroke="var(--accent-primary)" stroke-width="3" opacity="0.3"/>
+          <circle cx="60" cy="40" r="30" fill="none" stroke="var(--score-excellent)" stroke-width="3"
+                  stroke-dasharray="188.5" stroke-dashoffset="47" stroke-linecap="round"/>
+          <text x="60" y="45" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text)">75%</text>
+        </svg>
+      </div>
+      <h2 class="onboarding-heading">How Match Scores Work</h2>
+      <p class="onboarding-body">
+        Your match score combines skill matching, role alignment, and location preference into a single percentage.
+        It is guidance to help you prioritise -- not a verdict on your suitability. The breakdown shows exactly which skills matched and where the gaps are.
+      </p>
+    </div>
+
+    <!-- Step 2: AI-Generated Drafts -->
+    <div class="onboarding-step" data-onboarding-step="1">
+      <div class="onboarding-illustration" aria-hidden="true">
+        <svg viewBox="0 0 120 80" width="120" height="80">
+          <rect x="20" y="10" width="80" height="60" rx="6" fill="none" stroke="var(--accent-primary)" stroke-width="2" opacity="0.3"/>
+          <path d="M35 30h50M35 40h40M35 50h45" stroke="var(--accent-secondary)" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+          <path d="M80 55l8-8 4 4-8 8z" fill="var(--accent-primary)" opacity="0.5"/>
+        </svg>
+      </div>
+      <h2 class="onboarding-heading">AI-Generated Drafts</h2>
+      <p class="onboarding-body">
+        Cover letters and selection criteria responses are starting points for your editing, not final output.
+        Every generated document is clearly marked as an AI draft. Review, personalise, and make it yours before submitting.
+      </p>
+    </div>
+
+    <!-- Step 3: Your Data is Private -->
+    <div class="onboarding-step" data-onboarding-step="2">
+      <div class="onboarding-illustration" aria-hidden="true">
+        <svg viewBox="0 0 120 80" width="120" height="80">
+          <rect x="35" y="30" width="50" height="35" rx="4" fill="none" stroke="var(--accent-primary)" stroke-width="2" opacity="0.3"/>
+          <path d="M45 30V22a15 15 0 0130 0v8" fill="none" stroke="var(--score-excellent)" stroke-width="2.5"/>
+          <circle cx="60" cy="47" r="5" fill="var(--accent-primary)" opacity="0.4"/>
+          <path d="M60 52v6" stroke="var(--accent-primary)" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+        </svg>
+      </div>
+      <h2 class="onboarding-heading">Your Data is Private</h2>
+      <p class="onboarding-body">
+        There is no public profile. Employers cannot see your data. Your resume and application history stay private to you.
+        You can delete your data at any time from your account settings.
+      </p>
+    </div>
+
+    <!-- Navigation -->
+    <div class="onboarding-nav">
+      <button type="button" class="btn btn-ghost btn-sm onboarding-back" id="onboarding-back" hidden>Back</button>
+      <div class="onboarding-nav-right">
+        <button type="button" class="btn btn-ghost btn-sm onboarding-skip" id="onboarding-skip">Skip</button>
+        <button type="button" class="btn btn-primary btn-sm onboarding-next" id="onboarding-next">Next</button>
+      </div>
+    </div>
+  </div>
+</div>

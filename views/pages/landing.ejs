@@ -1,0 +1,76 @@
+<% layout('layout') -%>
+
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _user = typeof user !== 'undefined' ? user : null;
+  var _stats = typeof stats !== 'undefined' ? stats : {};
+%>
+
+<!-- Hero Section -->
+<section style="max-width: 800px; margin: 0 auto; padding: 64px 16px 48px; text-align: center;">
+  <h1 style="font-size: 36px; font-weight: 700; line-height: 1.2; letter-spacing: -0.02em; color: var(--text, #1A1D23); margin-bottom: 16px;">
+    <%= _t('landing.hero.title', 'Find your next role in Australia') %>
+  </h1>
+  <p style="font-size: 18px; color: var(--text-secondary, #4B5563); line-height: 1.6; margin-bottom: 32px; max-width: 600px; margin-left: auto; margin-right: auto;">
+    <%= _t('landing.hero.subtitle', 'AI-powered job matching across Seek, LinkedIn, and APSJobs. Upload your resume, get match scores, and generate tailored cover letters.') %>
+  </p>
+  <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
+    <a href="/jobs" class="btn btn-primary" style="padding: 12px 32px; font-size: 16px;">
+      <%= _t('landing.hero.browseJobs', 'Browse Jobs') %>
+    </a>
+    <% if (!_user) { %>
+      <a href="/auth/register" class="btn btn-ghost" style="padding: 12px 32px; font-size: 16px;">
+        <%= _t('landing.hero.getStarted', 'Get Started') %>
+      </a>
+    <% } %>
+  </div>
+</section>
+
+<!-- Features -->
+<section style="max-width: 900px; margin: 0 auto; padding: 0 16px 64px;">
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px;">
+
+    <!-- Smart Matching -->
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 24px;">
+      <div style="font-size: 28px; margin-bottom: 12px;" aria-hidden="true">&#128269;</div>
+      <h3 style="font-size: 16px; font-weight: 600; color: var(--text, #1A1D23); margin-bottom: 8px;">
+        <%= _t('howItWorks.section1.title', 'Smart Matching') %>
+      </h3>
+      <p style="font-size: 14px; color: var(--text-secondary, #4B5563); line-height: 1.6;">
+        <%= _t('landing.feature1', 'Aggregates jobs from three platforms and scores each against your resume using semantic similarity, keyword matching, and role alignment.') %>
+      </p>
+    </div>
+
+    <!-- Tailored Drafts -->
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 24px;">
+      <div style="font-size: 28px; margin-bottom: 12px;" aria-hidden="true">&#9997;</div>
+      <h3 style="font-size: 16px; font-weight: 600; color: var(--text, #1A1D23); margin-bottom: 8px;">
+        <%= _t('howItWorks.section2.title', 'Tailored Drafts') %>
+      </h3>
+      <p style="font-size: 14px; color: var(--text-secondary, #4B5563); line-height: 1.6;">
+        <%= _t('landing.feature2', 'Generate customised cover letters and APS selection criteria responses. Editable drafts that save you time.') %>
+      </p>
+    </div>
+
+    <!-- Privacy -->
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 24px;">
+      <div style="font-size: 28px; margin-bottom: 12px;" aria-hidden="true">&#128274;</div>
+      <h3 style="font-size: 16px; font-weight: 600; color: var(--text, #1A1D23); margin-bottom: 8px;">
+        <%= _t('howItWorks.section3.title', 'Your Privacy') %>
+      </h3>
+      <p style="font-size: 14px; color: var(--text-secondary, #4B5563); line-height: 1.6;">
+        <%= _t('landing.feature3', 'Your data stays private. No public profiles, no employer sharing. Delete at any time.') %>
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<!-- Stats (if available) -->
+<% if (_stats.total) { %>
+<section style="max-width: 600px; margin: 0 auto; padding: 0 16px 64px; text-align: center;">
+  <p style="font-size: 14px; color: var(--text-muted, #6B7280);">
+    Currently tracking <strong><%= _stats.total %></strong> jobs across all platforms.
+  </p>
+</section>
+<% } %>

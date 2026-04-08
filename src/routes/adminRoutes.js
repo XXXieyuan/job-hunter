@@ -1,127 +1,415 @@
+const crypto = require('crypto');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const sanitizeHtml = require('sanitize-html');
 const { ADMIN_TOKEN } = require('../config');
+const { requireAdmin: requireAdminRole } = require('../middleware/auth');
+const { AppError, errorRingBuffer } = require('../utils/errors');
 const {
   triggerFullAnalysis,
+  triggerAnalysis,
   getLastAnalysisRun,
+  VALID_ANALYSIS_TYPES,
 } = require('../services/analysisService');
-const { getJobCounts, upsertManyJobs } = require('../repositories/jobsRepo');
-const { getStats: getFitStats } = require('../repositories/fitScoresRepo');
 const {
   triggerScrape,
-  getScraperRuns,
+  VALID_PLATFORMS,
 } = require('../services/scraperService');
-const { upsertCompany } = require('../repositories/companiesRepo');
+const { detectDuplicates } = require('../services/deduplicationService');
+const backgroundQueue = require('../services/backgroundQueue');
+const jobsRepo = require('../repositories/jobsRepo');
+const usersRepo = require('../repositories/usersRepo');
+const resumesRepo = require('../repositories/resumesRepo');
+const fitScoresRepo = require('../repositories/fitScoresRepo');
+const scraperRunsRepo = require('../repositories/scraperRunsRepo');
+const analysisRunsRepo = require('../repositories/analysisRunsRepo');
+const duplicateGroupsRepo = require('../repositories/duplicateGroupsRepo');
+const coverLettersRepo = require('../repositories/coverLettersRepo');
+const sessionsRepo = require('../repositories/sessionsRepo');
+const { getDbSizeMb } = require('../db/connection');
 const { getLogger } = require('../logger');
 
 const logger = getLogger('adminRoutes');
-
 const router = express.Router();
+const ADMIN_COOKIE_NAME = 'jh_admin_session';
 
-// Multer storage for uploaded job JSON files under data/uploads/jobs
+// Multer for file upload (POST /admin/upload)
 const jobsUploadRoot = path.join(__dirname, '..', '..', 'data', 'uploads', 'jobs');
-
 if (!fs.existsSync(jobsUploadRoot)) {
   fs.mkdirSync(jobsUploadRoot, { recursive: true });
 }
 
 const jobsStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, jobsUploadRoot);
-  },
+  destination: (req, file, cb) => cb(null, jobsUploadRoot),
   filename: (req, file, cb) => {
     const timestamp = Date.now();
     const ext = path.extname(file.originalname) || '';
-    const base = path
-      .basename(file.originalname, ext)
-      .replace(/[^a-zA-Z0-9-_]/g, '_');
+    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_');
     cb(null, `${base}-${timestamp}${ext}`);
   },
 });
 
 const jobsUpload = multer({
   storage: jobsStorage,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
-  },
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-function extractToken(req) {
-  if (req.query.token) return req.query.token;
-  const auth = req.headers.authorization || '';
-  if (auth.startsWith('Bearer ')) return auth.slice('Bearer '.length);
-  return null;
-}
+// ──────────────────────────────────────────────────────────────
+// T-J.1: POST /admin/login — Public (no auth middleware)
+// ──────────────────────────────────────────────────────────────
 
-function requireAdmin(req, res, next) {
-  const rawPath = req.path || req.originalUrl || '';
-  const pathLower = rawPath.toLowerCase();
+router.post('/admin/login', express.json({ limit: '1mb' }), (req, res) => {
+  const { token } = req.body || {};
 
-  // Only enforce admin token on /admin paths; everything else is public
-  if (!pathLower.startsWith('/admin')) {
-    return next();
+  if (!token || !ADMIN_TOKEN) {
+    return res.status(401).json({
+      error: { code: 'INVALID_CREDENTIALS', message: 'Invalid admin token.' },
+    });
   }
 
-  const token = extractToken(req);
-  if (!ADMIN_TOKEN || token === ADMIN_TOKEN) {
-    return next();
-  }
-  return res.status(401).send('未授权，缺少有效的管理令牌。');
-}
+  // Constant-time comparison to prevent timing attacks
+  const tokenBuf = Buffer.from(String(token));
+  const expectedBuf = Buffer.from(ADMIN_TOKEN);
 
-router.use(requireAdmin);
+  if (tokenBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(tokenBuf, expectedBuf)) {
+    return res.status(401).json({
+      error: { code: 'INVALID_CREDENTIALS', message: 'Invalid admin token.' },
+    });
+  }
+
+  // Set admin session cookie
+  res.cookie(ADMIN_COOKIE_NAME, ADMIN_TOKEN, {
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    secure: process.env.NODE_ENV === 'production',
+  });
+
+  logger.info('Admin login successful');
+  return res.redirect(302, '/admin');
+});
+
+// ──────────────────────────────────────────────────────────────
+// GET /admin — Admin dashboard page (renders token form when session absent)
+// ──────────────────────────────────────────────────────────────
 
 router.get('/admin', (req, res) => {
+  const adminToken = req.cookies && req.cookies[ADMIN_COOKIE_NAME];
+  const isAdmin = adminToken && ADMIN_TOKEN &&
+    adminToken.length === ADMIN_TOKEN.length &&
+    crypto.timingSafeEqual(Buffer.from(adminToken), Buffer.from(ADMIN_TOKEN));
+
+  if (!isAdmin) {
+    return res.status(401).render('admin/dashboard', { isAdmin: false });
+  }
+
   const lastRun = getLastAnalysisRun();
-  const jobCounts = getJobCounts();
-  const fitStats = getFitStats();
-   const scraperRuns = getScraperRuns(20);
+  const jobCounts = jobsRepo.getJobCounts();
+  const fitStats = fitScoresRepo.getStats();
+  const scraperRuns = scraperRunsRepo.getRecentRuns(20);
 
   res.render('admin/dashboard', {
+    isAdmin: true,
     lastRun,
     jobCounts,
     fitStats,
     scraperRuns,
-    adminToken: ADMIN_TOKEN,
   });
 });
 
-router.post('/admin/run', async (req, res) => {
-  const runId = triggerFullAnalysis({ source: 'admin_manual' });
-  logger.info('Admin triggered full analysis run', { runId });
-  res.json({ runId });
+// ──────────────────────────────────────────────────────────────
+// All remaining /admin routes require admin auth
+// ──────────────────────────────────────────────────────────────
+
+router.use('/admin', requireAdminRole);
+
+// ──────────────────────────────────────────────────────────────
+// T-J.1: GET /admin/stats — Dashboard statistics
+// ──────────────────────────────────────────────────────────────
+
+router.get('/admin/stats', (req, res) => {
+  // Job counts with by_source breakdown
+  const rawCounts = jobsRepo.getJobCounts();
+  const bySourceMap = { linkedin: 0, seek: 0, apsjobs: 0, manual: 0 };
+  if (Array.isArray(rawCounts.bySource)) {
+    for (const row of rawCounts.bySource) {
+      const src = String(row.source).toLowerCase();
+      if (src in bySourceMap) {
+        bySourceMap[src] = row.count;
+      } else {
+        bySourceMap.manual += row.count;
+      }
+    }
+  }
+
+  const job_counts = {
+    total: rawCounts.total,
+    active: rawCounts.active,
+    by_source: bySourceMap,
+  };
+
+  // User counts
+  const userTotal = usersRepo.getCount();
+  const user_counts = {
+    total: userTotal,
+    with_resume: resumesRepo.countUsersWithResume(),
+  };
+
+  // Score and cover letter counts
+  const scoreStats = fitScoresRepo.getStats();
+  const score_count = scoreStats.total;
+  const cover_letter_count = coverLettersRepo.getCount();
+
+  // DB size
+  const db_size_mb = getDbSizeMb();
+
+  // Source freshness
+  const source_freshness = scraperRunsRepo.getSourceFreshness();
+
+  // Platform health
+  const platform_health = scraperRunsRepo.getPlatformHealth();
+
+  res.json({
+    job_counts,
+    user_counts,
+    score_count,
+    cover_letter_count,
+    db_size_mb,
+    source_freshness,
+    platform_health,
+  });
 });
 
+// ──────────────────────────────────────────────────────────────
+// T-J.2: GET /admin/scraper/runs — Paginated scraper run history
+// ──────────────────────────────────────────────────────────────
+
+router.get('/admin/scraper/runs', (req, res) => {
+  const page = parseInt(req.query.page, 10) || 1;
+  const result = scraperRunsRepo.getPaginatedRuns(page, 25);
+  res.json(result);
+});
+
+// ──────────────────────────────────────────────────────────────
+// T-J.2: POST /admin/scraper/run — Trigger single scraper
+// Rate limit: 6 per hour global
+// ──────────────────────────────────────────────────────────────
+
 router.post('/admin/scraper/run', express.json({ limit: '1mb' }), (req, res) => {
-  const payload = req.body || {};
-  const name = payload.name || 'apsjobs';
-  const options = payload.options || {};
+  const { name, options } = req.body || {};
+
+  // Validate platform name
+  if (!name || !VALID_PLATFORMS.includes(name)) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: `Invalid platform. Must be one of: ${VALID_PLATFORMS.join(', ')}` },
+    });
+  }
+
+  // Rate limit: 6 per hour global
+  const recentCount = scraperRunsRepo.countRecentRuns(3600000);
+  if (recentCount >= 6) {
+    res.set('Retry-After', '3600');
+    return res.status(429).json({
+      error: { code: 'RATE_LIMITED', message: 'Scraper rate limit exceeded. Maximum 6 runs per hour.' },
+    });
+  }
 
   try {
-    const runId = triggerScrape(name, options);
-    logger.info('Admin triggered scraper run', {
-      runId,
-      scraperName: name,
-    });
-    res.json({ runId });
+    const result = triggerScrape(name, options || {});
+    logger.info('Admin triggered scraper run', { runId: result.runId, platform: name });
+    res.json({ runId: result.runId });
   } catch (err) {
-    if (err && err.code === 'INVALID_SCRAPER_OPTIONS') {
-      return res
-        .status(400)
-        .json({ error: err.message || '无效的抓取参数。' });
+    if (err && err.code === 'SCRAPER_ALREADY_RUNNING') {
+      return res.status(409).json({
+        error: { code: 'CONFLICT', message: err.message },
+      });
     }
-    res.status(500).json({ error: err.message || String(err) });
+    if (err && err.code === 'INVALID_SCRAPER_OPTIONS') {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: err.message },
+      });
+    }
+    logger.error('Failed to trigger scraper', { error: err.message });
+    return res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
+    });
   }
 });
 
-router.get('/admin/scraper/runs', (req, res) => {
-  const runs = getScraperRuns(50);
-  res.json({ runs });
+// ──────────────────────────────────────────────────────────────
+// T-J.2: POST /admin/scraper/run-all — Trigger all scrapers
+// ──────────────────────────────────────────────────────────────
+
+router.post('/admin/scraper/run-all', express.json({ limit: '1mb' }), (req, res) => {
+  const { options } = req.body || {};
+  const runIds = {};
+
+  try {
+    for (const platform of VALID_PLATFORMS) {
+      const result = triggerScrape(platform, options || {});
+      runIds[platform] = result.runId;
+    }
+
+    logger.info('Admin triggered all scrapers', { runIds });
+    res.json({ runIds });
+  } catch (err) {
+    if (err && err.code === 'SCRAPER_ALREADY_RUNNING') {
+      return res.status(409).json({
+        error: { code: 'CONFLICT', message: err.message },
+      });
+    }
+    logger.error('Failed to trigger all scrapers', { error: err.message });
+    return res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
+    });
+  }
 });
 
-function mapJobsPayload(payload) {
+// ──────────────────────────────────────────────────────────────
+// T-J.3: POST /admin/analysis/run — Trigger batch analysis
+// ──────────────────────────────────────────────────────────────
+
+router.post('/admin/analysis/run', express.json({ limit: '1mb' }), (req, res) => {
+  const { type, config } = req.body || {};
+
+  if (!type || !VALID_ANALYSIS_TYPES.includes(type)) {
+    return res.status(400).json({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: `Invalid analysis type. Must be one of: ${VALID_ANALYSIS_TYPES.join(', ')}`,
+      },
+    });
+  }
+
+  try {
+    const runId = type === 'full'
+      ? triggerFullAnalysis(config || {})
+      : triggerAnalysis({ type, config: config || {} });
+
+    logger.info('Admin triggered analysis run', { runId, type });
+    res.json({ runId });
+  } catch (err) {
+    logger.error('Failed to trigger analysis', { error: err.message });
+    return res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
+    });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────
+// T-J.3: GET /admin/analysis/runs — Paginated analysis run history
+// ──────────────────────────────────────────────────────────────
+
+router.get('/admin/analysis/runs', (req, res) => {
+  const page = parseInt(req.query.page, 10) || 1;
+  const result = analysisRunsRepo.getPaginatedRuns(page, 25);
+  res.json(result);
+});
+
+// ──────────────────────────────────────────────────────────────
+// T-J.3: GET /admin/queue/status — Background queue status (in-memory)
+// ──────────────────────────────────────────────────────────────
+
+router.get('/admin/queue/status', (req, res) => {
+  const status = backgroundQueue.getStatus();
+  res.json(status);
+});
+
+// ──────────────────────────────────────────────────────────────
+// T-J.3: GET /admin/errors — Recent errors from ring buffer
+// ──────────────────────────────────────────────────────────────
+
+router.get('/admin/errors', (req, res) => {
+  let limit = parseInt(req.query.limit, 10) || 50;
+  limit = Math.min(Math.max(1, limit), 200);
+
+  const errors = errorRingBuffer.getEntries(limit);
+  res.json({
+    errors,
+    total: errorRingBuffer.total,
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// T-J.4: POST /admin/cleanup — Data retention cleanup
+// ──────────────────────────────────────────────────────────────
+
+router.post('/admin/cleanup', express.json({ limit: '1mb' }), (req, res) => {
+  const { type } = req.body || {};
+  const cleanupType = type || 'all';
+  const validTypes = ['raw_json', 'inactive', 'sessions', 'all'];
+
+  if (!validTypes.includes(cleanupType)) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: `Invalid cleanup type. Must be one of: ${validTypes.join(', ')}` },
+    });
+  }
+
+  let raw_json_cleared = 0;
+  let archived_jobs = 0;
+  let sessions_cleaned = 0;
+
+  if (cleanupType === 'raw_json' || cleanupType === 'all') {
+    raw_json_cleared = jobsRepo.clearRawJsonOlderThan(30);
+  }
+
+  if (cleanupType === 'inactive' || cleanupType === 'all') {
+    archived_jobs = jobsRepo.archiveInactive(90);
+  }
+
+  if (cleanupType === 'sessions' || cleanupType === 'all') {
+    sessions_cleaned = sessionsRepo.deleteExpired();
+  }
+
+  logger.info('Admin cleanup completed', { type: cleanupType, raw_json_cleared, archived_jobs, sessions_cleaned });
+
+  res.json({
+    raw_json_cleared,
+    archived_jobs,
+    sessions_cleaned,
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// T-J.4: POST /admin/upload — Upload jobs JSON
+// ──────────────────────────────────────────────────────────────
+
+// HTML sanitization for job descriptions
+const SANITIZE_OPTIONS = {
+  allowedTags: ['p', 'br', 'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a'],
+  allowedAttributes: { a: ['href'] },
+  allowedSchemes: ['https'],
+  disallowedTagsMode: 'discard',
+};
+
+function validateAndMapJob(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (!raw.title || typeof raw.title !== 'string') return null;
+
+  return {
+    external_id: raw.external_id || null,
+    source: raw.source || 'manual',
+    role: raw.role || 'general',
+    title: String(raw.title).slice(0, 500),
+    company_name: raw.company_name || raw.company || null,
+    location: raw.location || null,
+    work_type: raw.work_type || null,
+    salary: raw.salary || null,
+    salary_min: raw.salary_min || null,
+    salary_max: raw.salary_max || null,
+    description: sanitizeHtml(raw.description || '', SANITIZE_OPTIONS),
+    url: raw.url || null,
+    posted_at: raw.posted_at || null,
+    closes_at: raw.closes_at || null,
+    raw_json: JSON.stringify(raw),
+    scraped_at: new Date().toISOString(),
+  };
+}
+
+router.post('/admin/upload', express.json({ limit: '10mb' }), (req, res) => {
+  const payload = req.body;
   const jobsArray = Array.isArray(payload)
     ? payload
     : Array.isArray(payload && payload.jobs)
@@ -129,130 +417,196 @@ function mapJobsPayload(payload) {
       : null;
 
   if (!jobsArray) {
-    return null;
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'Request body must be a JSON array of jobs or { jobs: [...] }.' },
+    });
   }
 
-  const mapped = jobsArray.map((job) => ({
-    external_id: job.external_id || null,
-    source: job.source || 'upload',
-    role: job.role || '未知角色',
-    title: job.title,
-    company_name: job.company_name || job.company || null,
-    location: job.location || null,
-    salary: job.salary || null,
-    description: job.description || '',
-    url: job.url || null,
-    posted_at: job.posted_at || null,
-    application_status: job.application_status || '未申请',
-    raw_json: JSON.stringify(job),
-  }));
+  let imported = 0;
+  let skipped = 0;
+  let errors = 0;
 
-  return mapped;
-}
+  // Process in batches of 50
+  const BATCH_SIZE = 50;
+  for (let i = 0; i < jobsArray.length; i += BATCH_SIZE) {
+    const batch = jobsArray.slice(i, i + BATCH_SIZE);
+    const mapped = [];
 
-router.post('/admin/upload', express.json({ limit: '2mb' }), (req, res) => {
-  const payload = req.body;
-  const mapped = mapJobsPayload(payload);
+    for (const raw of batch) {
+      const job = validateAndMapJob(raw);
+      if (job) {
+        mapped.push(job);
+      } else {
+        errors++;
+      }
+    }
 
-  if (!mapped) {
-    return res.status(400).json({ error: '请求体必须是职位数组或包含 jobs 数组字段的 JSON。' });
+    if (mapped.length > 0) {
+      try {
+        jobsRepo.upsertManyJobs(mapped);
+        imported += mapped.length;
+      } catch (err) {
+        logger.error('Failed to upsert job batch', { error: err.message, batchIndex: i });
+        errors += mapped.length;
+      }
+    }
   }
 
-  try {
-    upsertManyJobs(mapped);
-    logger.info('Admin uploaded jobs via JSON body', {
-      jobsCount: mapped.length,
-    });
+  skipped = jobsArray.length - imported - errors;
 
-    // Lightweight company upsert based on company_name only
-    const uniqueCompanyNames = Array.from(
-      new Set(mapped.map((j) => j.company_name).filter(Boolean)),
-    );
-    uniqueCompanyNames.forEach((name) => {
-      upsertCompany({
-        name,
-        website: null,
-        description: '信息暂无',
-        raw_html: null,
-        industry: null,
-        size: null,
-      });
-    });
-
-    res.json({ inserted: mapped.length });
-  } catch (err) {
-    logger.error('Failed to upsert jobs from JSON body', {
-      error: err && err.message,
-    });
-    res.status(500).json({ error: err.message || String(err) });
-  }
+  logger.info('Admin upload completed', { imported, skipped, errors });
+  res.json({ imported, skipped, errors });
 });
 
-router.post(
-  '/admin/jobs/upload',
-  jobsUpload.single('jobFile'),
-  (req, res) => {
-    if (!req.file) {
-      return res.status(400).send('请上传包含职位数据的 JSON 文件。');
-    }
+// Also support file upload via multipart form
+router.post('/admin/jobs/upload', jobsUpload.single('jobFile'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'Please upload a JSON file containing job data.' },
+    });
+  }
 
-    let raw;
-    try {
-      raw = fs.readFileSync(req.file.path, 'utf8');
-    } catch (err) {
-      return res.status(500).send('读取上传文件失败，请稍后重试。');
-    }
+  let raw;
+  try {
+    raw = fs.readFileSync(req.file.path, 'utf8');
+  } catch (err) {
+    return res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to read uploaded file.' },
+    });
+  }
 
-    let payload;
-    try {
-      payload = JSON.parse(raw);
-    } catch (err) {
-      return res.status(400).send('上传的文件不是有效的 JSON。');
-    }
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch (err) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'Uploaded file is not valid JSON.' },
+    });
+  }
 
-    const mapped = mapJobsPayload(payload);
-    if (!mapped) {
-      return res
-        .status(400)
-        .send('JSON 内容必须是职位数组或包含 jobs 数组字段的对象。');
-    }
+  const jobsArray = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload && payload.jobs)
+      ? payload.jobs
+      : null;
 
-    try {
-      upsertManyJobs(mapped);
-      logger.info('Admin uploaded jobs via file', {
-        jobsCount: mapped.length,
-        // Avoid logging file path or name; only counts
+  if (!jobsArray) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'JSON must be an array of jobs or { jobs: [...] }.' },
+    });
+  }
+
+  let imported = 0;
+  let errors = 0;
+  const BATCH_SIZE = 50;
+
+  for (let i = 0; i < jobsArray.length; i += BATCH_SIZE) {
+    const batch = jobsArray.slice(i, i + BATCH_SIZE);
+    const mapped = [];
+    for (const item of batch) {
+      const job = validateAndMapJob(item);
+      if (job) mapped.push(job);
+      else errors++;
+    }
+    if (mapped.length > 0) {
+      try {
+        jobsRepo.upsertManyJobs(mapped);
+        imported += mapped.length;
+      } catch (err) {
+        logger.error('Failed to upsert file upload batch', { error: err.message });
+        errors += mapped.length;
+      }
+    }
+  }
+
+  logger.info('Admin file upload completed', { imported, errors });
+  res.json({ imported, skipped: 0, errors });
+});
+
+// ──────────────────────────────────────────────────────────────
+// T-J.4: POST /admin/dedup/run — Trigger deduplication
+// ──────────────────────────────────────────────────────────────
+
+backgroundQueue.registerHandler('dedup', async () => {
+  return detectDuplicates();
+});
+
+router.post('/admin/dedup/run', (req, res) => {
+  const jobCount = jobsRepo.countActiveNonDuplicate();
+
+  backgroundQueue.enqueue('dedup', {}, { description: 'Deduplication run' });
+
+  logger.info('Admin triggered deduplication', { jobCount });
+  res.json({ status: 'queued', job_count: jobCount });
+});
+
+// ──────────────────────────────────────────────────────────────
+// T-J.4: GET /admin/dedup/groups — List duplicate groups (paginated)
+// ──────────────────────────────────────────────────────────────
+
+router.get('/admin/dedup/groups', (req, res) => {
+  const page = parseInt(req.query.page, 10) || 1;
+  const result = duplicateGroupsRepo.getPaginatedGroups(page, 20);
+  res.json(result);
+});
+
+// ──────────────────────────────────────────────────────────────
+// T-J.4: POST /admin/dedup/resolve — Resolve duplicate group
+// ──────────────────────────────────────────────────────────────
+
+router.post('/admin/dedup/resolve', express.json({ limit: '1mb' }), (req, res) => {
+  const { group_id, canonical_job_id, action } = req.body || {};
+
+  if (!group_id || !action) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'group_id and action are required.' },
+    });
+  }
+
+  if (!['merge', 'split'].includes(action)) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'action must be "merge" or "split".' },
+    });
+  }
+
+  const group = duplicateGroupsRepo.findById(group_id);
+  if (!group) {
+    return res.status(404).json({
+      error: { code: 'NOT_FOUND', message: 'Duplicate group not found.' },
+    });
+  }
+
+  if (action === 'merge') {
+    if (!canonical_job_id) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'canonical_job_id is required for merge action.' },
       });
-
-      const uniqueCompanyNames = Array.from(
-        new Set(mapped.map((j) => j.company_name).filter(Boolean)),
-      );
-      uniqueCompanyNames.forEach((name) => {
-        upsertCompany({
-          name,
-          website: null,
-          description: '信息暂无',
-          raw_html: null,
-          industry: null,
-          size: null,
-        });
-      });
-
-      const tokenQuery = ADMIN_TOKEN
-        ? `?token=${encodeURIComponent(ADMIN_TOKEN)}`
-        : '';
-      res.send(
-        `上传成功，处理职位数量：${mapped.length}。<a href="/admin${tokenQuery}">返回管理面板</a>`,
-      );
-    } catch (err) {
-      logger.error('Failed to upsert jobs from uploaded file', {
-        error: err && err.message,
-      });
-      res
-        .status(500)
-        .send(`写入数据库失败：${err.message || String(err)}`);
     }
-  },
-);
+    duplicateGroupsRepo.mergeGroup(group_id, canonical_job_id);
+    logger.info('Admin merged duplicate group', { group_id, canonical_job_id });
+  } else {
+    // split: delete group and unmark members
+    duplicateGroupsRepo.dismissGroup(group_id);
+    logger.info('Admin split duplicate group', { group_id });
+  }
+
+  res.json({ resolved: true, action, group_id });
+});
+
+// ──────────────────────────────────────────────────────────────
+// Legacy: GET /admin/scraper/runs/:id
+// ──────────────────────────────────────────────────────────────
+
+router.get('/admin/scraper/runs/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id || isNaN(id)) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid run ID.' } });
+  }
+  const run = scraperRunsRepo.getRunById(id);
+  if (!run) {
+    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Run not found.' } });
+  }
+  res.json({ run });
+});
 
 module.exports = router;

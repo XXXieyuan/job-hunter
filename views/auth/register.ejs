@@ -1,0 +1,105 @@
+<% layout('layout') -%>
+
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _error = typeof error !== 'undefined' ? error : null;
+  var _errors = typeof errors !== 'undefined' ? errors : {};
+  var _redirect = typeof redirect !== 'undefined' ? redirect : '';
+%>
+
+<section style="display: flex; justify-content: center; align-items: flex-start; min-height: 60vh; padding: 48px 16px;">
+  <div style="width: 100%; max-width: 400px;">
+
+    <!-- Auth Card — glassmorphism -->
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 32px 28px; box-shadow: var(--shadow-card, 0 1px 3px rgba(0,0,0,0.08)); backdrop-filter: blur(12px);">
+
+      <h2 style="margin: 0 0 24px; text-align: center; font-size: 20px; font-weight: 600; color: var(--text, #1A1D23);">
+        <%= _t('auth.createAccount', 'Create Account') %>
+      </h2>
+
+      <!-- Server error banner -->
+      <% if (_error) { %>
+      <div role="alert" style="padding: 10px 14px; margin-bottom: 16px; border-radius: 8px; background: #fef2f2; color: var(--danger, #DC2626); border: 1px solid #fecaca; font-size: 13px;">
+        <%= _error %>
+      </div>
+      <% } %>
+
+      <!-- Register Form -->
+      <form method="POST" action="/auth/register" novalidate>
+        <% if (_redirect) { %>
+          <input type="hidden" name="redirect" value="<%= _redirect %>" />
+        <% } %>
+
+        <div style="margin-bottom: 16px;">
+          <label for="reg-email" style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 500; color: var(--text, #1A1D23);">
+            <%= _t('auth.email', 'Email') %> <span style="color: var(--danger, #DC2626);">*</span>
+          </label>
+          <input type="email" id="reg-email" name="email" required autocomplete="email"
+                 style="width: 100%; padding: 10px 12px; border: 1px solid <%= _errors.email ? 'var(--danger, #DC2626)' : 'var(--border-subtle, #E2E6EA)' %>; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
+                 <% if (_errors.email) { %>aria-invalid="true" aria-describedby="reg-email-error"<% } %> />
+          <% if (_errors.email) { %>
+            <p id="reg-email-error" style="margin-top: 4px; font-size: 12px; color: var(--danger, #DC2626);"><%= _errors.email %></p>
+          <% } %>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <label for="reg-display-name" style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 500; color: var(--text, #1A1D23);">
+            <%= _t('auth.displayName', 'Display Name') %>
+          </label>
+          <input type="text" id="reg-display-name" name="display_name" maxlength="100" autocomplete="name"
+                 placeholder="<%= _t('auth.displayNamePlaceholder', 'How should we call you?') %>"
+                 style="width: 100%; padding: 10px 12px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;" />
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <label for="reg-password" style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 500; color: var(--text, #1A1D23);">
+            <%= _t('auth.password', 'Password') %> <span style="color: var(--danger, #DC2626);">*</span>
+          </label>
+          <input type="password" id="reg-password" name="password" required minlength="8" autocomplete="new-password"
+                 style="width: 100%; padding: 10px 12px; border: 1px solid <%= _errors.password ? 'var(--danger, #DC2626)' : 'var(--border-subtle, #E2E6EA)' %>; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
+                 <% if (_errors.password) { %>aria-invalid="true" aria-describedby="reg-password-hint reg-password-error"<% } else { %>aria-describedby="reg-password-hint"<% } %> />
+          <p id="reg-password-hint" style="margin-top: 4px; font-size: 12px; color: var(--text-muted, #6B7280);">
+            <%= _t('auth.passwordHint', 'At least 8 characters') %>
+          </p>
+          <% if (_errors.password) { %>
+            <p id="reg-password-error" style="margin-top: 2px; font-size: 12px; color: var(--danger, #DC2626);"><%= _errors.password %></p>
+          <% } %>
+        </div>
+
+        <div style="margin-bottom: 12px; font-size: 12px; color: var(--text-muted, #6B7280);">
+          <%= _t('auth.privacyNotice', 'Your data is private.') %>
+          <a href="/how-it-works#privacy" style="color: var(--accent-primary, #2563EB); text-decoration: none;">
+            <%= _t('auth.privacyLink', 'Read our privacy policy.') %>
+          </a>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-weight: 600; font-size: 14px;">
+          <%= _t('auth.createAccount', 'Create Account') %>
+        </button>
+
+        <p style="text-align: center; margin-top: 12px; font-size: 13px; color: var(--text-secondary, #4B5563);">
+          <%= _t('auth.haveAccount', 'Already have an account?') %>
+          <a href="/auth/login<%= _redirect ? '?redirect=' + encodeURIComponent(_redirect) : '' %>"
+             style="color: var(--accent-primary, #2563EB); text-decoration: none; font-weight: 500;">
+            <%= _t('auth.signIn', 'Sign In') %>
+          </a>
+        </p>
+      </form>
+
+      <!-- Divider -->
+      <div style="display: flex; align-items: center; gap: 12px; margin: 20px 0 16px;">
+        <div style="flex: 1; height: 1px; background: var(--border-subtle, #E2E6EA);"></div>
+        <span style="font-size: 12px; color: var(--text-muted, #6B7280);"><%= _t('auth.or', 'or') %></span>
+        <div style="flex: 1; height: 1px; background: var(--border-subtle, #E2E6EA);"></div>
+      </div>
+
+      <!-- Browse without account -->
+      <div style="text-align: center;">
+        <a href="/jobs" style="font-size: 13px; color: var(--text-secondary, #4B5563); text-decoration: none;">
+          <%= _t('auth.browseWithout', 'Continue browsing without an account') %> &rarr;
+        </a>
+      </div>
+
+    </div>
+  </div>
+</section>

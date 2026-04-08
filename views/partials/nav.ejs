@@ -1,0 +1,71 @@
+<%
+  var _currentPath = typeof currentPath !== 'undefined' ? currentPath : '';
+  var _user = typeof user !== 'undefined' ? user : null;
+  var _locale = typeof locale !== 'undefined' ? locale : 'en';
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+%>
+<header class="nav-shell" role="banner">
+  <a href="/" class="nav-brand" aria-label="Job Hunter Home">
+    <span class="nav-brand-icon" aria-hidden="true">JH</span>
+    <span class="nav-brand-title"><%= _t('app.name', 'Job Hunter') %></span>
+  </a>
+
+  <button
+    class="nav-toggle"
+    type="button"
+    aria-label="<%= _t('nav.toggle', 'Toggle navigation') %>"
+    aria-expanded="false"
+    aria-controls="nav-menu"
+  >
+    <span class="nav-toggle-bar"></span>
+    <span class="nav-toggle-bar"></span>
+    <span class="nav-toggle-bar"></span>
+  </button>
+
+  <div class="nav-center" id="nav-menu">
+    <nav class="nav-links" role="navigation" aria-label="Main navigation">
+      <a
+        href="/jobs"
+        class="nav-link <%= _currentPath.startsWith('/jobs') ? 'active' : '' %>"
+      ><%= _t('nav.jobs', 'Jobs') %></a>
+
+      <% if (_user) { %>
+      <a
+        href="/resumes"
+        class="nav-link <%= _currentPath.startsWith('/resumes') ? 'active' : '' %>"
+      ><%= _t('nav.resumes', 'Resumes') %></a>
+
+      <a
+        href="/applications"
+        class="nav-link <%= _currentPath.startsWith('/applications') ? 'active' : '' %>"
+      ><%= _t('nav.applications', 'Applications') %></a>
+      <% } %>
+
+      <a
+        href="/admin"
+        class="nav-link <%= _currentPath.startsWith('/admin') ? 'active' : '' %>"
+      ><%= _t('nav.admin', 'Admin') %></a>
+    </nav>
+
+    <div class="nav-right">
+      <div class="lang-toggle" aria-label="<%= _t('nav.language', 'Language') %>">
+        <a
+          href="/lang/zh"
+          class="lang-pill <%= _locale === 'zh' ? 'active' : '' %>"
+        ><%= _t('lang.zh', '中') %></a>
+        <span class="lang-separator">·</span>
+        <a
+          href="/lang/en"
+          class="lang-pill <%= _locale === 'en' ? 'active' : '' %>"
+        ><%= _t('lang.en', 'EN') %></a>
+      </div>
+
+      <% if (_user) { %>
+        <span class="nav-user-email"><%= _user.display_name || _user.email %></span>
+        <a href="/auth/logout" class="btn btn-ghost btn-sm"><%= _t('nav.signOut', 'Sign Out') %></a>
+      <% } else { %>
+        <a href="/auth/login" class="btn btn-primary btn-sm"><%= _t('nav.signIn', 'Sign In') %></a>
+      <% } %>
+    </div>
+  </div>
+</header>

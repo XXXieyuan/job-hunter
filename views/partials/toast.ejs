@@ -1,0 +1,16 @@
+<div class="toast-container" id="toast-container" aria-live="assertive" aria-atomic="true">
+  <%
+    var _flash = typeof flash !== 'undefined' ? flash : {};
+    var _messages = [];
+    if (_flash.success) _messages.push({ type: 'success', text: _flash.success });
+    if (_flash.warning) _messages.push({ type: 'warning', text: _flash.warning });
+    if (_flash.error)   _messages.push({ type: 'error',   text: _flash.error });
+    if (_flash.info)    _messages.push({ type: 'info',    text: _flash.info });
+  %>
+  <% _messages.forEach(function(msg) { %>
+  <div class="toast toast-<%= msg.type %>" role="alert">
+    <span class="toast-message"><%= msg.text %></span>
+    <button class="toast-close" type="button" aria-label="Dismiss">&times;</button>
+  </div>
+  <% }); %>
+</div>

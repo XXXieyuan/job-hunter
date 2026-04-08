@@ -1,167 +1,339 @@
 <% layout('layout') -%>
 
-<section class="page-section">
-  <div class="section-header jobs-header">
-    <h1><%= t('jobs.list.title') %></h1>
-    <p class="section-subtitle"><%= t('jobs.list.subtitle') %></p>
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _user = typeof user !== 'undefined' ? user : null;
+  var _jobs = typeof jobs !== 'undefined' && Array.isArray(jobs) ? jobs : [];
+  var _filters = typeof filters !== 'undefined' ? filters : {};
+  var _totalCount = typeof totalCount !== 'undefined' ? totalCount : _jobs.length;
+  var _page = typeof page !== 'undefined' ? page : 1;
+  var _totalPages = typeof totalPages !== 'undefined' ? totalPages : 1;
+  var _sort = typeof sort !== 'undefined' ? sort : 'newest';
+  var _error = typeof error !== 'undefined' ? error : null;
+  var _hasResume = typeof hasResume !== 'undefined' ? hasResume : false;
+  var _sourceFreshness = typeof sourceFreshness !== 'undefined' ? sourceFreshness : {};
+  var _scoringInProgress = typeof scoringInProgress !== 'undefined' ? scoringInProgress : false;
+
+  // Determine stale sources (>24h)
+  var _staleSources = [];
+  var _now = Date.now();
+  var _24h = 24 * 60 * 60 * 1000;
+  ['linkedin', 'seek', 'apsjobs'].forEach(function(src) {
+    if (_sourceFreshness[src]) {
+      var ts = new Date(_sourceFreshness[src]).getTime();
+      if (_now - ts > _24h) _staleSources.push(src);
+    }
+  });
+%>
+
+<!-- Page Header -->
+<section style="padding: 24px 16px 0; max-width: 1200px; margin: 0 auto;">
+  <h1 style="font-size: 28px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; color: var(--text, #1A1D23); margin-bottom: 4px;">
+    <%= _t('jobs.list.title', 'Job Listings') %>
+  </h1>
+  <p style="font-size: 14px; color: var(--text-secondary, #4B5563); margin-bottom: 20px;">
+    <%= _totalCount %> <%= _t('jobs.list.subtitle', 'jobs from Seek, LinkedIn, and APSJobs') %>
+  </p>
+</section>
+
+<!-- Source Freshness Banner -->
+<% if (_staleSources.length > 0) { %>
+<section style="max-width: 1200px; margin: 0 auto; padding: 0 16px;">
+  <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 16px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #92400e;">
+    <span aria-hidden="true" style="font-size: 16px;">&#9888;</span>
+    <span>
+      <%= _t('jobs.list.staleBanner', 'Some sources have not been updated in over 24 hours:') %>
+      <strong><%= _staleSources.join(', ') %></strong>
+    </span>
   </div>
+</section>
+<% } %>
 
-  <form class="filter-bar search-box" method="get" action="/jobs">
-    <div class="filter-group">
-      <label><%= t('jobs.list.filter.role') %></label>
-      <select name="role">
-        <option value=""><%= t('jobs.list.filter.all', '全部') %></option>
-        <% roles.forEach(function(r){ %>
-        <option value="<%= r %>" <%= filters.role === r ? 'selected' : '' %>>
-          <%= r %>
-        </option>
-        <% }) %>
-      </select>
+<!-- Scoring In Progress Banner -->
+<% if (_scoringInProgress) { %>
+<section style="max-width: 1200px; margin: 8px auto 0; padding: 0 16px;">
+  <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 16px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e40af;">
+    <span aria-hidden="true" style="font-size: 16px;">&#8987;</span>
+    <span><%= _t('jobs.list.scoringBanner', 'Scoring in progress... scores will update automatically.') %></span>
+  </div>
+</section>
+<% } %>
+
+<!-- Layout: Sidebar + Main -->
+<section style="max-width: 1200px; margin: 16px auto 0; padding: 0 16px 32px; display: flex; gap: 24px; align-items: flex-start;">
+
+  <!-- Filter Sidebar (desktop) -->
+  <aside class="filter-sidebar" style="width: 280px; flex-shrink: 0; position: sticky; top: 80px;">
+    <%- include('../partials/filter-bar', { filters: _filters }) %>
+  </aside>
+
+  <!-- Main Content -->
+  <div style="flex: 1; min-width: 0;">
+
+    <!-- Onboarding CTA Banner -->
+    <% if (!_user) { %>
+    <div class="onboarding-cta-banner" style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 8px; padding: 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <div style="flex: 1; min-width: 200px;">
+        <p style="font-size: 14px; font-weight: 500; color: var(--text, #1A1D23); margin-bottom: 4px;">
+          <%= _t('onboarding.cta.welcome', 'Welcome to Job Hunter! Upload your resume to get personalised match scores.') %>
+        </p>
+        <p style="font-size: 13px; color: var(--text-secondary, #4B5563);">
+          <%= _t('jobs.list.ctaSubtext', 'Sign in to unlock match scores, cover letter generation, and application tracking.') %>
+        </p>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <a href="/auth/register" class="btn btn-primary btn-sm"><%= _t('onboarding.cta.getStarted', 'Get Started') %></a>
+        <a href="/how-it-works" class="btn btn-ghost btn-sm"><%= _t('onboarding.cta.learnMore', 'Learn More') %></a>
+      </div>
     </div>
-
-    <div class="filter-group">
-      <label><%= t('jobs.list.filter.source') %></label>
-      <select name="source">
-        <option value=""><%= t('jobs.list.filter.all', '全部') %></option>
-        <% sources.forEach(function(s){ %>
-        <option value="<%= s %>" <%= filters.source === s ? 'selected' : '' %>>
-          <%= s %>
-        </option>
-        <% }) %>
-      </select>
-    </div>
-
-    <div class="filter-group">
-      <label><%= t('jobs.list.filter.minScore') %></label>
-      <input
-        type="number"
-        name="minScore"
-        min="0"
-        max="100"
-        step="5"
-        value="<%= filters.minScore || '' %>"
-        placeholder="<%= t('jobs.list.filter.placeholder.minScore') %>"
-        class="search-input"
-      />
-    </div>
-
-    <div class="filter-actions">
-      <button class="btn btn-primary" type="submit"><%= t('jobs.list.filter.apply') %></button>
-    </div>
-  </form>
-
-  <div class="cards-grid jobs-list">
-    <% if (!jobs.length) { %>
-    <div class="empty-state glass-card">
-      <p><%= t('jobs.list.empty') %></p>
+    <% } else if (_user && !_hasResume) { %>
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+      <span style="font-size: 14px; color: var(--text-secondary, #4B5563);">
+        <%= _t('jobs.list.noResumeBanner', 'Upload a resume to see match scores for all listings.') %>
+      </span>
+      <a href="/resumes" class="btn btn-primary btn-sm"><%= _t('jobs.list.uploadResume', 'Upload Resume') %></a>
     </div>
     <% } %>
 
-    <% jobs.forEach(function(job){ 
-      const score = typeof job.overall_score === 'number' ? job.overall_score : null;
-      let scoreClass = 'score-low';
-      if (score !== null) {
-        if (score > 70) scoreClass = 'score-high';
-        else if (score >= 50) scoreClass = 'score-mid';
-      }
-    %>
-    <article class="job-card glass-card">
-      <header class="job-card-header">
-        <div>
-          <h2 class="job-title"><%= job.title %></h2>
-          <div class="job-meta">
-            <span><%= job.company_name || t('jobs.list.company.unknown') %></span>
-            <% if (job.location) { %>
-            <span class="meta-item">
-              <span class="icon-pill">
-                <svg
-                  class="icon icon-location"
-                  viewBox="0 0 20 20"
-                  aria-hidden="true"
-                  focusable="false"
-                >
-                  <path
-                    d="M10 2.5a5 5 0 0 0-5 5c0 3.25 3.28 6.74 4.47 7.93a.78.78 0 0 0 1.06 0C11.72 14.24 15 10.75 15 7.5a5 5 0 0 0-5-5Zm0 2a3 3 0 0 1 3 3c0 1.86-1.58 3.94-3 5.46-1.42-1.52-3-3.6-3-5.46a3 3 0 0 1 3-3Zm0 1.8A1.2 1.2 0 1 0 11.2 7.5 1.2 1.2 0 0 0 10 6.3Z"
-                  />
-                </svg>
-                <span><%= job.location %></span>
-              </span>
-            </span>
-            <% } %>
-            <% if (job.role) { %>
-            <span class="tag role-tag"><%= job.role %></span>
-            <% } %>
-          </div>
-        </div>
-        <div class="job-score">
-          <% const displayScore = score !== null ? Math.round(score) : null; %>
-          <% const circleValue = displayScore !== null ? Math.max(5, Math.min(100, displayScore)) : 0; %>
-          <div class="score-circle">
-            <svg
-              class="progress-ring"
-              viewBox="0 0 36 36"
-              aria-hidden="true"
-              focusable="false"
-            >
-              <circle class="progress-ring-bg" cx="18" cy="18" r="15"></circle>
-              <circle
-                class="progress-ring-value <%= scoreClass %>"
-                cx="18"
-                cy="18"
-                r="15"
-                stroke-dasharray="100 100"
-                stroke-dashoffset="<%= 100 - circleValue %>"
-              ></circle>
-              <text x="18" y="20.5" class="progress-ring-text">
-                <%= displayScore !== null ? displayScore.toFixed(0) : '–' %>
-              </text>
-            </svg>
-            <div class="score-circle-meta">
-              <span class="score-circle-label"><%= t('jobs.list.fitScoreLabel') %></span>
-              <span
-                class="score-value"
-                data-score="<%= score !== null ? score : '' %>"
-              >
-                <%= score !== null ? score.toFixed(0) + '%' : t('jobs.list.fitScore.notCalculated') %>
-              </span>
-            </div>
-          </div>
-        </div>
-      </header>
+    <!-- Sort Controls -->
+    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 12px;">
+      <span style="font-size: 13px; color: var(--text-muted, #6B7280);"><%= _t('jobs.list.sortBy', 'Sort by:') %></span>
+      <%
+        function sortUrl(sortVal) {
+          var params = new URLSearchParams();
+          if (_filters.keyword) params.set('keyword', _filters.keyword);
+          if (_filters.location) params.set('location', _filters.location);
+          if (_filters.source) params.set('source', _filters.source);
+          if (_filters.workType) params.set('workType', _filters.workType);
+          if (_filters.visa) params.set('visa', _filters.visa);
+          if (_filters.minScore) params.set('minScore', _filters.minScore);
+          if (_filters.minSalary) params.set('minSalary', _filters.minSalary);
+          if (_filters.maxSalary) params.set('maxSalary', _filters.maxSalary);
+          params.set('sort', sortVal);
+          return '/jobs?' + params.toString();
+        }
+      %>
+      <a href="<%= sortUrl('newest') %>"
+         class="btn btn-ghost btn-sm <%= _sort === 'newest' ? 'active' : '' %>"
+         style="<%= _sort === 'newest' ? 'font-weight: 600; text-decoration: underline;' : '' %>">
+        <%= _t('sort.newest', 'Newest') %>
+      </a>
+      <a href="<%= sortUrl('score') %>"
+         class="btn btn-ghost btn-sm <%= _sort === 'score' ? 'active' : '' %>"
+         style="<%= _sort === 'score' ? 'font-weight: 600; text-decoration: underline;' : '' %>">
+        <%= _t('sort.bestMatch', 'Best Match') %>
+      </a>
+      <a href="<%= sortUrl('salary') %>"
+         class="btn btn-ghost btn-sm <%= _sort === 'salary' ? 'active' : '' %>"
+         style="<%= _sort === 'salary' ? 'font-weight: 600; text-decoration: underline;' : '' %>">
+        <%= _t('sort.salary', 'Salary') %>
+      </a>
+    </div>
 
-      <p class="job-snippet">
-        <%= (job.description || '').slice(0, 120) %><%=
-        (job.description || '').length > 120 ? '…' : '' %>
-      </p>
+    <% if (_error) { %>
+      <!-- Error state -->
+      <div class="empty-state" style="text-align: center; padding: 40px 16px; background: var(--bg-elevated, #fff); border-radius: 12px; border: 1px solid var(--border-subtle, #E2E6EA);">
+        <p style="color: var(--danger, #DC2626); margin-bottom: 12px;">
+          <%= _t('jobs.list.error', 'Could not load jobs. Please try again.') %>
+        </p>
+        <a href="/jobs" class="btn btn-primary btn-sm"><%= _t('common.retry', 'Retry') %></a>
+      </div>
 
-      <footer class="job-card-footer">
-        <div class="job-tags">
-          <% if (job.source) { %>
-          <span class="tag"><%= job.source %></span>
+    <% } else if (_jobs.length === 0 && Object.keys(_filters).some(function(k) { return _filters[k]; })) { %>
+      <!-- Empty with filters -->
+      <div class="empty-state" style="text-align: center; padding: 40px 16px; background: var(--bg-elevated, #fff); border-radius: 12px; border: 1px solid var(--border-subtle, #E2E6EA);">
+        <p style="color: var(--text-secondary, #4B5563); margin-bottom: 12px;">
+          <%= _t('jobs.list.emptyFiltered', 'No jobs match your filters. Try broadening your search or') %>
+          <a href="/jobs"><%= _t('jobs.list.clearAllFilters', 'clear all filters') %></a>.
+        </p>
+      </div>
+
+    <% } else if (_jobs.length === 0) { %>
+      <!-- Empty no jobs at all -->
+      <div class="empty-state" style="text-align: center; padding: 40px 16px; background: var(--bg-elevated, #fff); border-radius: 12px; border: 1px solid var(--border-subtle, #E2E6EA);">
+        <p style="color: var(--text-secondary, #4B5563);">
+          <%= _t('jobs.list.emptyNoJobs', 'No jobs available yet. The admin has not run any scrapers.') %>
+        </p>
+      </div>
+
+    <% } else { %>
+      <!-- Loading skeleton (hidden, shown via JS) -->
+      <div class="skeleton-container" id="list-skeleton" style="display: none;">
+        <% for (var sk = 0; sk < 6; sk++) { %>
+          <%- include('../partials/skeleton-card') %>
+        <% } %>
+      </div>
+
+      <!-- Job cards grid -->
+      <div class="job-list" id="job-list-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px;">
+        <% _jobs.forEach(function(job, idx) { %>
+          <%
+            var cardScore = null;
+            if (_user && job.fit_score && typeof job.fit_score === 'object') {
+              cardScore = job.fit_score.overall_score;
+            } else if (_user && typeof job.overall_score === 'number') {
+              cardScore = job.overall_score;
+            }
+          %>
+          <%- include('../partials/job-card', { job: job, score: cardScore, index: idx }) %>
+        <% }); %>
+      </div>
+
+      <!-- Pagination -->
+      <% if (_totalPages > 1) { %>
+      <nav class="pagination" aria-label="<%= _t('jobs.list.pagination', 'Page navigation') %>"
+           style="display: flex; justify-content: center; align-items: center; gap: 4px; margin-top: 24px;">
+        <%
+          function pageUrl(p) {
+            var params = new URLSearchParams();
+            if (_filters.keyword) params.set('keyword', _filters.keyword);
+            if (_filters.location) params.set('location', _filters.location);
+            if (_filters.source) params.set('source', _filters.source);
+            if (_filters.workType) params.set('workType', _filters.workType);
+            if (_filters.visa) params.set('visa', _filters.visa);
+            if (_filters.minScore) params.set('minScore', _filters.minScore);
+            if (_filters.minSalary) params.set('minSalary', _filters.minSalary);
+            if (_filters.maxSalary) params.set('maxSalary', _filters.maxSalary);
+            if (_sort) params.set('sort', _sort);
+            params.set('page', p);
+            return '/jobs?' + params.toString();
+          }
+        %>
+
+        <% if (_page > 1) { %>
+          <a href="<%= pageUrl(_page - 1) %>" class="btn btn-ghost btn-sm" aria-label="Previous page">&lt; Prev</a>
+        <% } else { %>
+          <span class="btn btn-ghost btn-sm" style="opacity: 0.4; pointer-events: none;" aria-disabled="true">&lt; Prev</span>
+        <% } %>
+
+        <%
+          var startPage = Math.max(1, _page - 2);
+          var endPage = Math.min(_totalPages, _page + 2);
+        %>
+        <% if (startPage > 1) { %>
+          <a href="<%= pageUrl(1) %>" class="btn btn-ghost btn-sm">1</a>
+          <% if (startPage > 2) { %><span style="color: var(--text-muted, #6B7280);">...</span><% } %>
+        <% } %>
+
+        <% for (var p = startPage; p <= endPage; p++) { %>
+          <% if (p === _page) { %>
+            <span class="btn btn-primary btn-sm" aria-current="page"><%= p %></span>
+          <% } else { %>
+            <a href="<%= pageUrl(p) %>" class="btn btn-ghost btn-sm"><%= p %></a>
           <% } %>
-          <% if (job.salary) { %>
-          <span class="tag tag-soft">
-            <span class="icon-pill">
-              <svg
-                class="icon icon-salary"
-                viewBox="0 0 20 20"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <path
-                  d="M4 5.5A1.5 1.5 0 0 1 5.5 4h9A1.5 1.5 0 0 1 16 5.5v9A1.5 1.5 0 0 1 14.5 16h-9A1.5 1.5 0 0 1 4 14.5v-9Zm4.9 1.25a.75.75 0 0 0-1.5 0v.27A2.5 2.5 0 0 0 7 9.25a2.4 2.4 0 0 0 1.36 2.17c.38.2.8.33 1.24.45.52.14.92.26 1.22.42.3.16.43.33.43.58 0 .34-.15.58-.42.75-.28.17-.7.28-1.24.28-.53 0-.96-.1-1.3-.3a1 1 0 0 1-.47-.86.75.75 0 0 0-1.5 0c0 .9.43 1.68 1.1 2.19.47.35 1.03.57 1.67.67v.28a.75.75 0 0 0 1.5 0v-.29c.72-.11 1.33-.32 1.8-.62.76-.49 1.17-1.24 1.17-2.16 0-.9-.43-1.58-1.14-2.03-.7-.44-1.55-.63-2.28-.82-.46-.12-.86-.23-1.16-.4-.3-.16-.44-.34-.44-.62 0-.3.13-.54.38-.7.26-.17.65-.26 1.12-.26.49 0 .9.1 1.2.3.28.18.45.46.5.82a.75.75 0 1 0 1.48-.2 2.46 2.46 0 0 0-1.05-1.7A3.5 3.5 0 0 0 10.4 7Z"
-                />
-              </svg>
-              <span><%= job.salary %></span>
-            </span>
-          </span>
-          <% } %>
-        </div>
-        <div class="job-actions">
-          <a href="/jobs/<%= job.id %>" class="btn btn-ghost"><%= t('jobs.list.viewDetail') %></a>
-        </div>
-      </footer>
-    </article>
-    <% }) %>
+        <% } %>
+
+        <% if (endPage < _totalPages) { %>
+          <% if (endPage < _totalPages - 1) { %><span style="color: var(--text-muted, #6B7280);">...</span><% } %>
+          <a href="<%= pageUrl(_totalPages) %>" class="btn btn-ghost btn-sm"><%= _totalPages %></a>
+        <% } %>
+
+        <% if (_page < _totalPages) { %>
+          <a href="<%= pageUrl(_page + 1) %>" class="btn btn-ghost btn-sm" aria-label="Next page">Next &gt;</a>
+        <% } else { %>
+          <span class="btn btn-ghost btn-sm" style="opacity: 0.4; pointer-events: none;" aria-disabled="true">Next &gt;</span>
+        <% } %>
+      </nav>
+      <% } %>
+    <% } %>
   </div>
 </section>
+
+<!-- Mobile filter toggle button (visible on small screens) -->
+<button type="button" class="filter-toggle-mobile" id="filter-toggle-mobile"
+        style="display: none; position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 100; padding: 10px 24px; border-radius: 24px; background: var(--accent-primary, #2563EB); color: #fff; border: none; font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+  <%= _t('filter.toggle', 'Filters') %>
+</button>
+
+<style>
+@media (max-width: 768px) {
+  .filter-sidebar {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    width: 100% !important;
+    max-height: 70vh;
+    overflow-y: auto;
+    z-index: 200;
+    background: var(--bg-elevated, #fff);
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+    padding: 16px;
+  }
+  .filter-sidebar.open {
+    display: block;
+  }
+  #filter-toggle-mobile {
+    display: block !important;
+  }
+}
+</style>
+
+<script>
+(function() {
+  var toggleBtn = document.getElementById('filter-toggle-mobile');
+  var sidebar = document.querySelector('.filter-sidebar');
+  if (toggleBtn && sidebar) {
+    toggleBtn.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+    });
+    document.addEventListener('click', function(e) {
+      if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && e.target !== toggleBtn) {
+        sidebar.classList.remove('open');
+      }
+    });
+  }
+
+  // AJAX + pushState pagination
+  var jobListContainer = document.getElementById('job-list-container');
+  var skeleton = document.getElementById('list-skeleton');
+  var paginationNav = document.querySelector('.pagination');
+
+  function navigateViaAjax(url) {
+    if (!jobListContainer) return false;
+    if (skeleton) skeleton.style.display = 'grid';
+    jobListContainer.style.opacity = '0.5';
+
+    var apiUrl = url.replace('/jobs?', '/api/jobs?').replace(/^\/jobs$/, '/api/jobs');
+    fetch(apiUrl)
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (skeleton) skeleton.style.display = 'none';
+        jobListContainer.style.opacity = '1';
+        // Full page reload on AJAX success to re-render server-side EJS with new data
+        // pushState first so the URL updates, then reload
+        if (window.history && window.history.pushState) {
+          window.history.pushState({ ajaxNav: true }, '', url);
+        }
+        window.location.href = url;
+      })
+      .catch(function() {
+        if (skeleton) skeleton.style.display = 'none';
+        jobListContainer.style.opacity = '1';
+        window.location.href = url;
+      });
+    return true;
+  }
+
+  // Intercept pagination link clicks
+  if (paginationNav) {
+    paginationNav.addEventListener('click', function(e) {
+      var link = e.target.closest('a');
+      if (!link || !link.href) return;
+      e.preventDefault();
+      navigateViaAjax(link.getAttribute('href'));
+    });
+  }
+
+  // Handle popstate (back/forward)
+  window.addEventListener('popstate', function(e) {
+    if (e.state && e.state.ajaxNav) {
+      window.location.reload();
+    }
+  });
+})();
+</script>

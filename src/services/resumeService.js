@@ -165,7 +165,7 @@ async function extractResumeFieldsWithAI(rawText) {
   return normalized;
 }
 
-async function createResumeFromUpload(file) {
+async function createResumeFromUpload(file, userId) {
   const filePath = file.path;
   const fileName = file.originalname;
   const fileType = file.mimetype || path.extname(file.originalname);
@@ -174,6 +174,7 @@ async function createResumeFromUpload(file) {
   const extracted = await extractResumeFieldsWithAI(rawText);
 
   const resume = {
+    user_id: userId || null,
     name: extracted.name,
     summary: extracted.summary,
     skills_json: JSON.stringify(extracted.skills || []),

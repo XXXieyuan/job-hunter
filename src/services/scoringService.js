@@ -1,18 +1,36 @@
-const { hasOpenAIKey, getEmbedding } = require('./openAIClient');
+const { hasOpenAIKey, generateEmbedding, chatCompletion } = require('./openAIClient');
+const fitScoresRepo = require('../repositories/fitScoresRepo');
+const { getLogger } = require('../logger');
 
-const KEYWORD_WEIGHT = 0.4;
-const EMBEDDING_WEIGHT = 0.6;
+const logger = getLogger('scoringService');
 
-function normalize(text) {
-  return (text || '').toLowerCase();
-}
+// Weights per SYSTEM_DESIGN.md Section 4.3
+const W_SEMANTIC = 0.40;
+const W_KEYWORD = 0.30;
+const W_ROLE = 0.20;
+const W_LOCATION = 0.10;
 
+// Australian states for location matching
+const AUSTRALIAN_STATES = {
+  nsw: 'nsw', 'new south wales': 'nsw', sydney: 'nsw', newcastle: 'nsw', wollongong: 'nsw',
+  vic: 'vic', victoria: 'vic', melbourne: 'vic', geelong: 'vic',
+  qld: 'qld', queensland: 'qld', brisbane: 'qld', 'gold coast': 'qld',
+  wa: 'wa', 'western australia': 'wa', perth: 'wa',
+  sa: 'sa', 'south australia': 'sa', adelaide: 'sa',
+  tas: 'tas', tasmania: 'tas', hobart: 'tas',
+  act: 'act', canberra: 'act', 'australian capital territory': 'act',
+  nt: 'nt', 'northern territory': 'nt', darwin: 'nt',
+};
+
+/**
+ * Cosine similarity between two float arrays.
+ */
 function cosineSimilarity(a, b) {
   if (!a || !b || a.length !== b.length) return 0;
   let dot = 0;
   let na = 0;
   let nb = 0;
-  for (let i = 0; i < a.length; i += 1) {
+  for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i];
     na += a[i] * a[i];
     nb += b[i] * b[i];
@@ -21,20 +39,33 @@ function cosineSimilarity(a, b) {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
-async function scoreJobAgainstResume(job, resume) {
-  const jobText = `${job.title || ''}\n${job.description || ''}`;
-  let resumeSkills = [];
-  try {
-    resumeSkills = resume.skills_json ? JSON.parse(resume.skills_json) : [];
-  } catch {
-    resumeSkills = [];
-  }
-  if (!Array.isArray(resumeSkills)) {
-    resumeSkills = [];
-  }
+/**
+ * Clamp a value between min and max.
+ */
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val));
+}
 
-  // Normalize skills into a flat list of non-empty strings
-  const normalizedSkills = resumeSkills
+/**
+ * Normalize text for comparison.
+ */
+function normalize(text) {
+  return (text || '').toLowerCase().trim();
+}
+
+/**
+ * Extract a flat array of skill strings from resume.skills_json.
+ */
+function extractSkills(resume) {
+  let skills = [];
+  try {
+    skills = resume.skills_json ? JSON.parse(resume.skills_json) : [];
+  } catch {
+    skills = [];
+  }
+  if (!Array.isArray(skills)) skills = [];
+
+  return skills
     .map((s) => {
       if (!s) return null;
       if (typeof s === 'string') return s.trim();
@@ -45,78 +76,501 @@ async function scoreJobAgainstResume(job, resume) {
       return null;
     })
     .filter((s) => s && s.length > 0);
+}
 
-  const experience = resume.experience_json ? JSON.parse(resume.experience_json) : [];
-  const experienceText = experience
+/**
+ * Extract experience entries from resume.
+ */
+function extractExperience(resume) {
+  try {
+    const exp = resume.experience_json ? JSON.parse(resume.experience_json) : [];
+    return Array.isArray(exp) ? exp : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Build job text for embedding: title + company + location + description.
+ * Per SYSTEM_DESIGN.md Section 4.2.
+ */
+function buildJobEmbeddingText(job) {
+  return [
+    job.title || '',
+    job.company_name || '',
+    job.location || '',
+    job.description || '',
+  ].join('\n');
+}
+
+/**
+ * Build resume text for embedding.
+ * Per SYSTEM_DESIGN.md Section 4.2.
+ */
+function buildResumeEmbeddingText(resume) {
+  const skills = extractSkills(resume);
+  const experience = extractExperience(resume);
+  const expText = experience
     .map((e) => `${e.title || ''} ${e.company || ''} ${e.description || ''}`)
     .join('\n');
 
-  const resumeTextCombined = [
+  let education = '';
+  try {
+    const edu = resume.education_json ? JSON.parse(resume.education_json) : [];
+    if (Array.isArray(edu)) {
+      education = edu.map((e) => `${e.degree || ''} ${e.institution || ''}`).join('\n');
+    }
+  } catch { /* ignore */ }
+
+  return [
     resume.summary || '',
-    normalizedSkills.join(', '),
-    experienceText,
+    `Skills: ${skills.join(', ')}`,
+    `Experience: ${expText}`,
+    `Education: ${education}`,
   ].join('\n');
+}
 
-  const jobTextLower = normalize(jobText);
+// ──────────────────────────────────────────────
+// Semantic Score (0-100)
+// ──────────────────────────────────────────────
 
-  const matchedKeywords = normalizedSkills.filter((kw) => {
-    const kwLower = normalize(kw);
-    return kwLower && jobTextLower.includes(kwLower);
-  });
+async function computeSemanticScore(job, resume) {
+  if (!hasOpenAIKey()) return null;
 
-  const missingSkills = normalizedSkills.filter((kw) => {
-    const kwLower = normalize(kw);
-    return kwLower && !jobTextLower.includes(kwLower);
-  });
+  try {
+    const jobText = buildJobEmbeddingText(job);
+    const resumeText = buildResumeEmbeddingText(resume);
 
-  const totalKeywords = normalizedSkills.length || 1;
-  let keywordScore = (matchedKeywords.length / totalKeywords) * 100;
+    const [jobEmbedding, resumeEmbedding] = await Promise.all([
+      generateEmbedding(jobText),
+      generateEmbedding(resumeText),
+    ]);
 
-  const jobTitleNorm = normalize(job.title || '');
-  const experienceTitles = experience
-    .map((e) => normalize(e.title || ''))
-    .join(' ');
-  if (
-    (jobTitleNorm.includes('product') && experienceTitles.includes('product')) ||
-    (jobTitleNorm.includes('engineer') && experienceTitles.includes('engineer')) ||
-    (jobTitleNorm.includes('ai') && experienceTitles.includes('ai'))
-  ) {
-    keywordScore = Math.min(keywordScore + 10, 100);
+    if (!jobEmbedding || !resumeEmbedding) return null;
+
+    const sim = cosineSimilarity(jobEmbedding, resumeEmbedding);
+    return clamp(sim * 100, 0, 100);
+  } catch (err) {
+    logger.error('Semantic score failed:', err.message);
+    return null;
   }
+}
 
-  let embeddingScore = null;
-  if (hasOpenAIKey()) {
-    try {
-      const [jobEmbedding, resumeEmbedding] = await Promise.all([
-        getEmbedding(jobText),
-        getEmbedding(resume.summary || resumeTextCombined),
-      ]);
-      if (jobEmbedding && resumeEmbedding) {
-        const sim = cosineSimilarity(jobEmbedding, resumeEmbedding);
-        embeddingScore = Math.max(0, Math.min(100, sim * 100));
-      }
-    } catch {
-      embeddingScore = null;
+// ──────────────────────────────────────────────
+// Keyword Score (0-100)
+// ──────────────────────────────────────────────
+
+function computeKeywordScore(job, resume) {
+  const skills = extractSkills(resume);
+  if (skills.length === 0) return { score: 0, matched: [], missing: [] };
+
+  const jobTextLower = normalize(`${job.title || ''}\n${job.description || ''}`);
+
+  const matched = [];
+  const missing = [];
+
+  for (const skill of skills) {
+    const skillLower = normalize(skill);
+    if (skillLower && jobTextLower.includes(skillLower)) {
+      matched.push(skill);
+    } else {
+      missing.push(skill);
     }
   }
 
-  const overallScore =
-    embeddingScore != null
-      ? KEYWORD_WEIGHT * keywordScore + EMBEDDING_WEIGHT * embeddingScore
-      : keywordScore;
+  const score = clamp((matched.length / skills.length) * 100, 0, 100);
+  return { score, matched, missing };
+}
+
+// ──────────────────────────────────────────────
+// Role Alignment Score (0-100)
+// ──────────────────────────────────────────────
+
+async function computeRoleAlignmentScore(job, resume) {
+  const experience = extractExperience(resume);
+  const jobTitleNorm = normalize(job.title || '');
+
+  if (!jobTitleNorm) return 30;
+
+  // Extract significant words from job title (remove common filler)
+  const stopWords = new Set([
+    'senior', 'junior', 'lead', 'principal', 'associate', 'intern',
+    'i', 'ii', 'iii', 'iv', 'v', 'the', 'a', 'an', 'and', 'or', 'of', 'for', 'in', 'at',
+  ]);
+  const jobTitleWords = jobTitleNorm.split(/\s+/).filter((w) => w.length > 1 && !stopWords.has(w));
+
+  // Check for title matches in experience
+  const expTitles = experience.map((e) => normalize(e.title || ''));
+  let bestOverlap = 0;
+  let hasExactMatch = false;
+
+  for (const expTitle of expTitles) {
+    if (!expTitle) continue;
+
+    // Check for near-exact match (ignoring seniority prefixes)
+    const expWords = expTitle.split(/\s+/).filter((w) => w.length > 1 && !stopWords.has(w));
+    const expWordSet = new Set(expWords);
+    const jobWordSet = new Set(jobTitleWords);
+
+    // Count overlap
+    let overlap = 0;
+    for (const w of jobTitleWords) {
+      if (expWordSet.has(w)) overlap++;
+    }
+
+    // Exact match (all significant words present)
+    if (jobTitleWords.length > 0 && overlap === jobTitleWords.length) {
+      hasExactMatch = true;
+    }
+
+    const maxLen = Math.max(jobTitleWords.length, expWords.length, 1);
+    const overlapRatio = overlap / maxLen;
+    if (overlapRatio > bestOverlap) bestOverlap = overlapRatio;
+  }
+
+  // Base score from word overlap
+  let score = bestOverlap * 80;
+
+  // Boost for exact/near-exact match
+  if (hasExactMatch) score = Math.max(score, 90);
+
+  // If we have an API key, also compute embedding similarity of titles
+  if (hasOpenAIKey() && expTitles.length > 0) {
+    try {
+      const allExpTitles = expTitles.filter(Boolean).join(', ');
+      const [jobTitleEmb, expTitleEmb] = await Promise.all([
+        generateEmbedding(job.title),
+        generateEmbedding(allExpTitles),
+      ]);
+      if (jobTitleEmb && expTitleEmb) {
+        const sim = cosineSimilarity(jobTitleEmb, expTitleEmb);
+        const embScore = clamp(sim * 100, 0, 100);
+        // Blend: 60% word overlap, 40% embedding similarity
+        score = 0.6 * score + 0.4 * embScore;
+      }
+    } catch (err) {
+      logger.warn('Role alignment embedding failed:', err.message);
+    }
+  }
+
+  return clamp(score, 0, 100);
+}
+
+// ──────────────────────────────────────────────
+// Location Score (0-100)
+// Per SYSTEM_DESIGN.md: exact=100, same state=70, remote=90, different=30, no pref=80
+// ──────────────────────────────────────────────
+
+function resolveState(locationStr) {
+  const lower = normalize(locationStr);
+  for (const [key, state] of Object.entries(AUSTRALIAN_STATES)) {
+    if (lower.includes(key)) return state;
+  }
+  return null;
+}
+
+function computeLocationScore(job, resume) {
+  const jobLocation = normalize(job.location || '');
+  if (!jobLocation) return 80; // no job location info -> neutral
+
+  // Check for remote
+  if (
+    jobLocation.includes('remote') ||
+    jobLocation.includes('work from home') ||
+    jobLocation.includes('wfh')
+  ) {
+    return 90;
+  }
+
+  // Get user preferred locations from resume (stored in user profile or resume metadata)
+  let preferredLocations = [];
+  try {
+    if (resume.preferred_locations) {
+      preferredLocations = typeof resume.preferred_locations === 'string'
+        ? JSON.parse(resume.preferred_locations)
+        : resume.preferred_locations;
+    }
+  } catch { /* ignore */ }
+
+  if (!Array.isArray(preferredLocations) || preferredLocations.length === 0) {
+    return 80; // no preference set -> neutral
+  }
+
+  // Check exact city match
+  for (const pref of preferredLocations) {
+    if (jobLocation.includes(normalize(pref))) {
+      return 100;
+    }
+  }
+
+  // Check same state
+  const jobState = resolveState(jobLocation);
+  for (const pref of preferredLocations) {
+    const prefState = resolveState(pref);
+    if (jobState && prefState && jobState === prefState) {
+      return 70;
+    }
+  }
+
+  return 30; // different state
+}
+
+// ──────────────────────────────────────────────
+// Skill Gap Classification (via AI)
+// ──────────────────────────────────────────────
+
+async function classifySkillGaps(missingSkills, job, resume) {
+  if (!missingSkills || missingSkills.length === 0) return [];
+
+  // Default classification without AI
+  const defaultGaps = missingSkills.map((skill) => ({
+    skill,
+    category: 'closeable',
+    suggestion: `Consider learning ${skill} to strengthen your application.`,
+  }));
+
+  if (!hasOpenAIKey() || missingSkills.length === 0) return defaultGaps;
+
+  try {
+    const prompt = `You are a career advisor for the Australian job market.
+Classify each missing skill into one of three categories:
+- "hard_requirement": Cannot be obtained (citizenship, years of specific experience, professional license requiring years of study)
+- "closeable": Can be learned/obtained within 1-6 months (specific tools, certifications, short courses)
+- "reframeable": The candidate may have equivalent experience under a different name
+
+For each skill, provide a brief, actionable suggestion.
+
+Job title: ${job.title || 'Unknown'}
+Job description excerpt: ${(job.description || '').slice(0, 2000)}
+Candidate skills: ${extractSkills(resume).join(', ')}
+
+Missing skills to classify:
+${missingSkills.join('\n')}
+
+Respond as a JSON array of objects with "skill", "category", and "suggestion" fields. Return ONLY the JSON array, no other text.`;
+
+    const result = await chatCompletion([
+      { role: 'system', content: prompt },
+    ], { temperature: 0.3, max_tokens: 2048 });
+
+    if (result) {
+      // Try to parse JSON from response
+      const jsonMatch = result.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch (err) {
+    logger.warn('Skill gap classification failed, using defaults:', err.message);
+  }
+
+  return defaultGaps;
+}
+
+// ──────────────────────────────────────────────
+// Detail builders for breakdown_json
+// Per INTERFACE_CONTRACT.md Section 2
+// ──────────────────────────────────────────────
+
+function buildRoleAlignmentDetail(job, resume, roleScore) {
+  const experience = extractExperience(resume);
+  const expTitles = experience
+    .map((e) => e.title)
+    .filter(Boolean)
+    .join(', ');
+  const jobTitle = job.title || 'Unknown role';
+
+  if (roleScore >= 80) {
+    return `Your experience${expTitles ? ` as '${expTitles}'` : ''} aligns well with '${jobTitle}'.`;
+  }
+  if (roleScore >= 50) {
+    return `Your experience${expTitles ? ` as '${expTitles}'` : ''} partially aligns with '${jobTitle}'. The seniority or domain gap is the main factor.`;
+  }
+  return `Your experience${expTitles ? ` as '${expTitles}'` : ''} has limited direct alignment with '${jobTitle}'. Consider highlighting transferable skills.`;
+}
+
+function buildLocationDetail(job, resume, locationScore) {
+  const jobLocation = job.location || 'unspecified location';
+  if (locationScore >= 100) {
+    return `Job is in ${jobLocation}. This matches your preferred location.`;
+  }
+  if (locationScore >= 90) {
+    return `Job is in ${jobLocation} (remote/flexible). This is accessible from any location.`;
+  }
+  if (locationScore >= 70) {
+    return `Job is in ${jobLocation}. This is in the same state as your preferred location.`;
+  }
+  if (locationScore >= 80) {
+    return `Job is in ${jobLocation}. No location preference specified.`;
+  }
+  return `Job is in ${jobLocation}. This is in a different state from your preferred location.`;
+}
+
+function buildVisaNote(job) {
+  const visa = job.visa_eligibility;
+  if (!visa) return 'No visa requirement information available for this role.';
+
+  switch (visa) {
+    case 'citizens_only':
+      return 'This role requires Australian citizenship.';
+    case 'pr_required':
+      return 'This role requires Australian permanent residency or citizenship.';
+    case 'visa_holders_welcome':
+      return 'This role lists visa holders as welcome — work visa holders are eligible.';
+    default:
+      return 'No visa requirement information available for this role.';
+  }
+}
+
+function detectInternationalExperience(resume) {
+  const experience = extractExperience(resume);
+  const summary = normalize(resume.summary || '');
+
+  // Check for international experience markers
+  const intlKeywords = [
+    'international', 'overseas', 'abroad', 'foreign',
+    'china', 'india', 'uk', 'usa', 'europe', 'asia',
+    'multinational', 'global', 'cross-border',
+  ];
+
+  const allText = normalize(
+    experience.map((e) => `${e.title || ''} ${e.company || ''} ${e.description || ''}`).join(' ') +
+    ' ' + summary
+  );
+
+  return intlKeywords.some((kw) => allText.includes(kw));
+}
+
+function computeVisaMatch(job) {
+  const visa = job.visa_eligibility;
+  if (!visa) return null;
+  if (visa === 'visa_holders_welcome') return 1;
+  if (visa === 'citizens_only' || visa === 'pr_required') return 0;
+  return null;
+}
+
+// ──────────────────────────────────────────────
+// Main Scoring Function
+// ──────────────────────────────────────────────
+
+/**
+ * Score a single job against a resume. Computes composite score with four signals.
+ * Stores result via fitScoresRepo.
+ *
+ * @param {object} job - Job record from DB
+ * @param {object} resume - Resume record from DB
+ * @param {object} opts - Options: { skipStore: boolean, skipGapClassification: boolean }
+ * @returns {object} Score result with breakdown
+ */
+async function scoreJobAgainstResume(job, resume, opts = {}) {
+  // Compute all four sub-scores
+  const [semanticScore, roleAlignmentScore] = await Promise.all([
+    computeSemanticScore(job, resume),
+    computeRoleAlignmentScore(job, resume),
+  ]);
+
+  const { score: keywordScore, matched, missing } = computeKeywordScore(job, resume);
+  const locationScore = computeLocationScore(job, resume);
+
+  // Composite score calculation
+  // If semantic score unavailable, redistribute weight to keyword
+  let overallScore;
+  if (semanticScore != null) {
+    overallScore =
+      W_SEMANTIC * semanticScore +
+      W_KEYWORD * keywordScore +
+      W_ROLE * roleAlignmentScore +
+      W_LOCATION * locationScore;
+  } else {
+    // Fallback: redistribute semantic weight proportionally
+    const fallbackKeywordWeight = W_KEYWORD + W_SEMANTIC * (W_KEYWORD / (W_KEYWORD + W_ROLE + W_LOCATION));
+    const fallbackRoleWeight = W_ROLE + W_SEMANTIC * (W_ROLE / (W_KEYWORD + W_ROLE + W_LOCATION));
+    const fallbackLocationWeight = W_LOCATION + W_SEMANTIC * (W_LOCATION / (W_KEYWORD + W_ROLE + W_LOCATION));
+    overallScore =
+      fallbackKeywordWeight * keywordScore +
+      fallbackRoleWeight * roleAlignmentScore +
+      fallbackLocationWeight * locationScore;
+  }
+
+  overallScore = clamp(Math.round(overallScore * 100) / 100, 0, 100);
+
+  // Classify skill gaps
+  let skillGaps = [];
+  if (!opts.skipGapClassification) {
+    skillGaps = await classifySkillGaps(missing, job, resume);
+  } else {
+    skillGaps = missing.map((skill) => ({
+      skill,
+      category: 'closeable',
+      suggestion: `Consider learning ${skill}.`,
+    }));
+  }
+
+  // Build detail strings for breakdown
+  const roleAlignmentDetail = buildRoleAlignmentDetail(job, resume, roleAlignmentScore);
+  const locationDetail = buildLocationDetail(job, resume, locationScore);
+  const visaNote = buildVisaNote(job);
+  const valuesInternationalExperience = detectInternationalExperience(resume);
+
+  // Build breakdown JSON per INTERFACE_CONTRACT.md Section 2 (lines 208-230)
+  const breakdown = {
+    matched_skills: matched,
+    missing_skills: skillGaps,
+    role_alignment_detail: roleAlignmentDetail,
+    location_detail: locationDetail,
+    visa_note: visaNote,
+  };
+
+  // Compute visa_match: 0=ineligible, 1=eligible, null=unknown
+  const visaMatch = computeVisaMatch(job);
+
+  // Store via fitScoresRepo
+  if (!opts.skipStore) {
+    try {
+      fitScoresRepo.upsertFitScore({
+        job_id: job.id,
+        resume_id: resume.id,
+        overall_score: overallScore,
+        semantic_score: semanticScore != null ? Math.round(semanticScore * 100) / 100 : null,
+        keyword_score: Math.round(keywordScore * 100) / 100,
+        role_alignment_score: Math.round(roleAlignmentScore * 100) / 100,
+        location_score: locationScore,
+        breakdown_json: JSON.stringify(breakdown),
+        skill_gaps_json: JSON.stringify(skillGaps),
+        visa_match: visaMatch,
+        values_international_experience: valuesInternationalExperience ? 1 : 0,
+      });
+    } catch (err) {
+      logger.error('Failed to store fit score:', err.message);
+    }
+  }
 
   return {
     overall_score: overallScore,
-    keyword_score: keywordScore,
-    embedding_score: embeddingScore,
-    breakdown: {
-      matched_keywords: matchedKeywords,
-      total_keywords: totalKeywords,
-      missing_skills: missingSkills,
-    },
+    semantic_score: semanticScore != null ? Math.round(semanticScore * 100) / 100 : null,
+    keyword_score: Math.round(keywordScore * 100) / 100,
+    role_alignment_score: Math.round(roleAlignmentScore * 100) / 100,
+    location_score: locationScore,
+    visa_match: visaMatch,
+    values_international_experience: valuesInternationalExperience,
+    breakdown,
+    skill_gaps: skillGaps,
   };
 }
 
 module.exports = {
   scoreJobAgainstResume,
+  buildResumeEmbeddingText,
+  // Exported for testing
+  cosineSimilarity,
+  computeKeywordScore,
+  computeLocationScore,
+  resolveState,
+  extractSkills,
+  buildRoleAlignmentDetail,
+  buildLocationDetail,
+  buildVisaNote,
+  detectInternationalExperience,
+  computeVisaMatch,
 };

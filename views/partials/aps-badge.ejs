@@ -1,0 +1,45 @@
+<%
+  /**
+   * APS Classification Badge with tooltip
+   * Expects locals: classification (string, e.g. "APS 6", "EL 1", "SES Band 1")
+   */
+  var _cls = typeof classification !== 'undefined' ? String(classification).trim() : '';
+  if (!_cls) return;
+
+  // APS classification context data
+  var _apsData = {
+    'APS 1': { salary: '$56,854 - $61,481', desc: 'Entry level. Tasks under direct supervision, routine administrative work.' },
+    'APS 2': { salary: '$62,778 - $68,834', desc: 'Performs tasks with some autonomy. Administrative and operational support roles.' },
+    'APS 3': { salary: '$72,100 - $77,329', desc: 'Experienced officers. Works under general direction, may supervise APS 1-2 staff.' },
+    'APS 4': { salary: '$79,368 - $85,645', desc: 'Specialist or team lead. Moderate complexity, contributes to policy or program delivery.' },
+    'APS 5': { salary: '$87,510 - $93,661', desc: 'Senior officer. Leads projects, provides specialist advice, manages small teams.' },
+    'APS 6': { salary: '$95,805 - $108,590', desc: 'Senior specialist or team leader. Significant autonomy, complex problem-solving, policy development.' },
+    'EL 1': { salary: '$116,058 - $130,426', desc: 'Executive Level 1 (Director equivalent). Manages teams and programs, strategic planning.' },
+    'EL 2': { salary: '$134,580 - $170,820', desc: 'Executive Level 2 (Branch Manager). Senior leadership, drives major policy/program outcomes.' },
+    'SES Band 1': { salary: '$213,715 - $260,512', desc: 'Senior Executive Service. Heads branches, shapes organisational direction.' },
+    'SES Band 2': { salary: '$270,058 - $329,375', desc: 'Senior Executive Service. Deputy Secretary level, cross-agency leadership.' },
+    'SES Band 3': { salary: '$340,000+', desc: 'Senior Executive Service. Secretary/Agency Head level.' }
+  };
+
+  // Normalise: try matching exactly first, then fuzzy
+  var _info = _apsData[_cls] || null;
+  if (!_info) {
+    var _clsUpper = _cls.toUpperCase();
+    Object.keys(_apsData).forEach(function(key) {
+      if (!_info && _clsUpper.indexOf(key.toUpperCase()) !== -1) {
+        _info = _apsData[key];
+      }
+    });
+  }
+%>
+<span class="badge-aps-classification" tabindex="0" aria-label="APS Classification: <%= _cls %>">
+  <%= _cls %>
+  <% if (_info) { %>
+  <span class="aps-tooltip" role="tooltip">
+    <div class="aps-tooltip-title"><%= _cls %></div>
+    <div class="aps-tooltip-salary">Salary range: <%= _info.salary %></div>
+    <div class="aps-tooltip-desc"><%= _info.desc %></div>
+    <div class="aps-tooltip-desc" style="margin-top: 4px; font-style: italic;">Source: APS Enterprise Agreement 2024-27</div>
+  </span>
+  <% } %>
+</span>

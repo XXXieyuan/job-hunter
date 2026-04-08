@@ -1,0 +1,66 @@
+<%
+  /**
+   * ApplicationStatusBadge partial
+   * Expects locals:
+   *   status: 'saved' | 'applied' | 'interviewing' | 'offered' | 'rejected'
+   *   clickable: boolean (optional, default false) - shows dropdown on click
+   *   applicationId: string/number (optional) - for status change API calls
+   */
+  var _status = typeof status !== 'undefined' ? status : 'saved';
+  var _clickable = typeof clickable !== 'undefined' ? clickable : false;
+  var _applicationId = typeof applicationId !== 'undefined' ? applicationId : '';
+
+  var _statusLabels = {
+    saved: 'Saved',
+    applied: 'Applied',
+    interviewing: 'Interviewing',
+    offered: 'Offered',
+    rejected: 'Rejected'
+  };
+
+  var _statusIcons = {
+    saved: '&#9733;',
+    applied: '&#10003;',
+    interviewing: '&#9679;',
+    offered: '&#9670;',
+    rejected: '&#10005;'
+  };
+
+  var _label = _statusLabels[_status] || _status;
+%>
+<% if (_clickable) { %>
+<div class="status-badge-wrapper" data-application-id="<%= _applicationId %>">
+  <button
+    class="badge badge-<%= _status %> status-badge-trigger"
+    type="button"
+    aria-haspopup="listbox"
+    aria-expanded="false"
+  >
+    <span aria-hidden="true"><%- _statusIcons[_status] || '' %></span>
+    <%= _label %>
+    <span aria-hidden="true" style="font-size: 10px; margin-left: 2px;">&#9662;</span>
+  </button>
+  <div class="status-dropdown" role="listbox" hidden>
+    <% ['saved', 'applied', 'interviewing', 'offered', 'rejected'].forEach(function(s) { %>
+    <button
+      class="status-dropdown-item badge badge-<%= s %>"
+      type="button"
+      role="option"
+      data-status="<%= s %>"
+      <%= s === _status ? 'aria-selected="true"' : '' %>
+    >
+      <span aria-hidden="true"><%- _statusIcons[s] %></span>
+      <%= _statusLabels[s] %>
+    </button>
+    <% }); %>
+    <button class="status-dropdown-item text-danger" type="button" data-status="remove" role="option">
+      Remove
+    </button>
+  </div>
+</div>
+<% } else { %>
+<span class="badge badge-<%= _status %>" aria-label="Application status: <%= _label %>">
+  <span aria-hidden="true"><%- _statusIcons[_status] || '' %></span>
+  <%= _label %>
+</span>
+<% } %>

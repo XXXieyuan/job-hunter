@@ -1,0 +1,27 @@
+<% layout('layout') -%>
+
+<section class="page-section" style="text-align: center; padding: var(--space-12) var(--space-4);">
+  <div style="max-width: 480px; margin: 0 auto;">
+    <h1 style="font-size: 4rem; font-weight: 700; color: var(--text-tertiary); margin-bottom: var(--space-2);">
+      <%= typeof statusCode !== 'undefined' ? statusCode : 500 %>
+    </h1>
+
+    <h2 style="margin-bottom: var(--space-4);">
+      <% if (typeof statusCode !== 'undefined' && statusCode === 404) { %>
+        <%= typeof t === 'function' ? t('errors.404', 'Page Not Found') : 'Page Not Found' %>
+      <% } else if (typeof statusCode !== 'undefined' && statusCode === 403) { %>
+        <%= typeof t === 'function' ? t('errors.403', 'Access Denied') : 'Access Denied' %>
+      <% } else { %>
+        <%= typeof t === 'function' ? t('errors.500', 'Something Went Wrong') : 'Something Went Wrong' %>
+      <% } %>
+    </h2>
+
+    <p class="text-secondary" style="margin-bottom: var(--space-6);">
+      <%= typeof message !== 'undefined' && message ? message : '' %>
+    </p>
+
+    <a href="/jobs" class="btn btn-primary">
+      <%= typeof t === 'function' ? t('nav.backHome', 'Back to Home') : 'Back to Home' %>
+    </a>
+  </div>
+</section>

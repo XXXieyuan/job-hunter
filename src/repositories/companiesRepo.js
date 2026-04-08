@@ -4,6 +4,11 @@ function getDbInstance() {
   return getDb();
 }
 
+function getCompanyById(id) {
+  const db = getDbInstance();
+  return db.prepare('SELECT * FROM companies WHERE id = ?').get(id);
+}
+
 function getCompanyByName(name) {
   const db = getDbInstance();
   return db.prepare('SELECT * FROM companies WHERE name = ?').get(name);
@@ -17,29 +22,55 @@ function upsertCompany(company) {
       `UPDATE companies
        SET website = @website,
            description = @description,
-           raw_html = @raw_html,
            industry = @industry,
            size = @size,
-           researched_at = CURRENT_TIMESTAMP
+           logo_url = @logo_url,
+           headquarters = @headquarters,
+           raw_json = @raw_json,
+           researched_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = @id`
     );
     stmt.run({
-      ...company,
+      website: company.website || null,
+      description: company.description || null,
+      industry: company.industry || null,
+      size: company.size || null,
+      logo_url: company.logo_url || null,
+      headquarters: company.headquarters || null,
+      raw_json: company.raw_json || null,
       id: existing.id,
     });
     return existing.id;
   }
 
   const stmt = db.prepare(
-    `INSERT INTO companies (name, website, description, raw_html, industry, size, researched_at)
-     VALUES (@name, @website, @description, @raw_html, @industry, @size, CURRENT_TIMESTAMP)`
+    `INSERT INTO companies (name, website, description, industry, size, logo_url, headquarters, raw_json, researched_at)
+     VALUES (@name, @website, @description, @industry, @size, @logo_url, @headquarters, @raw_json, CURRENT_TIMESTAMP)`
   );
-  const info = stmt.run(company);
+  const info = stmt.run({
+    name: company.name,
+    website: company.website || null,
+    description: company.description || null,
+    industry: company.industry || null,
+    size: company.size || null,
+    logo_url: company.logo_url || null,
+    headquarters: company.headquarters || null,
+    raw_json: company.raw_json || null,
+  });
   return info.lastInsertRowid;
 }
 
+function getAll() {
+  const db = getDbInstance();
+  return db
+    .prepare('SELECT * FROM companies ORDER BY name ASC')
+    .all();
+}
+
 module.exports = {
+  getCompanyById,
   getCompanyByName,
   upsertCompany,
+  getAll,
 };
-

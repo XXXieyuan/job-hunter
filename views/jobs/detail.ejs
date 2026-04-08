@@ -1,167 +1,982 @@
 <% layout('layout') -%>
 
-<section class="page-section">
-  <div class="section-header detail-header">
-    <a href="/jobs" class="back-link"><%= t('jobs.detail.backToList') %></a>
-    <h1 class="detail-title"><%= job.title %></h1>
-    <p class="section-subtitle detail-meta">
-      <span class="company-name"><%= job.company_name || t('jobs.list.company.unknown') %></span>
-      <% if (job.location) { %>
-      <span class="meta-item">
-        <span class="icon-pill">
-          <svg
-            class="icon icon-location"
-            viewBox="0 0 20 20"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <path
-              d="M10 2.5a5 5 0 0 0-5 5c0 3.25 3.28 6.74 4.47 7.93a.78.78 0 0 0 1.06 0C11.72 14.24 15 10.75 15 7.5a5 5 0 0 0-5-5Zm0 2a3 3 0 0 1 3 3c0 1.86-1.58 3.94-3 5.46-1.42-1.52-3-3.6-3-5.46a3 3 0 0 1 3-3Zm0 1.8A1.2 1.2 0 1 0 11.2 7.5 1.2 1.2 0 0 0 10 6.3Z"
-            />
-          </svg>
-          <span><%= job.location %></span>
-        </span>
-      </span>
-      <% } %>
-    </p>
-  </div>
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _user = typeof user !== 'undefined' ? user : null;
+  var _job = typeof job !== 'undefined' ? job : {};
+  var _score = typeof score !== 'undefined' ? score : null;
+  var _breakdown = typeof breakdown !== 'undefined' ? breakdown : {};
+  var _company = typeof company !== 'undefined' ? company : null;
+  var _coverLetter = typeof coverLetter !== 'undefined' ? coverLetter : null;
+  var _hasResume = typeof hasResume !== 'undefined' ? hasResume : false;
+  var _application = typeof application !== 'undefined' ? application : null;
+  var _scoreFeedback = typeof scoreFeedback !== 'undefined' ? scoreFeedback : null;
+  var _isAps = typeof isAps !== 'undefined' ? isAps : false;
+  var _duplicateSources = typeof duplicateSources !== 'undefined' && Array.isArray(duplicateSources) ? duplicateSources : [];
 
-  <section class="glass-card detail-block">
-    <div class="tabs" data-tabs-root="job-detail-tabs">
-      <button class="tab-btn active" type="button" data-tab-target="tab-overview">
-        <%= t('jobs.detail.tabs.overview') %>
-      </button>
-      <button class="tab-btn" type="button" data-tab-target="tab-fit">
-        <%= t('jobs.detail.tabs.fit') %>
-      </button>
-      <button class="tab-btn" type="button" data-tab-target="tab-company">
-        <%= t('jobs.detail.tabs.company') %>
-      </button>
-      <button class="tab-btn" type="button" data-tab-target="tab-cover">
-        <%= t('jobs.detail.tabs.coverLetter') %>
-      </button>
-    </div>
+  // Parse skill gaps if available
+  var _skillGaps = {};
+  if (_score && _score.skill_gaps_json) {
+    try { _skillGaps = JSON.parse(_score.skill_gaps_json); } catch(e) {}
+  }
+  if (_score && _score.breakdown_json) {
+    try {
+      var bd = typeof _score.breakdown_json === 'string' ? JSON.parse(_score.breakdown_json) : _score.breakdown_json;
+      if (bd.matched_skills) _breakdown.matched_skills = bd.matched_skills;
+      if (bd.missing_skills) _skillGaps = Object.assign(_skillGaps, { missing_skills_detail: bd.missing_skills });
+      if (bd.role_alignment_detail) _breakdown.role_alignment_detail = bd.role_alignment_detail;
+      if (bd.location_detail) _breakdown.location_detail = bd.location_detail;
+      if (bd.visa_note) _breakdown.visa_note = bd.visa_note;
+    } catch(e) {}
+  }
+  var _matchedSkills = _breakdown.matched_skills || _breakdown.matched_keywords || _skillGaps.matched || [];
+  var _missingSkillsDetail = (_skillGaps.missing_skills_detail || []);
 
-    <div id="job-detail-tabs" class="tab-content tab-content-root">
-      <div class="tab-pane active" data-tab-id="tab-overview">
-        <div class="section">
-          <h2 class="section-title"><%= t('jobs.detail.overview.title') %></h2>
-          <p class="muted">
-            <%= t('jobs.detail.overview.sourceLabel') %>
-            <%= job.source || t('jobs.detail.overview.sourceUnknown') %>
-            <% if (job.posted_at) { %>
-            · <%= t('jobs.detail.overview.postedAt') %> <%= job.posted_at %>
-            <% } %>
-          </p>
-          <pre class="job-description">
-<%= job.description || t('jobs.detail.overview.noDescription') %>
-          </pre>
-          <% if (job.url) { %>
-          <p class="muted">
-            <%= t('jobs.detail.overview.originalLink') %>
-            <a href="<%= job.url %>" target="_blank" rel="noopener noreferrer"><%= job.url %></a>
-          </p>
+  // Categorize missing skills
+  var _hardReq = [];
+  var _closeable = [];
+  var _reframeable = [];
+  var _uncategorized = [];
+  _missingSkillsDetail.forEach(function(item) {
+    if (typeof item === 'object' && item.category) {
+      if (item.category === 'hard_requirement') _hardReq.push(item);
+      else if (item.category === 'closeable') _closeable.push(item);
+      else if (item.category === 'reframeable') _reframeable.push(item);
+      else _uncategorized.push(item);
+    } else {
+      _uncategorized.push({ skill: typeof item === 'string' ? item : (item.skill || ''), category: 'unknown' });
+    }
+  });
+  // Fallback: old format
+  if (_missingSkillsDetail.length === 0) {
+    if (_skillGaps.hard_requirement) _hardReq = _skillGaps.hard_requirement.map(function(s) { return { skill: s, category: 'hard_requirement' }; });
+    if (_skillGaps.closeable) _closeable = _skillGaps.closeable.map(function(s) { return { skill: s, category: 'closeable' }; });
+    if (_skillGaps.reframeable) _reframeable = _skillGaps.reframeable.map(function(s) { return { skill: s, category: 'reframeable' }; });
+    if (_breakdown.missing_skills) _uncategorized = _breakdown.missing_skills.map(function(s) { return { skill: s, category: 'unknown' }; });
+  }
+
+  // Score components
+  var _overallScore = _score ? Math.round(_score.overall_score || 0) : null;
+  var _semanticScore = _score ? Math.round(_score.semantic_score || 0) : null;
+  var _keywordScore = _score ? Math.round(_score.keyword_score || 0) : null;
+  var _roleScore = _score ? Math.round(_score.role_alignment_score || 0) : null;
+  var _locationScore = _score ? Math.round(_score.location_score || 0) : null;
+
+  // Source label
+  var _sourceLabel = 'Source';
+  if (_job.source === 'seek') _sourceLabel = 'Seek';
+  else if (_job.source === 'linkedin') _sourceLabel = 'LinkedIn';
+  else if (_job.source === 'apsjobs') _sourceLabel = 'APSJobs';
+  else if (_job.source) _sourceLabel = _job.source;
+%>
+
+<section style="max-width: 900px; margin: 0 auto; padding: 24px 16px 48px;">
+
+  <!-- Back link -->
+  <a href="/jobs" style="display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-secondary, #4B5563); text-decoration: none; margin-bottom: 16px;">
+    &larr; <%= _t('jobs.detail.backToList', 'Back to listings') %>
+  </a>
+
+  <!-- Two-column layout: Main + Sidebar -->
+  <div style="display: flex; gap: 24px; align-items: flex-start;">
+
+    <!-- Main content column -->
+    <div style="flex: 1; min-width: 0;">
+
+      <!-- Job Header -->
+      <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 24px; margin-bottom: 20px;">
+        <h1 style="font-size: 28px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; color: var(--text, #1A1D23); margin-bottom: 8px;">
+          <%= _job.title %>
+        </h1>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary, #4B5563); margin-bottom: 16px;">
+          <span style="font-weight: 500;"><%= _job.company_name || _t('jobs.detail.unknownCompany', 'Unknown company') %></span>
+          <% if (_job.location) { %>
+            <span style="color: var(--border-subtle, #E2E6EA);" aria-hidden="true">|</span>
+            <span><%= _job.location %></span>
+          <% } %>
+          <% if (_job.source) { %>
+            <span style="color: var(--border-subtle, #E2E6EA);" aria-hidden="true">|</span>
+            <span class="tag tag-<%= _job.source.toLowerCase().replace(/\s/g, '') %>"><%= _sourceLabel %></span>
+          <% } %>
+          <% if (_job.work_type) { %>
+            <span style="color: var(--border-subtle, #E2E6EA);" aria-hidden="true">|</span>
+            <span><%= _job.work_type %></span>
+          <% } %>
+          <% if (_job.salary) { %>
+            <span style="color: var(--border-subtle, #E2E6EA);" aria-hidden="true">|</span>
+            <span><%= _job.salary %></span>
+          <% } %>
+        </div>
+
+        <!-- Metadata badges -->
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+          <% if (_job.visa_eligibility) { %>
+            <%
+              var visaBadgeClass = 'tag';
+              if (_job.visa_eligibility === 'visa_holders_welcome') visaBadgeClass = 'tag tag-visa-welcome';
+              else if (_job.visa_eligibility === 'pr_required') visaBadgeClass = 'tag tag-visa-pr';
+              else if (_job.visa_eligibility === 'citizens_only') visaBadgeClass = 'tag tag-visa-citizens';
+            %>
+            <span class="<%= visaBadgeClass %>"><%= _job.visa_eligibility.replace(/_/g, ' ') %></span>
+          <% } %>
+          <% if (_job.aps_classification) { %>
+            <%- include('../partials/aps-badge', { classification: _job.aps_classification }) %>
+          <% } %>
+          <% if (_job.security_clearance && _job.security_clearance !== 'none') { %>
+            <span class="tag" style="background: #fef2f2; color: #991b1b; border-color: #fecaca;"><%= _job.security_clearance %></span>
+          <% } %>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted, #6B7280);">
+          <% if (_job.posted_at) { %>
+            <span><%= _t('jobs.detail.posted', 'Posted') %>: <%= _job.posted_at %></span>
+          <% } %>
+          <% if (_job.closes_at) { %>
+            <span style="color: var(--border-subtle, #E2E6EA);" aria-hidden="true">|</span>
+            <span><%= _t('jobs.detail.closes', 'Closes') %>: <%= _job.closes_at %></span>
           <% } %>
         </div>
       </div>
 
-      <div class="tab-pane" data-tab-id="tab-fit">
-        <div class="section">
-          <h2 class="section-title"><%= t('jobs.detail.fit.title') %></h2>
-          <% if (!score) { %>
-          <p class="muted"><%= t('jobs.detail.fit.notCalculated') %></p>
-          <% } else { 
-            const overall = score.overall_score;
-          %>
-          <div class="score-block fit-score detail-fit-layout">
-            <div class="score-main">
-              <div class="score-circle score-circle-large">
-                <% const overallRounded = overall != null ? Math.round(overall) : null; %>
-                <% const overallCircle = overallRounded != null ? Math.max(5, Math.min(100, overallRounded)) : 0; %>
-                <% let overallClass = 'score-low'; %>
-                <% if (overallRounded !== null) { %>
-                  <% if (overallRounded > 70) overallClass = 'score-high'; else if (overallRounded >= 50) overallClass = 'score-mid'; %>
+      <!-- Large Score Indicator (if authenticated and scored) -->
+      <% if (_user && _overallScore !== null) { %>
+      <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 24px;">
+        <%- include('../partials/score-indicator', { score: _overallScore, size: 'large' }) %>
+        <div style="display: flex; flex-wrap: wrap; gap: 16px; flex: 1;">
+          <% var scoreItems = [
+            { label: _t('jobs.detail.match.semantic', 'Semantic (40%)'), val: _semanticScore },
+            { label: _t('jobs.detail.match.keyword', 'Keyword (30%)'), val: _keywordScore },
+            { label: _t('jobs.detail.match.role', 'Role (20%)'), val: _roleScore },
+            { label: _t('jobs.detail.match.location', 'Location (10%)'), val: _locationScore }
+          ]; %>
+          <% scoreItems.forEach(function(item) { if (item.val !== null) { %>
+          <div style="flex: 1; min-width: 120px;">
+            <div style="font-size: 12px; color: var(--text-muted, #6B7280); margin-bottom: 4px;"><%= item.label %></div>
+            <div style="background: var(--bg-subtle, #F1F3F5); border-radius: 6px; height: 8px; overflow: hidden;">
+              <div style="height: 100%; width: <%= item.val %>%; background: var(--accent-secondary, #0891B2); border-radius: 6px;"></div>
+            </div>
+            <div style="font-size: 12px; font-weight: 500; color: var(--text-secondary, #4B5563); margin-top: 2px;"><%= item.val %>%</div>
+          </div>
+          <% } }); %>
+        </div>
+      </div>
+      <% } %>
+
+      <!-- Tabs -->
+      <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; overflow: hidden;">
+
+        <!-- Tab bar -->
+        <div class="tabs" data-tabs-root="job-detail-tabs"
+             style="display: flex; border-bottom: 1px solid var(--border-subtle, #E2E6EA); background: var(--bg-subtle, #F1F3F5); overflow-x: auto;">
+          <button class="tab-btn active" type="button" data-tab-target="tab-overview"
+                  style="flex: 1; padding: 12px 16px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; white-space: nowrap;">
+            <%= _t('jobs.detail.tabs.overview', 'Overview') %>
+          </button>
+          <button class="tab-btn" type="button" data-tab-target="tab-match"
+                  style="flex: 1; padding: 12px 16px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; white-space: nowrap;">
+            <%= _t('jobs.detail.tabs.matchAnalysis', 'Match Analysis') %>
+          </button>
+          <button class="tab-btn" type="button" data-tab-target="tab-cover"
+                  style="flex: 1; padding: 12px 16px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; white-space: nowrap;">
+            <%= _t('jobs.detail.tabs.coverLetter', 'Cover Letter') %>
+          </button>
+          <button class="tab-btn" type="button" data-tab-target="tab-company"
+                  style="flex: 1; padding: 12px 16px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; white-space: nowrap;">
+            <%= _t('jobs.detail.tabs.company', 'Company') %>
+          </button>
+        </div>
+
+        <!-- Tab content -->
+        <div id="job-detail-tabs" class="tab-content tab-content-root" style="padding: 24px;">
+
+          <!-- Overview Tab -->
+          <div class="tab-pane active" data-tab-id="tab-overview">
+            <div style="margin-bottom: 16px;">
+              <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; font-size: 13px; color: var(--text-muted, #6B7280);">
+                <% if (_job.source) { %>
+                  <span><%= _t('jobs.detail.overview.source', 'Source') %>: <%= _sourceLabel %></span>
                 <% } %>
-                <svg
-                  class="progress-ring"
-                  viewBox="0 0 36 36"
-                  aria-hidden="true"
-                  focusable="false"
-                >
-                  <circle class="progress-ring-bg" cx="18" cy="18" r="15"></circle>
-                  <circle
-                    class="progress-ring-value <%= overallClass %>"
-                    cx="18"
-                    cy="18"
-                    r="15"
-                    stroke-dasharray="100 100"
-                    stroke-dashoffset="<%= 100 - overallCircle %>"
-                  ></circle>
-                  <text x="18" y="20.5" class="progress-ring-text">
-                    <%= overallRounded != null ? overallRounded.toFixed(0) : '–' %>
-                  </text>
-                </svg>
-                <div class="score-circle-meta">
-                  <span class="score-circle-label"><%= t('jobs.detail.fit.overallLabel') %></span>
-                  <span
-                    class="score-value"
-                    data-score="<%= overall %>"
-                  ><%= overall.toFixed(1) %>%</span>
+                <% if (_job.posted_at) { %>
+                  <span style="color: var(--border-subtle, #E2E6EA);" aria-hidden="true">|</span>
+                  <span><%= _t('jobs.detail.overview.posted', 'Posted') %>: <%= _job.posted_at %></span>
+                <% } %>
+                <% if (_job.closes_at) { %>
+                  <span style="color: var(--border-subtle, #E2E6EA);" aria-hidden="true">|</span>
+                  <span><%= _t('jobs.detail.overview.closes', 'Closes') %>: <%= _job.closes_at %></span>
+                <% } %>
+                <% if (_job.work_type) { %>
+                  <span style="color: var(--border-subtle, #E2E6EA);" aria-hidden="true">|</span>
+                  <span><%= _job.work_type %></span>
+                <% } %>
+                <% if (_job.salary) { %>
+                  <span style="color: var(--border-subtle, #E2E6EA);" aria-hidden="true">|</span>
+                  <span><%= _job.salary %></span>
+                <% } %>
+              </div>
+            </div>
+
+            <% if (_job.description) { %>
+              <div class="job-description" style="font-size: 14px; line-height: 1.6; color: var(--text, #1A1D23);">
+                <%- _job.description %>
+              </div>
+            <% } else { %>
+              <p style="color: var(--text-muted, #6B7280);"><%= _t('jobs.detail.overview.noDescription', 'No description available.') %></p>
+            <% } %>
+
+            <% if (_job.url) { %>
+              <p style="margin-top: 20px; font-size: 13px;">
+                <a href="<%= _job.url %>" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary, #2563EB);">
+                  <%= _t('jobs.detail.overview.viewOriginal', 'View original on') %> <%= _sourceLabel %> &rarr;
+                </a>
+              </p>
+            <% } %>
+          </div>
+
+          <!-- Match Analysis Tab (Lazy-loaded via AJAX) -->
+          <div class="tab-pane" data-tab-id="tab-match">
+            <% if (!_user) { %>
+              <div style="text-align: center; padding: 32px 16px;">
+                <p style="color: var(--text-secondary, #4B5563); margin-bottom: 12px;">
+                  <%= _t('jobs.detail.match.signIn', 'Sign in and upload your resume to see how you match this role.') %>
+                </p>
+                <a href="/auth/login?redirect=/jobs/<%= _job.id %>" class="btn btn-primary btn-sm">
+                  <%= _t('jobs.detail.match.signInBtn', 'Sign In') %>
+                </a>
+              </div>
+            <% } else if (!_hasResume) { %>
+              <div style="text-align: center; padding: 32px 16px;">
+                <p style="color: var(--text-secondary, #4B5563); margin-bottom: 12px;">
+                  <%= _t('jobs.detail.match.uploadResume', 'Upload your resume to see how you match this role.') %>
+                </p>
+                <a href="/resumes" class="btn btn-primary btn-sm">
+                  <%= _t('jobs.detail.match.uploadResumeBtn', 'Upload Resume') %>
+                </a>
+              </div>
+            <% } else if (!_score) { %>
+              <!-- Lazy load container — fetches score via AJAX -->
+              <div id="match-tab-content" style="text-align: center; padding: 32px 16px;">
+                <div id="match-tab-loading">
+                  <div class="skeleton-pulse" style="width: 60%; height: 16px; margin: 0 auto 12px; border-radius: 4px; background: var(--bg-subtle, #F1F3F5);"></div>
+                  <p style="color: var(--text-secondary, #4B5563); font-size: 13px;">Loading match analysis...</p>
+                </div>
+                <div id="match-tab-empty" style="display: none;">
+                  <p style="color: var(--text-secondary, #4B5563);">
+                    <%= _t('jobs.detail.match.notScored', 'Match scoring is in progress or has not been run yet. Check back soon.') %>
+                  </p>
+                </div>
+                <div id="match-tab-result" style="display: none; text-align: left;"></div>
+              </div>
+            <% } else { %>
+              <!-- Score breakdown bars -->
+              <h3 style="font-size: 17px; font-weight: 500; margin-bottom: 16px; color: var(--text, #1A1D23);">
+                <%= _t('jobs.detail.match.breakdownTitle', 'Score Breakdown') %>
+              </h3>
+              <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
+                <% var breakdownItems = [
+                  { label: _t('jobs.detail.match.semantic', 'Semantic Similarity (40%)'), val: _semanticScore },
+                  { label: _t('jobs.detail.match.keyword', 'Keyword Match (30%)'), val: _keywordScore },
+                  { label: _t('jobs.detail.match.role', 'Role-Title Alignment (20%)'), val: _roleScore },
+                  { label: _t('jobs.detail.match.location', 'Location Preference (10%)'), val: _locationScore }
+                ]; %>
+                <% breakdownItems.forEach(function(item) { if (item.val !== null) { %>
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary, #4B5563); margin-bottom: 4px;">
+                    <span><%= item.label %></span>
+                    <span style="font-weight: 500;"><%= item.val %>%</span>
+                  </div>
+                  <div style="background: var(--bg-subtle, #F1F3F5); border-radius: 6px; height: 8px; overflow: hidden;">
+                    <div class="score-breakdown-bar" data-target-width="<%= item.val %>" style="height: 100%; width: 0%;"></div>
+                  </div>
+                </div>
+                <% } }); %>
+              </div>
+
+              <!-- Matched skills -->
+              <% if (_matchedSkills.length > 0) { %>
+              <div style="margin-bottom: 16px;">
+                <h4 style="font-size: 13px; font-weight: 500; color: var(--text-secondary, #4B5563); margin-bottom: 8px;">
+                  <%= _t('jobs.detail.match.matchedSkills', 'Matched Skills') %>
+                </h4>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                  <% _matchedSkills.forEach(function(skill) { %>
+                    <span style="display: inline-block; padding: 4px 10px; font-size: 12px; border-radius: 20px; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;"><%= typeof skill === 'object' ? skill.name || skill.skill : skill %></span>
+                  <% }); %>
                 </div>
               </div>
+              <% } %>
+
+              <!-- Hard Requirements -->
+              <% if (_hardReq.length > 0) { %>
+              <div style="margin-bottom: 12px;">
+                <h4 style="font-size: 13px; font-weight: 500; color: #991b1b; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                  <span aria-hidden="true" style="font-size: 14px;">&#128721;</span>
+                  <%= _t('jobs.detail.match.hardRequirementTitle', 'Requirements you may not meet') %>
+                </h4>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <% _hardReq.forEach(function(item) { %>
+                    <div style="padding: 8px 12px; font-size: 13px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca;">
+                      <span style="color: #DC2626; font-weight: 500;"><%= item.skill %></span>
+                      <% if (item.suggestion) { %>
+                        <p style="margin: 4px 0 0; font-size: 12px; color: #991b1b;"><%= item.suggestion %></p>
+                      <% } %>
+                    </div>
+                  <% }); %>
+                </div>
+              </div>
+              <% } %>
+
+              <!-- Closeable Gaps -->
+              <% if (_closeable.length > 0) { %>
+              <div style="margin-bottom: 12px;">
+                <h4 style="font-size: 13px; font-weight: 500; color: #92400e; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                  <span aria-hidden="true" style="font-size: 14px;">&#128295;</span>
+                  <%= _t('jobs.detail.match.closeableTitle', 'Skills you can develop') %>
+                </h4>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <% _closeable.forEach(function(item) { %>
+                    <div style="padding: 8px 12px; font-size: 13px; border-radius: 8px; background: #fffbeb; border: 1px solid #fde68a;">
+                      <span style="color: #D97706; font-weight: 500;"><%= item.skill %></span>
+                      <% if (item.suggestion) { %>
+                        <p style="margin: 4px 0 0; font-size: 12px; color: #92400e;"><%= item.suggestion %></p>
+                      <% } %>
+                    </div>
+                  <% }); %>
+                </div>
+              </div>
+              <% } %>
+
+              <!-- Reframeable -->
+              <% if (_reframeable.length > 0) { %>
+              <div style="margin-bottom: 12px;">
+                <h4 style="font-size: 13px; font-weight: 500; color: #1e40af; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                  <span aria-hidden="true" style="font-size: 14px;">&#8599;</span>
+                  <%= _t('jobs.detail.match.reframeableTitle', 'Experience you can reframe') %>
+                </h4>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <% _reframeable.forEach(function(item) { %>
+                    <div style="padding: 8px 12px; font-size: 13px; border-radius: 8px; background: #eff6ff; border: 1px solid #bfdbfe;">
+                      <span style="color: #2563EB; font-weight: 500;"><%= item.skill %></span>
+                      <% if (item.suggestion) { %>
+                        <p style="margin: 4px 0 0; font-size: 12px; color: #1e40af;"><%= item.suggestion %></p>
+                      <% } %>
+                    </div>
+                  <% }); %>
+                </div>
+              </div>
+              <% } %>
+
+              <!-- Uncategorized fallback -->
+              <% if (_uncategorized.length > 0 && _hardReq.length === 0 && _closeable.length === 0 && _reframeable.length === 0) { %>
+              <div style="margin-bottom: 12px;">
+                <h4 style="font-size: 13px; font-weight: 500; color: var(--text-secondary, #4B5563); margin-bottom: 8px;">
+                  <%= _t('jobs.detail.match.missingSkills', 'Missing Skills') %>
+                </h4>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                  <% _uncategorized.forEach(function(item) { %>
+                    <span style="display: inline-block; padding: 4px 10px; font-size: 12px; border-radius: 20px; background: #fffbeb; color: #D97706; border: 1px solid #fde68a;"><%= item.skill %></span>
+                  <% }); %>
+                </div>
+              </div>
+              <% } %>
+
+              <!-- Score Feedback -->
+              <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-subtle, #E2E6EA);">
+                <h4 style="font-size: 13px; font-weight: 500; color: var(--text-secondary, #4B5563); margin-bottom: 8px;">
+                  <%= _t('jobs.detail.match.feedbackTitle', 'How accurate is this score?') %>
+                </h4>
+                <% if (_scoreFeedback) { %>
+                  <p style="font-size: 13px; color: var(--text-muted, #6B7280);">
+                    <%= _t('jobs.detail.match.feedbackThanks', 'Thanks for your feedback!') %>
+                  </p>
+                <% } else { %>
+                  <div style="display: flex; flex-wrap: wrap; gap: 8px;" id="score-feedback-container" data-job-id="<%= _job.id %>">
+                    <button type="button" class="btn btn-ghost btn-sm score-feedback-btn" data-feedback="helpful">
+                      &#128077; Helpful
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-sm score-feedback-btn" data-feedback="too_high">
+                      &#8593; Too High
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-sm score-feedback-btn" data-feedback="too_low">
+                      &#8595; Too Low
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-sm score-feedback-btn" data-feedback="irrelevant">
+                      &#10006; Irrelevant
+                    </button>
+                  </div>
+                  <div id="score-feedback-comment" style="display: none; margin-top: 8px;">
+                    <textarea id="score-feedback-comment-input" rows="2" placeholder="Optional: add a comment..."
+                              style="width: 100%; padding: 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 6px; font-size: 13px; resize: vertical;"></textarea>
+                    <button type="button" class="btn btn-primary btn-sm" id="score-feedback-submit" style="margin-top: 4px;">
+                      Submit Feedback
+                    </button>
+                  </div>
+                <% } %>
+              </div>
+            <% } %>
+          </div>
+
+          <!-- Cover Letter Tab -->
+          <div class="tab-pane" data-tab-id="tab-cover">
+            <% if (!_user) { %>
+              <div style="text-align: center; padding: 32px 16px;">
+                <p style="color: var(--text-secondary, #4B5563); margin-bottom: 12px;">
+                  <%= _t('jobs.detail.cover.signIn', 'Sign in to generate a tailored cover letter for this role.') %>
+                </p>
+                <a href="/auth/login?redirect=/jobs/<%= _job.id %>" class="btn btn-primary btn-sm">
+                  <%= _t('jobs.detail.cover.signInBtn', 'Sign In') %>
+                </a>
+              </div>
+            <% } else if (!_hasResume) { %>
+              <div style="text-align: center; padding: 32px 16px;">
+                <p style="color: var(--text-secondary, #4B5563); margin-bottom: 12px;">
+                  <%= _t('jobs.detail.match.uploadResume', 'Upload your resume to generate cover letters.') %>
+                </p>
+                <a href="/resumes" class="btn btn-primary btn-sm">
+                  <%= _t('jobs.detail.match.uploadResumeBtn', 'Upload Resume') %>
+                </a>
+              </div>
+            <% } else { %>
+              <!-- Mode selector (Standard / APS) -->
+              <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <label style="font-size: 12px; font-weight: 500; color: var(--text-secondary, #4B5563);">Mode:</label>
+                  <select id="cover-letter-mode" style="font-size: 13px; padding: 4px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 6px; background: var(--bg-elevated, #fff); color: var(--text, #1A1D23);">
+                    <option value="standard">Standard Cover Letter</option>
+                    <% if (_isAps) { %>
+                      <option value="aps_selection_criteria">APS Selection Criteria</option>
+                    <% } %>
+                  </select>
+                </div>
+                <% if (_isAps) { %>
+                  <span style="display: inline-block; padding: 3px 8px; font-size: 11px; border-radius: 4px; background: #eff6ff; color: #2563EB; border: 1px solid #bfdbfe; font-weight: 500;">
+                    APS Role Detected
+                  </span>
+                <% } %>
+              </div>
+
+              <% if (!_coverLetter) { %>
+                <div style="text-align: center; padding: 32px 16px;" id="cover-letter-empty">
+                  <p style="color: var(--text-secondary, #4B5563); margin-bottom: 12px;">
+                    <%= _t('jobs.detail.cover.empty', 'No cover letter has been generated yet for this role.') %>
+                  </p>
+                  <button type="button" class="btn btn-primary btn-sm" id="generate-cover-letter-btn" data-job-id="<%= _job.id %>">
+                    <%= _t('jobs.detail.cover.generate', 'Generate Cover Letter') %>
+                  </button>
+                </div>
+              <% } else { %>
+                <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;" id="cover-letter-toolbar">
+                  <span style="font-size: 12px; color: var(--text-muted, #6B7280);">
+                    <%= _t('jobs.detail.cover.draftNotice', 'This is an AI-generated draft. Review and edit before submitting.') %>
+                  </span>
+                  <div style="display: flex; gap: 6px;">
+                    <button type="button" class="btn btn-ghost btn-sm" id="regenerate-cover-letter-btn" data-job-id="<%= _job.id %>">
+                      Regenerate
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="copy-cover-letter-btn">
+                      <%= _t('jobs.detail.cover.copy', 'Copy') %>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="download-cover-letter-btn">
+                      Download
+                    </button>
+                  </div>
+                </div>
+                <div style="background: var(--bg-subtle, #F1F3F5); border-radius: 8px; padding: 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; color: var(--text, #1A1D23);"
+                     id="cover-letter-content"
+                     contenteditable="true"
+                     data-cover-letter-id="<%= _coverLetter.id %>">
+<%= _coverLetter.user_edited_content || _coverLetter.content %>
+                </div>
+              <% } %>
+
+              <!-- Loading indicator (hidden by default) -->
+              <div style="text-align: center; padding: 32px 16px; display: none;" id="cover-letter-loading">
+                <p style="color: var(--text-secondary, #4B5563);">Generating cover letter... This may take a moment.</p>
+              </div>
+            <% } %>
+          </div>
+
+          <!-- Company Tab -->
+          <div class="tab-pane" data-tab-id="tab-company">
+            <div id="company-content">
+              <% if (!_company) { %>
+                <div style="text-align: center; padding: 32px 16px;" id="company-empty">
+                  <p style="color: var(--text-secondary, #4B5563); margin-bottom: 12px;">
+                    <%= _t('jobs.detail.company.empty', 'Company information not yet available for this listing.') %>
+                  </p>
+                  <% if (_user && _job.company_name) { %>
+                    <button type="button" class="btn btn-primary btn-sm" id="generate-company-research-btn" data-job-id="<%= _job.id %>">
+                      Generate Company Research
+                    </button>
+                  <% } %>
+                </div>
+              <% } else { %>
+                <div style="display: flex; flex-direction: column; gap: 12px;" id="company-data">
+                  <h3 style="font-size: 17px; font-weight: 500; color: var(--text, #1A1D23);" id="company-name"><%= _company.name %></h3>
+                  <% if (_company.industry) { %>
+                    <div style="font-size: 13px; color: var(--text-secondary, #4B5563);">
+                      <span style="font-weight: 500;"><%= _t('jobs.detail.company.industry', 'Industry') %>:</span>
+                      <span id="company-industry"><%= _company.industry %></span>
+                    </div>
+                  <% } %>
+                  <% if (_company.size) { %>
+                    <div style="font-size: 13px; color: var(--text-secondary, #4B5563);">
+                      <span style="font-weight: 500;"><%= _t('jobs.detail.company.size', 'Size') %>:</span>
+                      <span id="company-size"><%= _company.size %></span>
+                    </div>
+                  <% } %>
+                  <% if (_company.description) { %>
+                    <p style="font-size: 14px; line-height: 1.6; color: var(--text, #1A1D23);" id="company-description"><%= _company.description %></p>
+                  <% } %>
+                  <% if (_company.website) { %>
+                    <a href="<%= _company.website %>" target="_blank" rel="noopener noreferrer"
+                       style="font-size: 13px; color: var(--accent-primary, #2563EB);" id="company-website">
+                      <%= _company.website %> &rarr;
+                    </a>
+                  <% } %>
+                </div>
+              <% } %>
             </div>
-            <div class="score-breakdown detail-list">
-              <div class="detail-item">
-                <span class="muted"><%= t('jobs.detail.fit.keywordScore') %></span>
-                <span><%= score.keyword_score.toFixed(1) %>%</span>
-              </div>
-              <div class="detail-item">
-                <span class="muted"><%= t('jobs.detail.fit.embeddingScore') %></span>
-                <span>
-                  <%= score.embedding_score != null
-                    ? score.embedding_score.toFixed(1) + '%'
-                    : t('jobs.detail.fit.embeddingScore.disabled') %>
-                </span>
-              </div>
+            <!-- Company research loading (hidden by default) -->
+            <div style="text-align: center; padding: 32px 16px; display: none;" id="company-research-loading">
+              <p style="color: var(--text-secondary, #4B5563);">Researching company... This may take a moment.</p>
             </div>
           </div>
 
-          <div class="chips-row">
-            <span class="chip">
-              <%= t('jobs.detail.fit.matchedKeywords') %>
-              <%= (breakdown.matched_keywords || []).join(locale === 'en' ? ', ' : '，') || t('jobs.detail.fit.matchedKeywords.empty') %>
-            </span>
-          </div>
-          <% } %>
-        </div>
-      </div>
-
-      <div class="tab-pane" data-tab-id="tab-company">
-        <div class="section">
-          <h2 class="section-title"><%= t('jobs.detail.company.title') %></h2>
-          <% if (!company) { %>
-          <p class="muted"><%= t('jobs.detail.company.empty') %></p>
-          <% } else { %>
-          <p class="muted">
-            <%= company.website || t('jobs.detail.company.website.empty') %>
-          </p>
-          <p>
-            <%= company.description || t('jobs.detail.company.description.empty') %>
-          </p>
-          <% } %>
-        </div>
-      </div>
-
-      <div class="tab-pane" data-tab-id="tab-cover">
-        <div class="section">
-          <h2 class="section-title"><%= t('jobs.detail.coverLetter.title') %></h2>
-          <% if (!coverLetter) { %>
-          <p class="muted"><%= t('jobs.detail.coverLetter.empty') %></p>
-          <% } else { %>
-          <pre class="cover-letter-content"><%= coverLetter.content %></pre>
-          <% } %>
         </div>
       </div>
     </div>
-  </section>
+
+    <!-- Sidebar (desktop) -->
+    <aside style="width: 320px; flex-shrink: 0;" class="job-detail-sidebar">
+      <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px; position: sticky; top: 80px;">
+
+        <!-- Application controls -->
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
+          <% if (_user && _application) { %>
+            <span style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; font-size: 12px; font-weight: 500; border-radius: 6px; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;"
+                  id="application-status-badge" data-app-id="<%= _application.id %>">
+              Tracked: <%= _application.status.charAt(0).toUpperCase() + _application.status.slice(1) %>
+            </span>
+            <% if (_application.status === 'saved') { %>
+              <button type="button" class="btn btn-primary btn-sm" id="mark-applied-btn"
+                      data-app-id="<%= _application.id %>" data-job-id="<%= _job.id %>" style="width: 100%;">
+                Mark as Applied
+              </button>
+            <% } %>
+          <% } else if (_user) { %>
+            <button type="button" class="btn btn-ghost btn-sm" id="save-job-btn" data-job-id="<%= _job.id %>" style="width: 100%;">
+              <%= _t('jobs.detail.save', 'Save Job') %>
+            </button>
+          <% } %>
+          <% if (_job.url) { %>
+            <a href="<%= _job.url %>" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="width: 100%; text-align: center;">
+              <%= _t('jobs.detail.applyOnSource', 'Apply on') %> <%= _sourceLabel %>
+            </a>
+          <% } %>
+        </div>
+
+        <!-- Duplicate Sources -->
+        <% if (_duplicateSources.length > 0) { %>
+        <div style="margin-bottom: 16px; padding-top: 12px; border-top: 1px solid var(--border-subtle, #E2E6EA);">
+          <h4 style="font-size: 12px; font-weight: 500; color: var(--text-muted, #6B7280); margin-bottom: 8px;">Also listed on:</h4>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <% _duplicateSources.forEach(function(dup) { %>
+              <a href="<%= dup.url %>" target="_blank" rel="noopener noreferrer"
+                 style="font-size: 13px; color: var(--accent-primary, #2563EB); display: flex; align-items: center; gap: 4px;">
+                <span class="tag tag-<%= (dup.source || '').toLowerCase() %>" style="font-size: 11px;"><%= dup.source %></span>
+                View &rarr;
+              </a>
+            <% }); %>
+          </div>
+        </div>
+        <% } %>
+
+        <!-- Metadata summary -->
+        <div style="border-top: 1px solid var(--border-subtle, #E2E6EA); padding-top: 12px; font-size: 13px; color: var(--text-secondary, #4B5563);">
+          <% if (_job.work_type) { %>
+            <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span>Work Type</span><span style="font-weight: 500;"><%= _job.work_type %></span></div>
+          <% } %>
+          <% if (_job.salary) { %>
+            <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span>Salary</span><span style="font-weight: 500;"><%= _job.salary %></span></div>
+          <% } %>
+          <% if (_job.location) { %>
+            <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span>Location</span><span style="font-weight: 500;"><%= _job.location %></span></div>
+          <% } %>
+          <% if (_job.source) { %>
+            <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span>Source</span><span style="font-weight: 500;"><%= _sourceLabel %></span></div>
+          <% } %>
+        </div>
+      </div>
+    </aside>
+  </div>
+
 </section>
+
+<style>
+@media (max-width: 768px) {
+  .job-detail-sidebar {
+    display: none;
+  }
+}
+</style>
+
+<script>
+(function() {
+  var jobId = '<%= _job.id %>';
+
+  // ── Lazy-load Match tab score via AJAX ──
+  var matchLoading = document.getElementById('match-tab-loading');
+  var matchEmpty = document.getElementById('match-tab-empty');
+  var matchResult = document.getElementById('match-tab-result');
+  if (matchLoading) {
+    fetch('/api/jobs/' + jobId + '/score')
+      .then(function(res) {
+        if (res.status === 404) return null;
+        if (!res.ok) throw new Error('Failed to load score');
+        return res.json();
+      })
+      .then(function(data) {
+        matchLoading.style.display = 'none';
+        if (!data || !data.score) {
+          matchEmpty.style.display = 'block';
+          return;
+        }
+        var s = data.score;
+        var bd = s.breakdown_json || {};
+        var html = '';
+        // Score breakdown bars
+        html += '<h3 style="font-size: 17px; font-weight: 500; margin-bottom: 16px; color: var(--text, #1A1D23);">Score Breakdown</h3>';
+        html += '<div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">';
+        var items = [
+          { label: 'Semantic Similarity (40%)', val: s.semantic_score },
+          { label: 'Keyword Match (30%)', val: s.keyword_score },
+          { label: 'Role-Title Alignment (20%)', val: s.role_alignment_score },
+          { label: 'Location Preference (10%)', val: s.location_score }
+        ];
+        items.forEach(function(item) {
+          if (item.val != null) {
+            var v = Math.round(item.val);
+            html += '<div>';
+            html += '<div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary, #4B5563); margin-bottom: 4px;">';
+            html += '<span>' + escapeHtml(item.label) + '</span><span style="font-weight: 500;">' + v + '%</span></div>';
+            html += '<div style="background: var(--bg-subtle, #F1F3F5); border-radius: 6px; height: 8px; overflow: hidden;">';
+            html += '<div style="height: 100%; width: ' + v + '%; background: var(--accent-primary, #2563EB); border-radius: 6px; transition: width 0.6s ease;"></div>';
+            html += '</div></div>';
+          }
+        });
+        html += '</div>';
+        // Matched skills
+        if (bd.matched_skills && bd.matched_skills.length > 0) {
+          html += '<h4 style="font-size: 14px; font-weight: 500; margin-bottom: 8px;">Matched Skills</h4>';
+          html += '<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;">';
+          bd.matched_skills.forEach(function(sk) { html += '<span class="tag" style="font-size: 12px;">' + escapeHtml(sk) + '</span>'; });
+          html += '</div>';
+        }
+        // Missing skills
+        if (bd.missing_skills && bd.missing_skills.length > 0) {
+          html += '<h4 style="font-size: 14px; font-weight: 500; margin-bottom: 8px;">Skill Gaps</h4>';
+          html += '<div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">';
+          bd.missing_skills.forEach(function(ms) {
+            var skill = typeof ms === 'string' ? ms : (ms.skill || '');
+            var cat = typeof ms === 'object' ? (ms.category || '') : '';
+            var suggestion = typeof ms === 'object' ? (ms.suggestion || '') : '';
+            html += '<div style="padding: 8px 12px; background: var(--bg-subtle, #F1F3F5); border-radius: 8px; font-size: 13px;">';
+            html += '<strong>' + escapeHtml(skill) + '</strong>';
+            if (cat) html += ' <span style="font-size: 11px; color: var(--text-muted, #6B7280);">(' + escapeHtml(cat) + ')</span>';
+            if (suggestion) html += '<div style="font-size: 12px; color: var(--text-secondary, #4B5563); margin-top: 4px;">' + escapeHtml(suggestion) + '</div>';
+            html += '</div>';
+          });
+          html += '</div>';
+        }
+        // Role alignment / location / visa notes
+        if (bd.role_alignment_detail) html += '<p style="font-size: 13px; color: var(--text-secondary, #4B5563); margin-bottom: 8px;"><strong>Role alignment:</strong> ' + escapeHtml(bd.role_alignment_detail) + '</p>';
+        if (bd.location_detail) html += '<p style="font-size: 13px; color: var(--text-secondary, #4B5563); margin-bottom: 8px;"><strong>Location:</strong> ' + escapeHtml(bd.location_detail) + '</p>';
+        if (bd.visa_note) html += '<p style="font-size: 13px; color: var(--text-secondary, #4B5563); margin-bottom: 8px;"><strong>Visa:</strong> ' + escapeHtml(bd.visa_note) + '</p>';
+        matchResult.innerHTML = html;
+        matchResult.style.display = 'block';
+      })
+      .catch(function() {
+        matchLoading.style.display = 'none';
+        matchEmpty.style.display = 'block';
+      });
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
+  }
+
+  // ── Save Job Button ──
+  var saveBtn = document.getElementById('save-job-btn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', function() {
+      fetch('/api/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: Number(jobId), status: 'saved' }),
+      })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data.id) {
+            saveBtn.textContent = 'Saved';
+            saveBtn.disabled = true;
+            saveBtn.style.opacity = '0.6';
+          }
+        })
+        .catch(function(err) { console.error('Failed to save job:', err); });
+    });
+  }
+
+  // ── Mark as Applied Button ──
+  var appliedBtn = document.getElementById('mark-applied-btn');
+  if (appliedBtn) {
+    appliedBtn.addEventListener('click', function() {
+      var appId = appliedBtn.getAttribute('data-app-id');
+      fetch('/api/applications/' + appId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'applied' }),
+      })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data.application) {
+            var badge = document.getElementById('application-status-badge');
+            if (badge) badge.textContent = 'Tracked: Applied';
+            appliedBtn.remove();
+          }
+        })
+        .catch(function(err) { console.error('Failed to update status:', err); });
+    });
+  }
+
+  // ── Generate Cover Letter ──
+  var modeSelect = document.getElementById('cover-letter-mode');
+
+  function generateCoverLetter() {
+    var mode = modeSelect ? modeSelect.value : 'standard';
+    var emptyEl = document.getElementById('cover-letter-empty');
+    var loadingEl = document.getElementById('cover-letter-loading');
+    var toolbarEl = document.getElementById('cover-letter-toolbar');
+    var contentEl = document.getElementById('cover-letter-content');
+
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (toolbarEl) toolbarEl.style.display = 'none';
+    if (contentEl) contentEl.style.display = 'none';
+    if (loadingEl) loadingEl.style.display = 'block';
+
+    fetch('/jobs/' + jobId + '/cover-letter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: mode, language: 'en' }),
+    })
+      .then(function(res) { return res.json().then(function(d) { return { ok: res.ok, data: d }; }); })
+      .then(function(result) {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (result.ok && result.data.content) {
+          if (!contentEl) {
+            var parent = loadingEl.parentNode;
+            var toolbar = document.createElement('div');
+            toolbar.id = 'cover-letter-toolbar';
+            toolbar.style.cssText = 'margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;';
+            toolbar.innerHTML = '<span style="font-size: 12px; color: var(--text-muted, #6B7280);">This is an AI-generated draft. Review and edit before submitting.</span>' +
+              '<div style="display: flex; gap: 6px;"><button type="button" class="btn btn-ghost btn-sm" id="regenerate-cover-letter-btn">Regenerate</button>' +
+              '<button type="button" class="btn btn-ghost btn-sm" id="copy-cover-letter-btn">Copy</button>' +
+              '<button type="button" class="btn btn-ghost btn-sm" id="download-cover-letter-btn">Download</button></div>';
+            parent.insertBefore(toolbar, loadingEl);
+
+            contentEl = document.createElement('div');
+            contentEl.id = 'cover-letter-content';
+            contentEl.setAttribute('contenteditable', 'true');
+            contentEl.style.cssText = 'background: var(--bg-subtle, #F1F3F5); border-radius: 8px; padding: 16px; font-family: "JetBrains Mono", monospace; font-size: 13px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; color: var(--text, #1A1D23);';
+            parent.insertBefore(contentEl, loadingEl);
+
+            bindCopyBtn();
+            bindRegenerateBtn();
+            bindDownloadBtn();
+            bindAutoSave();
+          } else {
+            if (toolbarEl) toolbarEl.style.display = 'flex';
+          }
+          contentEl.style.display = 'block';
+          contentEl.textContent = result.data.content;
+          if (result.data.id) contentEl.setAttribute('data-cover-letter-id', result.data.id);
+        } else {
+          if (emptyEl) {
+            emptyEl.style.display = 'block';
+            emptyEl.querySelector('p').textContent = result.data.error || 'Failed to generate cover letter.';
+          }
+        }
+      })
+      .catch(function(err) {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (emptyEl) emptyEl.style.display = 'block';
+        console.error('Cover letter generation failed:', err);
+      });
+  }
+
+  var genBtn = document.getElementById('generate-cover-letter-btn');
+  if (genBtn) genBtn.addEventListener('click', generateCoverLetter);
+
+  function bindRegenerateBtn() {
+    var regenBtn = document.getElementById('regenerate-cover-letter-btn');
+    if (regenBtn) regenBtn.addEventListener('click', generateCoverLetter);
+  }
+  bindRegenerateBtn();
+
+  // ── Copy Cover Letter ──
+  function bindCopyBtn() {
+    var copyBtn = document.getElementById('copy-cover-letter-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function() {
+        var el = document.getElementById('cover-letter-content');
+        if (el) {
+          var text = el.innerText || el.textContent;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text.trim()).then(function() {
+              copyBtn.textContent = 'Copied!';
+              setTimeout(function() { copyBtn.textContent = 'Copy'; }, 2000);
+            });
+          } else {
+            // Fallback
+            var range = document.createRange();
+            range.selectNodeContents(el);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            document.execCommand('copy');
+            sel.removeAllRanges();
+            copyBtn.textContent = 'Copied!';
+            setTimeout(function() { copyBtn.textContent = 'Copy'; }, 2000);
+          }
+        }
+      });
+    }
+  }
+  bindCopyBtn();
+
+  // ── Download Cover Letter as .txt ──
+  function bindDownloadBtn() {
+    var dlBtn = document.getElementById('download-cover-letter-btn');
+    if (dlBtn) {
+      dlBtn.addEventListener('click', function() {
+        var el = document.getElementById('cover-letter-content');
+        if (el) {
+          var text = el.innerText || el.textContent;
+          var blob = new Blob([text.trim()], { type: 'text/plain' });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = 'cover-letter.txt';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      });
+    }
+  }
+  bindDownloadBtn();
+
+  // ── Auto-save cover letter edits (debounced 1s) ──
+  var autoSaveTimer = null;
+  function bindAutoSave() {
+    var el = document.getElementById('cover-letter-content');
+    if (el && el.getAttribute('contenteditable') === 'true') {
+      el.addEventListener('input', function() {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(function() {
+          var clId = el.getAttribute('data-cover-letter-id');
+          if (!clId) return;
+          var editedContent = el.innerText || el.textContent;
+          fetch('/cover-letters/' + clId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_edited_content: editedContent.trim() }),
+          }).catch(function(err) { console.error('Auto-save failed:', err); });
+        }, 1000);
+      });
+    }
+  }
+  bindAutoSave();
+
+  // ── Company Research ──
+  var companyResearchBtn = document.getElementById('generate-company-research-btn');
+  if (companyResearchBtn) {
+    companyResearchBtn.addEventListener('click', function() {
+      var emptyEl = document.getElementById('company-empty');
+      var loadingEl = document.getElementById('company-research-loading');
+      if (emptyEl) emptyEl.style.display = 'none';
+      if (loadingEl) loadingEl.style.display = 'block';
+
+      fetch('/jobs/' + jobId + '/company-research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+        .then(function(res) { return res.json().then(function(d) { return { ok: res.ok, data: d }; }); })
+        .then(function(result) {
+          if (loadingEl) loadingEl.style.display = 'none';
+          if (result.ok && result.data.name) {
+            var container = document.getElementById('company-content');
+            var html = '<div style="display: flex; flex-direction: column; gap: 12px;" id="company-data">';
+            html += '<h3 style="font-size: 17px; font-weight: 500; color: var(--text, #1A1D23);">' + escapeHtml(result.data.name) + '</h3>';
+            if (result.data.industry) html += '<div style="font-size: 13px; color: var(--text-secondary, #4B5563);"><span style="font-weight: 500;">Industry:</span> ' + escapeHtml(result.data.industry) + '</div>';
+            if (result.data.size) html += '<div style="font-size: 13px; color: var(--text-secondary, #4B5563);"><span style="font-weight: 500;">Size:</span> ' + escapeHtml(result.data.size) + '</div>';
+            if (result.data.description) html += '<p style="font-size: 14px; line-height: 1.6; color: var(--text, #1A1D23);">' + escapeHtml(result.data.description) + '</p>';
+            if (result.data.website) html += '<a href="' + escapeHtml(result.data.website) + '" target="_blank" rel="noopener noreferrer" style="font-size: 13px; color: var(--accent-primary, #2563EB);">' + escapeHtml(result.data.website) + ' &rarr;</a>';
+            html += '</div>';
+            container.innerHTML = html;
+          } else {
+            if (emptyEl) { emptyEl.style.display = 'block'; emptyEl.querySelector('p').textContent = result.data.error || 'Company research unavailable.'; }
+          }
+        })
+        .catch(function(err) {
+          if (loadingEl) loadingEl.style.display = 'none';
+          if (emptyEl) emptyEl.style.display = 'block';
+          console.error('Company research failed:', err);
+        });
+    });
+  }
+
+
+  // ── Score Feedback ──
+  var feedbackContainer = document.getElementById('score-feedback-container');
+  var feedbackCommentDiv = document.getElementById('score-feedback-comment');
+  var selectedFeedbackType = null;
+
+  if (feedbackContainer) {
+    feedbackContainer.querySelectorAll('.score-feedback-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        selectedFeedbackType = btn.getAttribute('data-feedback');
+        if (feedbackCommentDiv) feedbackCommentDiv.style.display = 'block';
+        // Highlight selected
+        feedbackContainer.querySelectorAll('.score-feedback-btn').forEach(function(b) {
+          b.style.opacity = b === btn ? '1' : '0.5';
+        });
+      });
+    });
+
+    var submitFeedbackBtn = document.getElementById('score-feedback-submit');
+    if (submitFeedbackBtn) {
+      submitFeedbackBtn.addEventListener('click', function() {
+        if (!selectedFeedbackType) return;
+        var commentInput = document.getElementById('score-feedback-comment-input');
+        var comment = commentInput ? commentInput.value.trim() : null;
+        fetch('/jobs/' + jobId + '/score-feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ feedback_type: selectedFeedbackType, comment: comment || null }),
+        })
+          .then(function(res) { return res.json(); })
+          .then(function(data) {
+            if (data.id || data.feedback_type) {
+              feedbackContainer.innerHTML = '<p style="font-size: 13px; color: var(--text-muted, #6B7280);">Thanks for your feedback!</p>';
+              if (feedbackCommentDiv) feedbackCommentDiv.style.display = 'none';
+            }
+          })
+          .catch(function(err) { console.error('Failed to submit feedback:', err); });
+      });
+    }
+  }
+})();
+</script>

@@ -1,0 +1,103 @@
+<%
+  /**
+   * JobCard partial
+   * Expects locals: job (required), score (optional, number 0-100),
+   *   matchedSkills (optional, array of skill names), applicationStatus (optional, string)
+   * job: { id, title, company_name, location, platform, description, work_type, salary,
+   *        visa_eligibility, aps_classification, closes_at }
+   */
+  var _job = typeof job !== 'undefined' ? job : {};
+  var _score = typeof score !== 'undefined' ? score : null;
+  var _index = typeof index !== 'undefined' ? index : 0;
+  var _staggerDelay = Math.min(_index, 8) * 40;
+  var _matchedSkills = typeof matchedSkills !== 'undefined' && Array.isArray(matchedSkills) ? matchedSkills : [];
+  var _applicationStatus = typeof applicationStatus !== 'undefined' ? applicationStatus : null;
+  var _closesAt = _job.closes_at ? new Date(_job.closes_at) : null;
+  var _isExpired = _closesAt && _closesAt < new Date();
+%>
+<a
+  href="/jobs/<%= _job.id %>"
+  class="job-card"
+  style="animation-delay: <%= _staggerDelay %>ms"
+  aria-label="<%= _job.title %> at <%= _job.company_name || 'Unknown company' %>"
+>
+  <div class="job-card-header">
+    <div class="job-card-info">
+      <h3 class="job-title"><%= _job.title %></h3>
+      <div class="job-meta">
+        <span class="company-name"><%= _job.company_name || 'Unknown company' %></span>
+        <% if (_job.location) { %>
+          <span class="meta-dot" aria-hidden="true"></span>
+          <span><%= _job.location %></span>
+        <% } %>
+        <% if (_job.platform) { %>
+          <span class="meta-dot" aria-hidden="true"></span>
+          <span class="tag tag-<%= _job.platform.toLowerCase().replace(/\s/g, '') %>"><%= _job.platform %></span>
+        <% } %>
+      </div>
+    </div>
+
+    <% if (_score !== null && _score !== undefined && !isNaN(_score)) { %>
+      <%- include('./score-indicator', { score: _score, size: 'compact' }) %>
+    <% } else { %>
+      <div class="score-indicator">
+        <div class="score-ring score-ring--compact score-ring--empty">
+          <svg viewBox="0 0 36 36" width="48" height="48">
+            <circle class="score-ring-bg" cx="18" cy="18" r="15.9155" />
+            <text class="score-ring-text" x="18" y="18">?</text>
+          </svg>
+        </div>
+        <span class="score-no-data">Upload resume</span>
+      </div>
+    <% } %>
+  </div>
+
+  <% if (_matchedSkills.length > 0) { %>
+  <div class="skill-pills">
+    <% _matchedSkills.slice(0, 3).forEach(function(skill) { %>
+    <span class="skill-pill skill-pill--matched"><%= skill %></span>
+    <% }); %>
+    <% if (_matchedSkills.length > 3) { %>
+    <span class="skill-pill">+<%= _matchedSkills.length - 3 %></span>
+    <% } %>
+  </div>
+  <% } %>
+
+  <% if (_job.description) { %>
+  <p class="job-snippet"><%= _job.description.substring(0, 200) %></p>
+  <% } %>
+
+  <div class="job-card-footer">
+    <div class="job-tags">
+      <% if (_job.aps_classification) { %>
+        <%- include('./aps-badge', { classification: _job.aps_classification }) %>
+      <% } %>
+      <% if (_job.work_type) { %>
+        <span class="tag"><%= _job.work_type %></span>
+      <% } %>
+      <% if (_job.salary) { %>
+        <span class="tag"><%= _job.salary %></span>
+      <% } %>
+      <% if (_job.visa_eligibility) { %>
+        <%
+          var visaClass = 'tag';
+          if (_job.visa_eligibility === 'visa_holders_welcome') visaClass = 'tag tag-visa-welcome';
+          else if (_job.visa_eligibility === 'pr_required') visaClass = 'tag tag-visa-pr';
+          else if (_job.visa_eligibility === 'citizens_only') visaClass = 'tag tag-visa-citizens';
+        %>
+        <span class="<%= visaClass %>"><%= _job.visa_eligibility.replace(/_/g, ' ') %></span>
+      <% } %>
+    </div>
+    <div class="d-flex align-center gap-2">
+      <% if (_applicationStatus) { %>
+      <span class="job-card-status badge-<%= _applicationStatus %>"><%= _applicationStatus.charAt(0).toUpperCase() + _applicationStatus.slice(1) %></span>
+      <% } %>
+      <% if (_closesAt) { %>
+      <span class="job-card-expires<%= _isExpired ? ' job-card-expires--expired' : '' %>">
+        <%= _isExpired ? 'Expired' : 'Closes ' + _closesAt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) %>
+      </span>
+      <% } %>
+      <span class="btn btn-ghost btn-sm">View Detail</span>
+    </div>
+  </div>
+</a>

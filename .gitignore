@@ -1,4 +1,15 @@
 node_modules/
-data/
+data/*.sqlite
+data/*.sqlite-wal
+data/*.sqlite-shm
+data/*.sqlite.backup-*
+data/resumes/
+logs/
 .env
-*.db
+
+# Python scraper artifacts
+scrapers/__pycache__/
+*.pyc
+
+# Editor / agent artifacts
+.coding-agent/

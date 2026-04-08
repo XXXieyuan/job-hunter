@@ -1,268 +1,573 @@
 <% layout('layout') -%>
 
-<section
-  class="page-section admin-section"
-  id="admin-root"
-  data-admin-token="<%= typeof adminToken !== 'undefined' ? adminToken : '' %>"
->
+<section class="page-section admin-section" id="admin-root" style="max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px;">
   <div class="section-header admin-header">
-    <h1><%= t('admin.dashboard.title', '管理面板') %></h1>
-    <p class="section-subtitle">
-      <%= t(
-        'admin.dashboard.subtitle',
-        '运行分析、上传职位数据，并查看整体求职匹配统计。'
-      ) %>
-    </p>
+    <h1>Admin Dashboard</h1>
+    <p class="section-subtitle">Manage scrapers, analysis, job data, and system health.</p>
   </div>
 
-  <div class="admin-grid stats-grid">
-    <section
-      class="glass-card stat-card"
-      id="analysis-section"
-      data-i18n-triggering="<%= t('admin.analysis.status.triggering', '正在触发分析，请稍候…') %>"
-      data-i18n-started-with-id="<%= t('admin.analysis.status.startedWithId', '分析已启动，运行 ID：{runId}。请稍后刷新查看结果。') %>"
-      data-i18n-started="<%= t('admin.analysis.status.started', '分析已启动，请稍后刷新查看结果。') %>"
-      data-i18n-trigger-failed-prefix="<%= t('admin.analysis.error.triggerFailedPrefix', '触发分析失败：') %>"
-      data-i18n-network-error="<%= t('admin.analysis.error.network', '触发分析失败：网络错误或服务器不可用。') %>"
-    >
-      <h2 class="section-title"><%= t('admin.analysis.title', '运行状态') %></h2>
-      <% if (!lastRun) { %>
-      <p><%= t('admin.analysis.none', '尚未运行过分析。') %></p>
-      <% } else { %>
-      <p>
-        <%= t('admin.analysis.lastRunId', '最近一次运行 ID：') %><span class="tag"><%= lastRun.id %></span>
-      </p>
-      <p>
-        <%= t('admin.analysis.statusLabel', '状态：') %>
-        <% if (lastRun.status === 'running') { %>
-        <span class="status-pill status-running">
-          <%= t('admin.analysis.status.running', '运行中') %>
-        </span>
-        <% } else if (lastRun.status === 'completed') { %>
-        <span class="status-pill status-success">
-          <%= t('admin.analysis.status.completed', '完成') %>
-        </span>
-        <% } else { %>
-        <span class="status-pill status-failed">
-          <%= t('admin.analysis.status.failed', '失败') %>
-        </span>
-        <% } %>
-      </p>
-      <% if (lastRun.error) { %>
-      <p class="muted">
-        <%= t('admin.analysis.errorLabel', '错误信息：') %><%= lastRun.error %>
-      </p>
-      <% } %>
-      <% } %>
+  <% var _isAdmin = typeof isAdmin !== 'undefined' ? isAdmin : true; %>
+  <% if (!_isAdmin) { %>
+  <!-- Inline admin token form (shown when jh_admin_session absent) -->
+  <div style="max-width: 400px; margin: 48px auto; background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 32px;">
+    <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 8px; text-align: center;">Admin Authentication</h2>
+    <p style="font-size: 13px; color: var(--text-secondary, #4B5563); margin-bottom: 20px; text-align: center;">Enter the admin token to access the dashboard.</p>
+    <form id="admin-login-form" style="display: flex; flex-direction: column; gap: 12px;">
+      <input type="password" id="admin-token-input" class="input" placeholder="Admin token"
+             style="width: 100%; padding: 10px 12px; font-size: 14px;" autocomplete="off" required />
+      <button type="submit" class="btn btn-primary" style="width: 100%;">Sign In</button>
+      <p id="admin-login-error" style="font-size: 12px; color: #DC2626; text-align: center; display: none;"></p>
+    </form>
+  </div>
+  <script>
+  (function() {
+    var form = document.getElementById('admin-login-form');
+    var errorEl = document.getElementById('admin-login-error');
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var token = document.getElementById('admin-token-input').value;
+      if (!token) return;
+      errorEl.style.display = 'none';
+      fetch('/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token }),
+        redirect: 'follow'
+      })
+      .then(function(res) {
+        if (res.redirected) {
+          window.location.href = res.url;
+        } else if (!res.ok) {
+          return res.json().then(function(data) {
+            errorEl.textContent = (data.error && data.error.message) || 'Invalid token.';
+            errorEl.style.display = 'block';
+          });
+        } else {
+          window.location.reload();
+        }
+      })
+      .catch(function() {
+        errorEl.textContent = 'Network error. Please try again.';
+        errorEl.style.display = 'block';
+      });
+    });
+  })();
+  </script>
+  <% } else { %>
 
-      <button id="run-analysis-btn" class="btn btn-primary run-btn">
-        <%= t('admin.analysis.runButton', '运行分析') %>
-      </button>
-      <p id="run-analysis-status" class="muted small run-status"></p>
-    </section>
+  <%
+    var _jobCounts = typeof jobCounts !== 'undefined' ? jobCounts : { total: 0, withScore: 0 };
+    var _fitStats = typeof fitStats !== 'undefined' ? fitStats : { total: 0, avg: 0 };
+    var _sourceCounts = typeof sourceCounts !== 'undefined' ? sourceCounts : {};
+    var _lastRun = typeof lastRun !== 'undefined' ? lastRun : null;
+    var _scraperRuns = typeof scraperRuns !== 'undefined' ? scraperRuns : [];
+    var _userCounts = typeof userCounts !== 'undefined' ? userCounts : { total: 0, with_resume: 0 };
+    var _sourceFreshness = typeof sourceFreshness !== 'undefined' ? sourceFreshness : {};
+    var _platformHealth = typeof platformHealth !== 'undefined' ? platformHealth : {};
+    var _dbSizeMb = typeof dbSizeMb !== 'undefined' ? dbSizeMb : 0;
+    var _coverLetterCount = typeof coverLetterCount !== 'undefined' ? coverLetterCount : 0;
+  %>
 
-    <section class="glass-card stat-card">
-      <h2 class="section-title"><%= t('admin.stats.title', '数据统计') %></h2>
-      <ul class="stats-list">
-        <li>
-          <span><%= t('admin.stats.jobsTotal', '职位总数') %></span>
-          <span class="stat-value"><%= jobCounts.total %></span>
-        </li>
-        <li>
-          <span><%= t('admin.stats.jobsWithScore', '已打分职位数') %></span>
-          <span class="stat-value"><%= jobCounts.withScore %></span>
-        </li>
-        <li>
-          <span><%= t('admin.stats.fitTotal', '匹配记录总数') %></span>
-          <span class="stat-value"><%= fitStats.total %></span>
-        </li>
-        <li>
-          <span><%= t('admin.stats.fitAverage', '平均匹配度') %></span>
-          <span class="stat-value"><%= fitStats.avg.toFixed(1) %>%</span>
-        </li>
-      </ul>
-      <h3 class="mt">
-        <%= t('admin.stats.highFitPerRole', '高匹配职位数（按角色）') %>
-      </h3>
-      <ul class="stats-list">
-        <% if (!fitStats.highFitPerRole.length) { %>
-        <li>
-          <span class="muted"><%= t('admin.stats.empty', '暂无数据') %></span>
-        </li>
-        <% } else { %>
-        <% fitStats.highFitPerRole.forEach(function(r){ %>
-        <li>
-          <span><%= r.role || t('admin.stats.unknownRole', '未知角色') %></span>
-          <span><%= r.count %></span>
-        </li>
-        <% }) %>
-        <% } %>
-      </ul>
-    </section>
+  <!-- Stats Overview Panel -->
+  <div class="admin-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px;">
+    <div class="admin-stat-card" style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 16px;">
+      <span style="font-size: 12px; color: var(--text-muted, #6B7280);">Total Jobs</span>
+      <span style="display: block; font-size: 24px; font-weight: 600; color: var(--text, #1A1D23);"><%= _jobCounts.total %></span>
+      <div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px;">
+        <span class="tag tag-seek" style="font-size: 10px;">Seek: <%= _sourceCounts.seek || 0 %></span>
+        <span class="tag tag-linkedin" style="font-size: 10px;">LinkedIn: <%= _sourceCounts.linkedin || 0 %></span>
+        <span class="tag tag-apsjobs" style="font-size: 10px;">APS: <%= _sourceCounts.apsjobs || 0 %></span>
+      </div>
+    </div>
+    <div class="admin-stat-card" style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 16px;">
+      <span style="font-size: 12px; color: var(--text-muted, #6B7280);">Users</span>
+      <span style="display: block; font-size: 24px; font-weight: 600; color: var(--text, #1A1D23);"><%= _userCounts.total %></span>
+      <span style="font-size: 12px; color: var(--text-muted, #6B7280);">With resume: <%= _userCounts.with_resume %></span>
+    </div>
+    <div class="admin-stat-card" style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 16px;">
+      <span style="font-size: 12px; color: var(--text-muted, #6B7280);">Scores / Cover Letters</span>
+      <span style="display: block; font-size: 24px; font-weight: 600; color: var(--text, #1A1D23);"><%= _fitStats.total %> / <%= _coverLetterCount %></span>
+      <span style="font-size: 12px; color: var(--text-muted, #6B7280);">Avg score: <%= typeof _fitStats.avg === 'number' ? _fitStats.avg.toFixed(1) : '0' %>%</span>
+    </div>
+    <div class="admin-stat-card" style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 16px;">
+      <span style="font-size: 12px; color: var(--text-muted, #6B7280);">Database Size</span>
+      <span style="display: block; font-size: 24px; font-weight: 600; color: var(--text, #1A1D23);"><%= typeof _dbSizeMb === 'number' ? _dbSizeMb.toFixed(1) : '0' %> MB</span>
+    </div>
+  </div>
 
-    <section class="glass-card admin-section">
-      <h2 class="section-title"><%= t('admin.upload.title', '上传职位数据') %></h2>
-      <p class="muted">
-        <%= t(
-          'admin.upload.description',
-          '接受 JSON 格式，内容为职位对象数组：包含 title, company_name, description, role, url, location, salary 等字段。'
-        ) %>
-      </p>
-      <form id="upload-form">
-        <textarea
-          id="upload-json"
-          rows="8"
-          placeholder='<%= t(
-            "admin.upload.placeholder",
-            "[{\"title\":\"Senior AI Engineer\", \"company_name\":\"示例公司\", \"description\":\"...\", \"role\":\"AI Engineer\"}]"
-          ) %>'
-        ></textarea>
-        <button type="submit" class="btn btn-secondary">
-          <%= t('admin.upload.submit', '上传职位数据') %>
-        </button>
-      </form>
-      <p id="upload-status" class="muted small"></p>
-
-      <hr class="section-divider" />
-
-      <h3 class="section-title small">
-        <%= t('admin.upload.file.title', '通过文件上传职位 JSON') %>
-      </h3>
-      <p class="muted small">
-        <%= t(
-          'admin.upload.file.description',
-          '选择本地 JSON 文件上传，文件内容格式与上方文本框一致（职位数组或包含 jobs 数组的对象）。'
-        ) %>
-      </p>
-      <form
-        id="upload-file-form"
-        class="mt"
-        action="/admin/jobs/upload?token=job-hunter-admin-2026"
-        method="POST"
-        enctype="multipart/form-data"
-      >
-        <input type="file" name="jobFile" accept="application/json" />
-        <button type="submit" class="btn btn-secondary">
-          <%= t('admin.upload.file.submit', '上传职位 JSON 文件') %>
-        </button>
-      </form>
-    </section>
-
-    <section
-      class="glass-card stat-card"
-      id="scraper-section"
-      data-i18n-triggering="<%= t('admin.scraper.status.triggering', '正在触发抓取，请稍候…') %>"
-      data-i18n-started-with-id="<%= t('admin.scraper.status.startedWithId', '抓取已启动，运行 ID：{runId}。') %>"
-      data-i18n-started="<%= t('admin.scraper.status.started', '抓取已启动。') %>"
-      data-i18n-empty-runs="<%= t('admin.scraper.empty', '暂无抓取记录。') %>"
-      data-i18n-trigger-failed-prefix="<%= t('admin.scraper.error.triggerFailedPrefix', '触发抓取失败：') %>"
-      data-i18n-network-error="<%= t('admin.scraper.error.network', '触发抓取失败：网络错误或服务器不可用。') %>"
-      data-i18n-status-running="<%= t('admin.scraper.status.running', '运行中') %>"
-      data-i18n-status-queued="<%= t('admin.scraper.status.queued', '排队中') %>"
-      data-i18n-status-success="<%= t('admin.scraper.status.success', '成功') %>"
-      data-i18n-status-failure="<%= t('admin.scraper.status.failure', '失败') %>"
-      data-i18n-status-unknown="<%= t('admin.scraper.status.unknown', '未知') %>"
-    >
-      <h2 class="section-title"><%= t('admin.scraper.title', 'Scraper 控制') %></h2>
-      <p class="muted">
-        <%= t(
-          'admin.scraper.description',
-          '触发 APSJobs 抓取任务，将最新职位数据写入数据库。运行在后台执行，不会阻塞管理界面。'
-        ) %>
-      </p>
-
-      <div class="form-grid small-gap">
-        <div class="form-group">
-          <label class="small" for="scraper-keywords">
-            <%= t('admin.scraper.options.keywords', '关键字（逗号分隔）') %>
-          </label>
-          <input
-            id="scraper-keywords"
-            type="text"
-            class="input"
-            placeholder="<%= t('admin.scraper.options.keywords.placeholder', '例如：Data,Engineer') %>"
-          />
+  <!-- Platform Health Panel -->
+  <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+    <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Platform Health</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+      <% ['linkedin', 'seek', 'apsjobs'].forEach(function(src) {
+        var health = _platformHealth[src] || {};
+        var status = health.status || 'unknown';
+        var statusColor = status === 'healthy' ? '#059669' : (status === 'warning' ? '#D97706' : '#DC2626');
+        var statusBg = status === 'healthy' ? '#ecfdf5' : (status === 'warning' ? '#fffbeb' : '#fef2f2');
+        var statusBorder = status === 'healthy' ? '#a7f3d0' : (status === 'warning' ? '#fde68a' : '#fecaca');
+      %>
+      <div style="border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 8px; padding: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span style="width: 10px; height: 10px; border-radius: 50%; background: <%= statusColor %>;"></span>
+          <span style="font-size: 14px; font-weight: 500; text-transform: capitalize;"><%= src %></span>
+          <span style="padding: 2px 6px; font-size: 10px; border-radius: 4px; background: <%= statusBg %>; color: <%= statusColor %>; border: 1px solid <%= statusBorder %>;">
+            <%= status %>
+          </span>
         </div>
-        <div class="form-group">
-          <label class="small" for="scraper-region">
-            <%= t('admin.scraper.options.region', '地区/区域') %>
-          </label>
-          <input
-            id="scraper-region"
-            type="text"
-            class="input"
-            placeholder="<%= t('admin.scraper.options.region.placeholder', '例如：Canberra,ACT') %>"
-          />
-        </div>
-        <div class="form-group">
-          <label class="small" for="scraper-max-pages">
-            <%= t('admin.scraper.options.maxPages', '最大页数') %>
-          </label>
-          <input
-            id="scraper-max-pages"
-            type="number"
-            min="1"
-            step="1"
-            class="input"
-            placeholder="<%= t('admin.scraper.options.maxPages.placeholder', '例如：3') %>"
-          />
+        <% if (health.last_success) { %>
+          <div style="font-size: 11px; color: var(--text-muted, #6B7280);">Last success: <%= health.last_success %></div>
+        <% } %>
+        <% if (health.last_error) { %>
+          <div style="font-size: 11px; color: var(--text-muted, #6B7280);">Last error: <%= health.last_error %></div>
+        <% } %>
+        <% if (typeof health.error_rate === 'number') { %>
+          <div style="font-size: 11px; color: var(--text-muted, #6B7280);">Error rate: <%= (health.error_rate * 100).toFixed(1) %>%</div>
+        <% } %>
+      </div>
+      <% }); %>
+    </div>
+    <!-- Source Freshness -->
+    <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted, #6B7280);">
+      <strong>Source freshness:</strong>
+      <% ['linkedin', 'seek', 'apsjobs'].forEach(function(src) { %>
+        <span style="margin-left: 12px;"><%= src %>: <%= _sourceFreshness[src] || 'never' %></span>
+      <% }); %>
+    </div>
+  </div>
+
+  <!-- Two-column grid for controls -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 20px; margin-bottom: 20px;">
+
+    <!-- Scraper Controls -->
+    <div class="admin-card" id="scraper-section" style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px;"
+      data-i18n-triggering="Triggering scrape, please wait..."
+      data-i18n-started-with-id="Scrape started, run ID: {runId}."
+      data-i18n-started="Scrape started."
+      data-i18n-empty-runs="No scraper runs yet."
+      data-i18n-trigger-failed-prefix="Trigger failed: "
+      data-i18n-network-error="Trigger failed: Network error or server unavailable."
+      data-i18n-status-running="Running" data-i18n-status-queued="Queued"
+      data-i18n-status-success="Success" data-i18n-status-failure="Failed"
+      data-i18n-status-unknown="Unknown">
+      <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Scraper Control</h2>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 12px; color: var(--text-muted, #6B7280); display: block; margin-bottom: 4px;">Platform</label>
+        <div class="platform-selector" id="platform-selector" style="display: flex; gap: 4px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-ghost btn-sm platform-btn active" data-platform="apsjobs">APSJobs</button>
+          <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="seek">Seek</button>
+          <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="linkedin">LinkedIn</button>
+          <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="all">All</button>
         </div>
       </div>
 
-      <button id="trigger-scraper-btn" class="btn btn-secondary run-btn">
-        <%= t('admin.scraper.button.trigger', '触发 APSJobs 抓取') %>
-      </button>
-      <p id="scraper-status" class="muted small run-status"></p>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+        <div style="flex: 1; min-width: 100px;">
+          <label style="font-size: 11px; color: var(--text-muted, #6B7280);" for="scraper-keywords">Keywords</label>
+          <input id="scraper-keywords" type="text" class="input" placeholder="e.g. Data,Engineer" style="width: 100%; padding: 6px 8px; font-size: 13px;" />
+        </div>
+        <div style="flex: 1; min-width: 100px;">
+          <label style="font-size: 11px; color: var(--text-muted, #6B7280);" for="scraper-region">Region</label>
+          <input id="scraper-region" type="text" class="input" placeholder="e.g. Canberra,ACT" style="width: 100%; padding: 6px 8px; font-size: 13px;" />
+        </div>
+        <div style="width: 80px;">
+          <label style="font-size: 11px; color: var(--text-muted, #6B7280);" for="scraper-max-pages">Max Pages</label>
+          <input id="scraper-max-pages" type="number" min="1" class="input" placeholder="3" style="width: 100%; padding: 6px 8px; font-size: 13px;" />
+        </div>
+      </div>
 
-      <h3 class="mt"><%= t('admin.scraper.recentRuns', '最近抓取运行') %></h3>
-      <div class="table-wrapper">
-        <table class="table small" id="scraper-runs-table">
+      <button id="trigger-scraper-btn" class="btn btn-primary btn-sm">Trigger Scrape</button>
+      <p id="scraper-status" class="text-muted" style="font-size: 12px; margin-top: 8px;"></p>
+
+      <!-- Recent Runs Table -->
+      <h3 style="margin-top: 16px; font-size: 14px; font-weight: 500;">Recent Scraper Runs</h3>
+      <div style="overflow-x: auto; margin-top: 8px;">
+        <table class="table" id="scraper-runs-table" style="width: 100%; font-size: 12px;">
           <thead>
-            <tr>
-              <th><%= t('admin.scraper.table.header.id', 'ID') %></th>
-              <th><%= t('admin.scraper.table.header.scraper', '抓取器') %></th>
-              <th><%= t('admin.scraper.table.header.status', '状态') %></th>
-              <th><%= t('admin.scraper.table.header.startedAt', '开始时间') %></th>
-              <th><%= t('admin.scraper.table.header.finishedAt', '结束时间') %></th>
-              <th><%= t('admin.scraper.table.header.jobsAdded', '新增职位') %></th>
-              <th><%= t('admin.scraper.table.header.errorMessage', '错误信息') %></th>
-            </tr>
+            <tr><th>ID</th><th>Scraper</th><th>Status</th><th>Started</th><th>Finished</th><th>Jobs</th><th>Error</th></tr>
           </thead>
           <tbody>
-            <% if (!scraperRuns || !scraperRuns.length) { %>
-            <tr>
-              <td colspan="7" class="muted">
-                <%= t('admin.scraper.empty', '暂无抓取记录。') %>
-              </td>
-            </tr>
+            <% if (!_scraperRuns || !_scraperRuns.length) { %>
+            <tr><td colspan="7" style="color: var(--text-muted, #6B7280);">No scraper runs yet.</td></tr>
             <% } else { %>
-            <% scraperRuns.forEach(function(run){ %>
+            <% _scraperRuns.forEach(function(run) { %>
             <tr data-run-id="<%= run.id %>">
               <td><%= run.id %></td>
               <td><%= run.scraper_name %></td>
               <td>
                 <% if (run.status === 'running' || run.status === 'queued') { %>
-                <span class="status-pill status-running"><%= run.status %></span>
+                <span style="color: #D97706; font-weight: 500;"><%= run.status %></span>
                 <% } else if (run.status === 'success') { %>
-                <span class="status-pill status-success">
-                  <%= t('admin.scraper.status.success', '成功') %>
-                </span>
+                <span style="color: #059669; font-weight: 500;">Success</span>
                 <% } else { %>
-                <span class="status-pill status-failed">
-                  <%= t('admin.scraper.status.failure', '失败') %>
-                </span>
+                <span style="color: #DC2626; font-weight: 500;">Failed</span>
                 <% } %>
               </td>
               <td><%= run.started_at || '-' %></td>
               <td><%= run.finished_at || '-' %></td>
               <td><%= typeof run.jobs_added === 'number' ? run.jobs_added : '-' %></td>
-              <td class="small"><%= run.error_message || '-' %></td>
+              <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;"><%= run.error_message || '-' %></td>
             </tr>
             <% }) %>
             <% } %>
           </tbody>
         </table>
       </div>
-    </section>
+    </div>
+
+    <!-- Analysis Controls -->
+    <div class="admin-card" id="analysis-section" style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px;"
+      data-i18n-triggering="Triggering analysis, please wait..."
+      data-i18n-started-with-id="Analysis started, run ID: {runId}."
+      data-i18n-started="Analysis started."
+      data-i18n-trigger-failed-prefix="Trigger failed: "
+      data-i18n-network-error="Trigger failed: Network error or server unavailable.">
+      <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">AI Analysis</h2>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 12px; color: var(--text-muted, #6B7280); display: block; margin-bottom: 4px;">Analysis Type</label>
+        <select id="analysis-type" style="padding: 6px 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 6px; font-size: 13px;">
+          <option value="full">Full Analysis</option>
+          <option value="scoring">Scoring Only</option>
+          <option value="cover_letters">Cover Letters</option>
+          <option value="company_research">Company Research</option>
+          <option value="embeddings">Embeddings</option>
+        </select>
+      </div>
+
+      <% if (_lastRun) { %>
+      <div style="margin-bottom: 12px; padding: 8px 12px; background: var(--bg-subtle, #F1F3F5); border-radius: 8px; font-size: 12px;">
+        <span>Last run ID: <strong><%= _lastRun.id %></strong></span>
+        <% if (_lastRun.status === 'running') { %>
+        <span style="color: #D97706; font-weight: 500; margin-left: 8px;">Running</span>
+        <% } else if (_lastRun.status === 'completed') { %>
+        <span style="color: #059669; font-weight: 500; margin-left: 8px;">Completed</span>
+        <% } else { %>
+        <span style="color: #DC2626; font-weight: 500; margin-left: 8px;">Failed</span>
+        <% } %>
+        <% if (_lastRun.error) { %>
+        <div style="color: #DC2626; margin-top: 4px;">Error: <%= _lastRun.error %></div>
+        <% } %>
+      </div>
+      <% } %>
+
+      <button id="run-analysis-btn" class="btn btn-primary btn-sm">Run Analysis</button>
+      <p id="run-analysis-status" class="text-muted" style="font-size: 12px; margin-top: 8px;"></p>
+
+      <!-- Analysis Runs History Table -->
+      <h3 style="margin-top: 16px; font-size: 14px; font-weight: 500;">Recent Analysis Runs</h3>
+      <div style="overflow-x: auto; margin-top: 8px;">
+        <table class="table" id="analysis-runs-table" style="width: 100%; font-size: 12px;">
+          <thead>
+            <tr><th>ID</th><th>Type</th><th>Status</th><th>Started</th><th>Finished</th><th>Processed</th><th>Error</th></tr>
+          </thead>
+          <tbody id="analysis-runs-tbody">
+            <tr><td colspan="7" style="color: var(--text-muted, #6B7280);">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="refresh-analysis-runs-btn" style="margin-top: 4px;">Refresh</button>
+
+      <!-- Queue Status -->
+      <div id="queue-status-panel" style="margin-top: 16px; padding: 12px; background: var(--bg-subtle, #F1F3F5); border-radius: 8px;">
+        <h3 style="font-size: 14px; font-weight: 500; margin-bottom: 8px;">Queue Status</h3>
+        <div id="queue-status-content" style="font-size: 12px; color: var(--text-secondary, #4B5563);">
+          Loading...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error Log Viewer -->
+  <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+    <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Error Log</h2>
+    <div id="error-log-container" style="max-height: 400px; overflow-y: auto;">
+      <p style="font-size: 12px; color: var(--text-muted, #6B7280);">Loading errors...</p>
+    </div>
+    <button type="button" class="btn btn-ghost btn-sm" id="refresh-errors-btn" style="margin-top: 8px;">Refresh</button>
+  </div>
+
+  <!-- Bottom row: Cleanup + Upload + Dedup -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
+
+    <!-- Data Cleanup -->
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px;">
+      <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Data Maintenance</h2>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button type="button" class="btn btn-ghost btn-sm cleanup-btn" data-type="raw_json">Clean Raw JSON (&gt;30 days)</button>
+        <button type="button" class="btn btn-ghost btn-sm cleanup-btn" data-type="inactive">Archive Inactive Jobs (&gt;90 days)</button>
+        <button type="button" class="btn btn-ghost btn-sm cleanup-btn" data-type="sessions">Clean Expired Sessions</button>
+        <button type="button" class="btn btn-ghost btn-sm cleanup-btn" data-type="all" style="font-weight: 500;">Run All Cleanup</button>
+      </div>
+      <p id="cleanup-status" style="font-size: 12px; color: var(--text-muted, #6B7280); margin-top: 8px;"></p>
+    </div>
+
+    <!-- Upload Job Data -->
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px;">
+      <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Upload Job Data</h2>
+      <p style="font-size: 12px; color: var(--text-secondary, #4B5563); margin-bottom: 12px;">
+        Accepts JSON: array of job objects with title, company_name, description, url, location, salary.
+      </p>
+      <form id="upload-form">
+        <textarea id="upload-json" rows="5" class="input" placeholder='[{"title":"Senior AI Engineer",...}]'
+                  style="width: 100%; padding: 8px; font-size: 12px;"></textarea>
+        <button type="submit" class="btn btn-ghost btn-sm" style="margin-top: 8px;">Upload JSON</button>
+      </form>
+      <p id="upload-status" style="font-size: 12px; color: var(--text-muted, #6B7280); margin-top: 8px;"></p>
+
+      <div style="border-top: 1px solid var(--border-subtle, #E2E6EA); margin-top: 12px; padding-top: 12px;">
+        <h3 style="font-size: 13px; font-weight: 500; margin-bottom: 8px;">Upload via File</h3>
+        <form id="upload-file-form" action="/admin/jobs/upload" method="POST" enctype="multipart/form-data">
+          <input type="file" name="jobFile" accept="application/json" />
+          <button type="submit" class="btn btn-ghost btn-sm" style="margin-top: 8px;">Upload JSON File</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Deduplication Panel -->
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px;">
+      <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Deduplication</h2>
+      <button type="button" class="btn btn-primary btn-sm" id="trigger-dedup-btn">Run Deduplication</button>
+      <p id="dedup-status" style="font-size: 12px; color: var(--text-muted, #6B7280); margin-top: 8px;"></p>
+
+      <div id="dedup-groups-container" style="margin-top: 16px;">
+        <h3 style="font-size: 13px; font-weight: 500; margin-bottom: 8px;">Duplicate Groups</h3>
+        <div id="dedup-groups-list" style="font-size: 12px; color: var(--text-muted, #6B7280);">
+          Click "Run Deduplication" or load existing groups below.
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="load-dedup-groups-btn" style="margin-top: 8px;">Load Groups</button>
+      </div>
+    </div>
   </div>
 </section>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Queue Status Polling ──
+  var queuePanel = document.getElementById('queue-status-content');
+  var queuePolling = null;
+
+  function pollQueueStatus() {
+    fetch('/admin/queue/status')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        var html = '';
+        if (data.currentTask) {
+          html += '<div style="margin-bottom: 4px;"><strong>Current:</strong> ' + escapeHtml(data.currentTask.type || 'unknown') + '</div>';
+        } else {
+          html += '<div style="margin-bottom: 4px;">Queue idle.</div>';
+        }
+        if (data.pending && data.pending.length > 0) {
+          html += '<div><strong>Pending:</strong> ' + data.pending.length + ' tasks</div>';
+        }
+        html += '<div style="color: var(--text-muted, #6B7280); margin-top: 4px;">Queue length: ' + (data.queueLength || 0) + '</div>';
+        queuePanel.innerHTML = html;
+
+        // Stop polling if idle
+        if (!data.currentTask && (!data.pending || data.pending.length === 0)) {
+          if (queuePolling) { clearInterval(queuePolling); queuePolling = null; }
+        } else if (!queuePolling) {
+          queuePolling = setInterval(pollQueueStatus, 5000);
+        }
+      })
+      .catch(function() {
+        queuePanel.innerHTML = '<span style="color: #DC2626;">Failed to fetch queue status.</span>';
+      });
+  }
+  pollQueueStatus();
+
+  // ── Analysis Runs History ──
+  var analysisRunsTbody = document.getElementById('analysis-runs-tbody');
+  function loadAnalysisRuns() {
+    fetch('/admin/analysis/runs')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        var runs = data.runs || [];
+        if (runs.length === 0) {
+          analysisRunsTbody.innerHTML = '<tr><td colspan="7" style="color: var(--text-muted, #6B7280);">No analysis runs yet.</td></tr>';
+          return;
+        }
+        var html = '';
+        runs.forEach(function(run) {
+          var statusColor = run.status === 'running' ? '#D97706' : (run.status === 'completed' ? '#059669' : '#DC2626');
+          html += '<tr>';
+          html += '<td>' + run.id + '</td>';
+          html += '<td>' + escapeHtml(run.type || run.analysis_type || '-') + '</td>';
+          html += '<td><span style="color: ' + statusColor + '; font-weight: 500;">' + escapeHtml(run.status || '-') + '</span></td>';
+          html += '<td>' + escapeHtml(run.started_at || run.created_at || '-') + '</td>';
+          html += '<td>' + escapeHtml(run.finished_at || '-') + '</td>';
+          html += '<td>' + (typeof run.jobs_processed === 'number' ? run.jobs_processed : '-') + '</td>';
+          html += '<td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">' + escapeHtml(run.error_message || run.error || '-') + '</td>';
+          html += '</tr>';
+        });
+        analysisRunsTbody.innerHTML = html;
+      })
+      .catch(function() {
+        analysisRunsTbody.innerHTML = '<tr><td colspan="7" style="color: #DC2626;">Failed to load analysis runs.</td></tr>';
+      });
+  }
+  loadAnalysisRuns();
+  var refreshAnalysisBtn = document.getElementById('refresh-analysis-runs-btn');
+  if (refreshAnalysisBtn) refreshAnalysisBtn.addEventListener('click', loadAnalysisRuns);
+
+  // ── Error Log Viewer ──
+  var errorLogContainer = document.getElementById('error-log-container');
+  function loadErrors() {
+    fetch('/admin/errors?limit=50')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        var errors = data.errors || [];
+        if (errors.length === 0) {
+          errorLogContainer.innerHTML = '<p style="font-size: 12px; color: var(--text-muted, #6B7280);">No errors recorded.</p>';
+          return;
+        }
+        var html = '';
+        errors.forEach(function(err, idx) {
+          html += '<div class="error-log-entry" style="padding: 8px 0; border-bottom: 1px solid var(--border-subtle, #E2E6EA); cursor: pointer;" data-idx="' + idx + '">';
+          html += '<div style="display: flex; justify-content: space-between; align-items: center;">';
+          html += '<span style="font-size: 12px; color: ' + (err.level === 'error' ? '#DC2626' : '#D97706') + '; font-weight: 500;">[' + (err.level || 'error').toUpperCase() + ']</span>';
+          html += '<span style="font-size: 11px; color: var(--text-muted, #6B7280);">' + escapeHtml(err.timestamp || '') + '</span>';
+          html += '</div>';
+          html += '<div style="font-size: 12px; color: var(--text, #1A1D23); margin-top: 2px;">' + escapeHtml(err.message || '') + '</div>';
+          if (err.context) {
+            html += '<div style="font-size: 11px; color: var(--text-muted, #6B7280); margin-top: 2px;">' + escapeHtml(err.context.method || '') + ' ' + escapeHtml(err.context.path || '') + '</div>';
+          }
+          html += '<div class="error-stack" style="display: none; margin-top: 4px; padding: 8px; background: var(--bg-subtle, #F1F3F5); border-radius: 4px; font-family: monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; color: var(--text-secondary, #4B5563);">' + escapeHtml(err.stack || '') + '</div>';
+          html += '</div>';
+        });
+        if (data.total) html += '<div style="font-size: 11px; color: var(--text-muted, #6B7280); margin-top: 8px;">Showing ' + errors.length + ' of ' + data.total + ' errors</div>';
+        errorLogContainer.innerHTML = html;
+
+        // Toggle stack traces
+        errorLogContainer.querySelectorAll('.error-log-entry').forEach(function(entry) {
+          entry.addEventListener('click', function() {
+            var stack = entry.querySelector('.error-stack');
+            if (stack) stack.style.display = stack.style.display === 'none' ? 'block' : 'none';
+          });
+        });
+      })
+      .catch(function() {
+        errorLogContainer.innerHTML = '<p style="color: #DC2626; font-size: 12px;">Failed to load errors.</p>';
+      });
+  }
+  loadErrors();
+  var refreshErrorsBtn = document.getElementById('refresh-errors-btn');
+  if (refreshErrorsBtn) refreshErrorsBtn.addEventListener('click', loadErrors);
+
+  // ── Cleanup Controls ──
+  document.querySelectorAll('.cleanup-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var type = btn.getAttribute('data-type');
+      if (!confirm('Run cleanup: ' + type + '? This cannot be undone.')) return;
+      btn.disabled = true;
+      fetch('/admin/cleanup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: type })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        btn.disabled = false;
+        var status = document.getElementById('cleanup-status');
+        var parts = [];
+        if (typeof data.raw_json_cleared === 'number') parts.push('Raw JSON: ' + data.raw_json_cleared);
+        if (typeof data.archived_jobs === 'number') parts.push('Archived: ' + data.archived_jobs);
+        if (typeof data.sessions_cleaned === 'number') parts.push('Sessions: ' + data.sessions_cleaned);
+        status.textContent = parts.length > 0 ? parts.join(' | ') : 'Cleanup completed.';
+      })
+      .catch(function() {
+        btn.disabled = false;
+        document.getElementById('cleanup-status').textContent = 'Cleanup failed.';
+      });
+    });
+  });
+
+  // ── Dedup Controls ──
+  var dedupBtn = document.getElementById('trigger-dedup-btn');
+  var dedupStatus = document.getElementById('dedup-status');
+  if (dedupBtn) {
+    dedupBtn.addEventListener('click', function() {
+      dedupBtn.disabled = true;
+      dedupStatus.textContent = 'Running deduplication...';
+      fetch('/admin/dedup/run', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          dedupBtn.disabled = false;
+          dedupStatus.textContent = data.status === 'queued' ? 'Queued. Processing ' + (data.job_count || '') + ' jobs.' : 'Dedup triggered.';
+          if (!queuePolling) { queuePolling = setInterval(pollQueueStatus, 5000); }
+        })
+        .catch(function() {
+          dedupBtn.disabled = false;
+          dedupStatus.textContent = 'Failed to trigger dedup.';
+        });
+    });
+  }
+
+  // Load dedup groups
+  var loadDedupBtn = document.getElementById('load-dedup-groups-btn');
+  var dedupGroupsList = document.getElementById('dedup-groups-list');
+  if (loadDedupBtn) {
+    loadDedupBtn.addEventListener('click', function() {
+      fetch('/admin/dedup/groups')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          var groups = data.groups || [];
+          if (groups.length === 0) {
+            dedupGroupsList.innerHTML = '<p style="color: var(--text-muted, #6B7280);">No duplicate groups found.</p>';
+            return;
+          }
+          var html = '';
+          groups.forEach(function(g) {
+            html += '<div style="padding: 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 8px; margin-bottom: 8px;">';
+            html += '<div style="font-size: 12px; margin-bottom: 4px;"><strong>Group #' + g.id + '</strong> (' + escapeHtml(g.match_method || '') + ', confidence: ' + (g.confidence || 0).toFixed(2) + ')</div>';
+            (g.members || []).forEach(function(m) {
+              html += '<div style="font-size: 11px; color: var(--text-secondary, #4B5563); padding-left: 12px;">Job #' + m.job_id + ' [' + escapeHtml(m.source || '') + '] ' + escapeHtml(m.title || '') + '</div>';
+            });
+            html += '<div style="margin-top: 6px; display: flex; gap: 4px;">';
+            html += '<button type="button" class="btn btn-ghost btn-sm dedup-resolve-btn" data-group-id="' + g.id + '" data-canonical="' + g.canonical_job_id + '" data-action="merge" style="font-size: 11px;">Merge</button>';
+            html += '<button type="button" class="btn btn-ghost btn-sm dedup-resolve-btn" data-group-id="' + g.id + '" data-canonical="' + g.canonical_job_id + '" data-action="split" style="font-size: 11px;">Split</button>';
+            html += '</div></div>';
+          });
+          dedupGroupsList.innerHTML = html;
+
+          // Bind resolve buttons
+          dedupGroupsList.querySelectorAll('.dedup-resolve-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              fetch('/admin/dedup/resolve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  group_id: Number(btn.getAttribute('data-group-id')),
+                  canonical_job_id: Number(btn.getAttribute('data-canonical')),
+                  action: btn.getAttribute('data-action')
+                })
+              })
+              .then(function(res) { return res.json(); })
+              .then(function(data) {
+                if (data.resolved) {
+                  btn.closest('[style*="padding: 8px"]').remove();
+                  if (window.Toast) window.Toast.show('Group resolved.', 'success');
+                }
+              })
+              .catch(function() {
+                if (window.Toast) window.Toast.show('Failed to resolve group.', 'error');
+              });
+            });
+          });
+        })
+        .catch(function() {
+          dedupGroupsList.innerHTML = '<p style="color: #DC2626;">Failed to load groups.</p>';
+        });
+    });
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
+  }
+})();
+</script>
+<% } %>

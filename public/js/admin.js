@@ -1,8 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const adminRoot = document.getElementById('admin-root');
-  const ADMIN_TOKEN = adminRoot && adminRoot.dataset.adminToken
-    ? adminRoot.dataset.adminToken
-    : '';
+  // Admin auth is handled server-side via session; no client-side token needed.
 
   const runBtn = document.getElementById('run-analysis-btn');
   const runStatus = document.getElementById('run-analysis-status');
@@ -106,12 +104,11 @@ document.addEventListener('DOMContentLoaded', () => {
       runStatus.textContent = analysisTexts.triggering;
 
       try {
-        const res = await fetch(`/admin/run?token=${encodeURIComponent(ADMIN_TOKEN)}`, {
+        const res = await fetch('/admin/run', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ token: ADMIN_TOKEN }),
         });
 
         let json;
@@ -245,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       try {
         const res = await fetch(
-          `/admin/scraper/run?token=${encodeURIComponent(ADMIN_TOKEN)}`,
+          '/admin/scraper/run',
           {
             method: 'POST',
             headers: {

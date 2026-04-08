@@ -1,0 +1,74 @@
+<%
+  /**
+   * ScoreIndicator partial
+   * Expects locals: score (number 0-100), size ('sm' | 'lg', default 'sm'),
+   *                 scoring (boolean, true when score is being computed)
+   */
+  var _score = typeof score !== 'undefined' && score !== null ? Math.round(Number(score)) : null;
+  var _size = typeof size !== 'undefined' ? size : 'sm';
+  // Support legacy size names
+  if (_size === 'compact') _size = 'sm';
+  if (_size === 'large') _size = 'lg';
+
+  var _scoring = typeof scoring !== 'undefined' && scoring;
+
+  var _diameter = _size === 'lg' ? 120 : 48;
+  var _sizeClass = 'score-ring--' + _size;
+
+  // Colour-blind-safe palette: blue (0-59), teal (60-74), orange (75-100)
+  var _colorClass = 'score-ring__fill--null';
+  var _tierLabel = 'Not scored';
+
+  if (_score !== null) {
+    if (_score >= 75) {
+      _colorClass = 'score-ring__fill--orange';
+      _tierLabel = 'High';
+    } else if (_score >= 60) {
+      _colorClass = 'score-ring__fill--teal';
+      _tierLabel = 'Medium';
+    } else {
+      _colorClass = 'score-ring__fill--blue';
+      _tierLabel = 'Low';
+    }
+  }
+
+  // SVG circle math: circumference = 2 * pi * r, r = 15.9155 gives circumference ~= 100
+  var _dashoffset = _score !== null ? (100 - _score) : 100;
+%>
+<div
+  class="score-indicator"
+  data-score="<%= _score !== null ? _score : '' %>"
+  data-tier="<%= _tierLabel.toLowerCase() %>"
+  data-scoring="<%= _scoring ? 'true' : 'false' %>"
+  aria-label="<%= _score !== null ? 'Match score: ' + _score + ' percent' : 'Not scored' %>"
+>
+  <div class="score-ring <%= _sizeClass %><%= _score === null ? ' score-ring--empty' : '' %><%= _scoring ? ' score-ring--loading' : '' %>">
+    <svg viewBox="0 0 36 36" width="<%= _diameter %>" height="<%= _diameter %>">
+      <circle class="score-ring__circle score-ring__bg" cx="18" cy="18" r="15.9155" />
+      <% if (_score !== null) { %>
+      <circle
+        class="score-ring__circle <%= _colorClass %>"
+        cx="18" cy="18" r="15.9155"
+        style="--score-offset: <%= _dashoffset %>; stroke-dashoffset: 100;"
+        data-target-offset="<%= _dashoffset %>"
+      />
+      <% } else { %>
+      <circle
+        class="score-ring__circle score-ring__fill--null"
+        cx="18" cy="18" r="15.9155"
+        style="stroke-dashoffset: 100;"
+      />
+      <% } %>
+      <text class="score-ring__label" x="18" y="18" text-anchor="middle" dominant-baseline="central">
+        <%= _score !== null ? _score + '%' : '-- %' %>
+      </text>
+    </svg>
+  </div>
+  <span class="score-label">
+    <% if (_score !== null) { %>
+      Fit Score &middot; <%= _tierLabel %>
+    <% } else { %>
+      Not scored
+    <% } %>
+  </span>
+</div>

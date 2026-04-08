@@ -1,0 +1,82 @@
+<% layout('layout') -%>
+
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+%>
+
+<section style="max-width: 700px; margin: 0 auto; padding: 48px 16px 64px;">
+
+  <h1 style="font-size: 32px; font-weight: 700; line-height: 1.2; letter-spacing: -0.02em; color: var(--text, #1A1D23); margin-bottom: 8px; text-align: center;">
+    <%= _t('howItWorks.title', 'How It Works') %>
+  </h1>
+  <p style="font-size: 16px; color: var(--text-secondary, #4B5563); text-align: center; margin-bottom: 48px;">
+    <%= _t('howItWorks.intro', 'Job Hunter helps you find the right role faster with AI-powered tools.') %>
+  </p>
+
+  <!-- Section 1: Smart Matching -->
+  <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 32px; margin-bottom: 24px;">
+    <!-- CSS-only illustration -->
+    <div class="hiw-illustration" style="text-align: center; margin-bottom: 20px;" aria-hidden="true">
+      <div style="display: inline-flex; gap: 8px; align-items: center;">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: #eff6ff; display: flex; align-items: center; justify-content: center; font-size: 24px;">&#128269;</div>
+        <div style="width: 24px; height: 2px; background: var(--accent-primary, #2563EB);"></div>
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: #ecfdf5; display: flex; align-items: center; justify-content: center; font-size: 24px;">&#9989;</div>
+      </div>
+    </div>
+    <h2 style="font-size: 20px; font-weight: 600; color: var(--text, #1A1D23); margin-bottom: 12px;">
+      <%= _t('howItWorks.section1.title', 'Smart Matching') %>
+    </h2>
+    <p style="font-size: 15px; color: var(--text-secondary, #4B5563); line-height: 1.7;">
+      <%= _t('howItWorks.section1.body', 'We aggregate job listings from Seek, LinkedIn, and APSJobs into one searchable database. When you upload your resume, our AI scores each job against your skills, experience, and qualifications — giving you a transparent breakdown of why each score was assigned.') %>
+    </p>
+  </div>
+
+  <!-- Section 2: Tailored Drafts -->
+  <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 32px; margin-bottom: 24px;">
+    <div class="hiw-illustration" style="text-align: center; margin-bottom: 20px;" aria-hidden="true">
+      <div style="display: inline-flex; gap: 8px; align-items: center;">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: #fffbeb; display: flex; align-items: center; justify-content: center; font-size: 24px;">&#9997;</div>
+        <div style="width: 24px; height: 2px; background: var(--accent-secondary, #0891B2);"></div>
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: #f0fdf4; display: flex; align-items: center; justify-content: center; font-size: 24px;">&#128196;</div>
+      </div>
+    </div>
+    <h2 style="font-size: 20px; font-weight: 600; color: var(--text, #1A1D23); margin-bottom: 12px;">
+      <%= _t('howItWorks.section2.title', 'Tailored Drafts') %>
+    </h2>
+    <p style="font-size: 15px; color: var(--text-secondary, #4B5563); line-height: 1.7;">
+      <%= _t('howItWorks.section2.body', 'Generate customised cover letters and APS selection criteria responses in seconds. These are starting points — editable drafts that save you time, not finished products. Always review and personalise before submitting.') %>
+    </p>
+  </div>
+
+  <!-- Section 3: Your Privacy -->
+  <div id="privacy" style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 32px; margin-bottom: 24px;">
+    <div class="hiw-illustration" style="text-align: center; margin-bottom: 20px;" aria-hidden="true">
+      <div style="display: inline-flex; gap: 8px; align-items: center;">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: #f0fdf4; display: flex; align-items: center; justify-content: center; font-size: 24px;">&#128274;</div>
+      </div>
+    </div>
+    <h2 style="font-size: 20px; font-weight: 600; color: var(--text, #1A1D23); margin-bottom: 12px;">
+      <%= _t('howItWorks.section3.title', 'Your Privacy') %>
+    </h2>
+    <p style="font-size: 15px; color: var(--text-secondary, #4B5563); line-height: 1.7;">
+      <%= _t('howItWorks.section3.body', 'Your data stays on this platform. We don\'t create public profiles, share your information with employers, or sell your data. You can delete your account and all associated data at any time. We comply with the Australian Privacy Act 1988.') %>
+    </p>
+  </div>
+
+  <!-- CTA -->
+  <div style="text-align: center; margin-top: 32px;">
+    <a href="/jobs" class="btn btn-primary" style="padding: 12px 32px; font-size: 16px;">
+      Browse Jobs
+    </a>
+  </div>
+
+</section>
+
+<style>
+@media (prefers-reduced-motion: reduce) {
+  .hiw-illustration * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+</style>

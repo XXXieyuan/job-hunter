@@ -1,0 +1,58 @@
+-- ============================================================
+-- Rollback for 004_rebuild.sql
+-- Drops new tables and reverts schema to pre-004 state
+-- ============================================================
+-- NOTE: SQLite does not support DROP COLUMN (before 3.35.0).
+--       This rollback only drops newly created tables and
+--       removes FTS/triggers. Added columns on existing tables
+--       remain but are ignored by the original application code.
+-- ============================================================
+
+-- Drop FTS triggers
+DROP TRIGGER IF EXISTS jobs_ai;
+DROP TRIGGER IF EXISTS jobs_ad;
+DROP TRIGGER IF EXISTS jobs_au;
+
+-- Drop FTS virtual table
+DROP TABLE IF EXISTS jobs_fts;
+
+-- Drop new tables (reverse dependency order)
+DROP TABLE IF EXISTS score_feedback;
+DROP TABLE IF EXISTS duplicate_group_members;
+DROP TABLE IF EXISTS duplicate_groups;
+DROP TABLE IF EXISTS applications;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS users;
+
+-- Drop new indexes on existing tables
+DROP INDEX IF EXISTS idx_users_email;
+DROP INDEX IF EXISTS idx_sessions_token;
+DROP INDEX IF EXISTS idx_sessions_user;
+DROP INDEX IF EXISTS idx_sessions_expires;
+DROP INDEX IF EXISTS idx_applications_user;
+DROP INDEX IF EXISTS idx_applications_status;
+DROP INDEX IF EXISTS idx_applications_user_status;
+DROP INDEX IF EXISTS idx_dup_members_job;
+DROP INDEX IF EXISTS idx_resumes_user;
+DROP INDEX IF EXISTS idx_jobs_external_id;
+DROP INDEX IF EXISTS idx_jobs_source;
+DROP INDEX IF EXISTS idx_jobs_location;
+DROP INDEX IF EXISTS idx_jobs_active;
+DROP INDEX IF EXISTS idx_jobs_visa;
+DROP INDEX IF EXISTS idx_jobs_aps_class;
+DROP INDEX IF EXISTS idx_jobs_canonical;
+DROP INDEX IF EXISTS idx_jobs_posted;
+DROP INDEX IF EXISTS idx_companies_name;
+DROP INDEX IF EXISTS idx_fit_scores_resume;
+DROP INDEX IF EXISTS idx_fit_scores_overall;
+DROP INDEX IF EXISTS idx_cover_letters_user;
+DROP INDEX IF EXISTS idx_cover_letters_job;
+DROP INDEX IF EXISTS idx_scraper_runs_name;
+DROP INDEX IF EXISTS idx_analysis_runs_status;
+
+-- Ensure schema_migrations exists before cleanup (may not exist if migrations were applied directly)
+CREATE TABLE IF NOT EXISTS schema_migrations (id TEXT PRIMARY KEY);
+
+-- Remove migration record so it can be re-run
+DELETE FROM schema_migrations WHERE id = '004_rebuild.sql';
+DELETE FROM schema_migrations WHERE id = '004a_migrate_data.sql';

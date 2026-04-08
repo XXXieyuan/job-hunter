@@ -1,0 +1,324 @@
+<% layout('layout') -%>
+
+<section class="page-section resume-manage-page">
+  <div class="section-header">
+    <h1>Your Resumes</h1>
+    <p class="section-subtitle">Upload and manage your resume versions. Match scores are calculated from your confirmed resume.</p>
+  </div>
+
+  <!-- Upload Zone -->
+  <div class="resume-upload-zone" id="resume-upload-zone">
+    <form
+      action="/resumes/upload"
+      method="POST"
+      enctype="multipart/form-data"
+      id="resume-upload-form"
+    >
+      <div class="upload-dropzone" id="upload-dropzone">
+        <div class="upload-dropzone-default" id="upload-default-state">
+          <svg class="upload-icon" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true">
+            <path d="M24 4L14 16h7v12h6V16h7L24 4z" fill="currentColor" opacity="0.6"/>
+            <path d="M8 34v6c0 2.2 1.8 4 4 4h24c2.2 0 4-1.8 4-4v-6H8z" fill="currentColor" opacity="0.3"/>
+          </svg>
+          <p class="upload-text">Drag and drop your resume or <label for="resume-file-input" class="upload-browse-link">browse files</label></p>
+          <p class="upload-hint">PDF or Word (.docx), max 10MB</p>
+        </div>
+
+        <div class="upload-file-selected" id="upload-selected-state" hidden>
+          <div class="upload-file-info">
+            <span class="upload-file-icon" aria-hidden="true">&#128196;</span>
+            <span class="upload-file-name" id="upload-file-name"></span>
+            <span class="upload-file-size" id="upload-file-size"></span>
+            <button type="button" class="btn btn-ghost btn-sm upload-file-remove" id="upload-file-remove">Remove</button>
+          </div>
+        </div>
+
+        <div class="upload-progress" id="upload-progress-state" hidden>
+          <div class="progress-bar">
+            <div class="progress-bar-fill" id="upload-progress-fill"></div>
+          </div>
+          <p class="upload-progress-text">Uploading...</p>
+        </div>
+
+        <input
+          type="file"
+          name="resume"
+          id="resume-file-input"
+          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          hidden
+        />
+      </div>
+
+      <div class="upload-actions" id="upload-actions" hidden>
+        <button type="submit" class="btn btn-primary" id="upload-submit-btn">
+          Upload
+        </button>
+      </div>
+    </form>
+
+    <div class="upload-error" id="upload-error" hidden>
+      <p class="text-danger" id="upload-error-text"></p>
+    </div>
+  </div>
+
+  <!-- Resume List -->
+  <% if (typeof resumes !== 'undefined' && resumes && resumes.length > 0) { %>
+  <div class="resume-list-section">
+    <h2>Your resumes</h2>
+    <div class="resume-card-list" id="resume-card-list">
+      <% resumes.forEach(function(resume) { %>
+      <%
+        var statusClass = resume.is_confirmed ? 'confirmed' : 'needs-review';
+        var statusLabel = resume.is_confirmed ? 'Confirmed' : 'Needs Review';
+        var skills = [];
+        try { skills = JSON.parse(resume.skills_json || '[]'); } catch(e) { skills = []; }
+        var experience = [];
+        try { experience = JSON.parse(resume.experience_json || '[]'); } catch(e) { experience = []; }
+        var education = [];
+        try { education = JSON.parse(resume.education_json || '[]'); } catch(e) { education = []; }
+        var uploadDate = resume.uploaded_at || resume.created_at || '';
+      %>
+      <div class="resume-card resume-card--<%= statusClass %>" data-resume-id="<%= resume.id %>">
+        <div class="resume-card-header">
+          <div class="resume-card-info">
+            <div class="resume-card-icon" aria-hidden="true">
+              <% if (resume.file_type === 'pdf' || (resume.original_filename && resume.original_filename.endsWith('.pdf'))) { %>
+                &#128196;
+              <% } else { %>
+                &#128209;
+              <% } %>
+            </div>
+            <div class="resume-card-meta">
+              <h3 class="resume-card-name"><%= resume.label || resume.original_filename || 'Resume #' + resume.id %></h3>
+              <p class="resume-card-details body-small text-secondary">
+                <span class="resume-card-type"><%= resume.file_type || 'PDF' %></span>
+                <span class="meta-dot" aria-hidden="true"></span>
+                <span>Uploaded <%= uploadDate %></span>
+              </p>
+            </div>
+          </div>
+          <div class="resume-card-status">
+            <span class="badge badge-resume-<%= statusClass %>">
+              <% if (resume.is_confirmed) { %>
+                &#10003; <%= statusLabel %>
+              <% } else { %>
+                &#9888; <%= statusLabel %>
+              <% } %>
+            </span>
+          </div>
+        </div>
+
+        <div class="resume-card-summary body-small text-secondary">
+          <span><%= skills.length %> skills</span>
+          <span class="meta-dot" aria-hidden="true"></span>
+          <span><%= experience.length %> roles</span>
+          <span class="meta-dot" aria-hidden="true"></span>
+          <span><%= education.length %> degrees</span>
+        </div>
+
+        <div class="resume-card-actions">
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm resume-toggle-detail"
+            data-resume-id="<%= resume.id %>"
+            aria-expanded="false"
+          >View Details</button>
+          <form action="/resumes/<%= resume.id %>/delete" method="POST" class="inline-form"
+                onsubmit="return confirm('Delete this resume? This cannot be undone.');">
+            <button type="submit" class="btn btn-ghost btn-sm text-danger">Delete</button>
+          </form>
+        </div>
+
+        <!-- Expanded detail view (hidden by default) -->
+        <div class="resume-detail-expanded" id="resume-detail-<%= resume.id %>" hidden>
+          <div class="resume-detail-section">
+            <h4>Skills</h4>
+            <% if (skills.length > 0) { %>
+            <div class="skill-pills">
+              <% skills.forEach(function(skill) { %>
+              <span class="skill-pill"><%= typeof skill === 'string' ? skill : skill.name || skill %></span>
+              <% }); %>
+            </div>
+            <% } else { %>
+            <p class="text-muted body-small">No skills extracted yet.</p>
+            <% } %>
+          </div>
+
+          <div class="resume-detail-section">
+            <h4>Experience</h4>
+            <% if (experience.length > 0) { %>
+            <div class="experience-entries">
+              <% experience.forEach(function(exp) { %>
+              <div class="experience-entry">
+                <p class="experience-title"><strong><%= exp.title || exp.role || 'Untitled role' %></strong></p>
+                <p class="body-small text-secondary">
+                  <%= exp.company || '' %>
+                  <% if (exp.dates || exp.start_date) { %>
+                    <span class="meta-dot" aria-hidden="true"></span>
+                    <%= exp.dates || (exp.start_date + (exp.end_date ? ' - ' + exp.end_date : '')) %>
+                  <% } %>
+                </p>
+                <% if (exp.description) { %>
+                <p class="body-small"><%= exp.description %></p>
+                <% } %>
+              </div>
+              <% }); %>
+            </div>
+            <% } else { %>
+            <p class="text-muted body-small">No experience entries extracted yet.</p>
+            <% } %>
+          </div>
+
+          <div class="resume-detail-section">
+            <h4>Education</h4>
+            <% if (education.length > 0) { %>
+            <div class="education-entries">
+              <% education.forEach(function(edu) { %>
+              <div class="education-entry">
+                <p><strong><%= edu.degree || edu.qualification || 'Qualification' %></strong></p>
+                <p class="body-small text-secondary">
+                  <%= edu.institution || '' %>
+                  <% if (edu.year || edu.graduation_year) { %>
+                    <span class="meta-dot" aria-hidden="true"></span>
+                    <%= edu.year || edu.graduation_year %>
+                  <% } %>
+                </p>
+              </div>
+              <% }); %>
+            </div>
+            <% } else { %>
+            <p class="text-muted body-small">No education entries extracted yet.</p>
+            <% } %>
+          </div>
+
+          <div class="resume-detail-actions">
+            <form action="/resumes/<%= resume.id %>/confirm" method="POST" class="inline-form">
+              <button type="submit" class="btn btn-primary btn-sm">Confirm</button>
+            </form>
+            <button type="button" class="btn btn-ghost btn-sm" disabled title="Coming soon">Edit</button>
+            <button type="button" class="btn btn-ghost btn-sm" disabled title="Coming soon">Reparse</button>
+          </div>
+        </div>
+      </div>
+      <% }); %>
+    </div>
+  </div>
+  <% } else { %>
+  <!-- Empty state -->
+  <div class="empty-state">
+    <div class="empty-state-icon" aria-hidden="true">
+      <svg viewBox="0 0 64 64" width="64" height="64">
+        <rect x="16" y="8" width="32" height="48" rx="4" fill="none" stroke="currentColor" stroke-width="2" opacity="0.4"/>
+        <path d="M24 24h16M24 32h12M24 40h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.3"/>
+      </svg>
+    </div>
+    <h2>Upload your first resume</h2>
+    <p class="text-secondary">Upload your first resume to unlock match scores and cover letter generation.</p>
+  </div>
+  <% } %>
+</section>
+
+<script>
+(function() {
+  'use strict';
+
+  var dropzone = document.getElementById('upload-dropzone');
+  var fileInput = document.getElementById('resume-file-input');
+  var defaultState = document.getElementById('upload-default-state');
+  var selectedState = document.getElementById('upload-selected-state');
+  var fileName = document.getElementById('upload-file-name');
+  var fileSize = document.getElementById('upload-file-size');
+  var removeBtn = document.getElementById('upload-file-remove');
+  var uploadActions = document.getElementById('upload-actions');
+  var uploadError = document.getElementById('upload-error');
+  var uploadErrorText = document.getElementById('upload-error-text');
+
+  if (!dropzone || !fileInput) return;
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function showFile(file) {
+    if (!file) return;
+    var ext = file.name.split('.').pop().toLowerCase();
+    if (ext !== 'pdf' && ext !== 'docx') {
+      showError('Only PDF and Word (.docx) files are accepted.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showError('File exceeds the 10MB limit.');
+      return;
+    }
+    hideError();
+    fileName.textContent = file.name;
+    fileSize.textContent = formatSize(file.size);
+    defaultState.hidden = true;
+    selectedState.hidden = false;
+    uploadActions.hidden = false;
+  }
+
+  function resetUpload() {
+    fileInput.value = '';
+    defaultState.hidden = false;
+    selectedState.hidden = true;
+    uploadActions.hidden = true;
+  }
+
+  function showError(msg) {
+    uploadErrorText.textContent = msg;
+    uploadError.hidden = false;
+  }
+
+  function hideError() {
+    uploadError.hidden = true;
+  }
+
+  // Drag and drop
+  dropzone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    dropzone.classList.add('dropzone-active');
+  });
+  dropzone.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    dropzone.classList.remove('dropzone-active');
+  });
+  dropzone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dropzone.classList.remove('dropzone-active');
+    var files = e.dataTransfer.files;
+    if (files.length > 0) {
+      fileInput.files = e.dataTransfer.files;
+      showFile(files[0]);
+    }
+  });
+
+  fileInput.addEventListener('change', function() {
+    if (fileInput.files.length > 0) {
+      showFile(fileInput.files[0]);
+    }
+  });
+
+  if (removeBtn) {
+    removeBtn.addEventListener('click', function() {
+      resetUpload();
+    });
+  }
+
+  // Toggle detail views
+  var toggleBtns = document.querySelectorAll('.resume-toggle-detail');
+  toggleBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = btn.getAttribute('data-resume-id');
+      var detail = document.getElementById('resume-detail-' + id);
+      if (!detail) return;
+      var isHidden = detail.hidden;
+      detail.hidden = !isHidden;
+      btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+      btn.textContent = isHidden ? 'Hide Details' : 'View Details';
+    });
+  });
+})();
+</script>

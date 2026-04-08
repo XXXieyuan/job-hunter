@@ -1,0 +1,291 @@
+<% layout('layout') -%>
+
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _applications = typeof applications !== 'undefined' ? applications : [];
+  var _counts = typeof counts !== 'undefined' ? counts : (typeof statusCounts !== 'undefined' ? statusCounts : {});
+  var _activeFilter = typeof activeFilter !== 'undefined' ? activeFilter : '';
+  var _sortBy = typeof sortBy !== 'undefined' ? sortBy : 'date';
+  var _page = typeof page !== 'undefined' ? page : 1;
+  var _totalPages = typeof totalPages !== 'undefined' ? totalPages : 1;
+
+  // Normalize counts to expected shape
+  var _countMap = { all: 0, saved: 0, applied: 0, interviewing: 0, offered: 0, rejected: 0, withdrawn: 0 };
+  if (_counts && Array.isArray(_counts)) {
+    _counts.forEach(function(sc) { if (sc.status && _countMap.hasOwnProperty(sc.status)) _countMap[sc.status] = sc.count || 0; });
+    _countMap.all = 0;
+    Object.keys(_countMap).forEach(function(k) { if (k !== 'all') _countMap.all += _countMap[k]; });
+  } else if (_counts && typeof _counts === 'object') {
+    Object.keys(_countMap).forEach(function(k) { if (typeof _counts[k] === 'number') _countMap[k] = _counts[k]; });
+    if (!_counts.all) {
+      _countMap.all = 0;
+      Object.keys(_countMap).forEach(function(k) { if (k !== 'all') _countMap.all += _countMap[k]; });
+    }
+  }
+%>
+
+<section class="page-section tracker-page" style="max-width: 900px; margin: 0 auto; padding: 24px 16px 48px;">
+  <div class="section-header">
+    <h1><%= _t('tracker.title', 'Application Tracker') %></h1>
+    <p class="section-subtitle"><%= _t('tracker.subtitle', 'Track your job applications through every stage.') %></p>
+  </div>
+
+  <!-- Status Filter Tabs -->
+  <div class="status-summary-bar" role="navigation" aria-label="Filter by application status"
+       style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
+    <a href="/tracker" class="status-pill-link <%= !_activeFilter ? 'active' : '' %>">
+      All: <strong><%= _countMap.all %></strong>
+    </a>
+    <% ['saved', 'applied', 'interviewing', 'offered', 'rejected', 'withdrawn'].forEach(function(st) { %>
+      <a href="/tracker?status=<%= st %>"
+         class="status-pill-link status-pill-<%= st %> <%= _activeFilter === st ? 'active' : '' %>">
+        <%= st.charAt(0).toUpperCase() + st.slice(1) %>: <strong><%= _countMap[st] %></strong>
+      </a>
+    <% }); %>
+  </div>
+
+  <!-- Sort Controls -->
+  <div class="tracker-sort-controls" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+    <span class="body-small text-secondary"><%= _t('jobs.list.sortBy', 'Sort by:') %></span>
+    <a href="/tracker?<%= _activeFilter ? 'status=' + _activeFilter + '&' : '' %>sort=date"
+       class="btn btn-ghost btn-sm <%= _sortBy === 'date' ? 'active' : '' %>"
+       style="<%= _sortBy === 'date' ? 'font-weight: 600; text-decoration: underline;' : '' %>">
+      Date added
+    </a>
+    <a href="/tracker?<%= _activeFilter ? 'status=' + _activeFilter + '&' : '' %>sort=score"
+       class="btn btn-ghost btn-sm <%= _sortBy === 'score' ? 'active' : '' %>"
+       style="<%= _sortBy === 'score' ? 'font-weight: 600; text-decoration: underline;' : '' %>">
+      Match score
+    </a>
+  </div>
+
+  <% if (_applications.length > 0) { %>
+  <!-- Application List -->
+  <div class="application-list" id="application-list" style="display: flex; flex-direction: column; gap: 8px;">
+    <% _applications.forEach(function(app) { %>
+    <%
+      var appScore = app.overall_score || app.score || (app.fit_score ? app.fit_score.overall_score : null);
+      var jobTitle = app.title || (app.job ? app.job.title : 'Untitled Job');
+      var companyName = app.company_name || (app.job ? app.job.company_name : 'Unknown company');
+      var appLocation = app.location || (app.job ? app.job.location : '');
+      var appSource = app.source || (app.job ? app.job.source : '');
+      var isActive = app.is_active !== undefined ? app.is_active : (app.job ? app.job.is_active : 1);
+    %>
+    <div class="application-row" data-application-id="<%= app.id %>" data-job-id="<%= app.job_id %>"
+         style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 16px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div class="application-row-status">
+          <%- include('../partials/status-badge', { status: app.status, clickable: true, applicationId: app.id }) %>
+        </div>
+        <div style="flex: 1; min-width: 200px;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <a href="/jobs/<%= app.job_id %>" style="font-size: 14px; font-weight: 500; color: var(--text, #1A1D23); text-decoration: none;">
+              <%= jobTitle %>
+            </a>
+            <% if (!isActive) { %>
+              <span style="padding: 1px 6px; font-size: 10px; border-radius: 4px; background: #fef2f2; color: #DC2626; border: 1px solid #fecaca;">Closed</span>
+            <% } %>
+          </div>
+          <p style="font-size: 12px; color: var(--text-secondary, #4B5563); margin: 2px 0 0;">
+            <span><%= companyName %></span>
+            <% if (appLocation) { %>
+              <span style="margin: 0 4px; opacity: 0.4;">|</span>
+              <span><%= appLocation %></span>
+            <% } %>
+            <% if (appSource) { %>
+              <span style="margin: 0 4px; opacity: 0.4;">|</span>
+              <span class="tag tag-<%= appSource %>" style="font-size: 10px;"><%= appSource %></span>
+            <% } %>
+          </p>
+        </div>
+        <div class="application-row-score">
+          <% if (appScore !== null && appScore !== undefined) { %>
+            <%- include('../partials/score-indicator', { score: appScore, size: 'compact' }) %>
+          <% } else { %>
+            <span style="font-size: 12px; color: var(--text-muted, #6B7280);">--</span>
+          <% } %>
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted, #6B7280);">
+          <%= app.status_updated_at || app.created_at || '' %>
+        </div>
+        <div>
+          <button type="button" class="btn btn-ghost btn-sm application-notes-btn"
+                  data-application-id="<%= app.id %>" title="<%= app.notes ? 'Edit notes' : 'Add notes' %>">
+            &#9998; Notes
+          </button>
+        </div>
+      </div>
+
+      <!-- Notes preview -->
+      <% if (app.notes) { %>
+        <p style="font-size: 12px; color: var(--text-muted, #6B7280); margin: 8px 0 0; padding-left: 40px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+          <%= app.notes.substring(0, 100) %><%= app.notes.length > 100 ? '...' : '' %>
+        </p>
+      <% } %>
+    </div>
+
+    <!-- Notes panel (hidden by default) -->
+    <div class="application-notes-panel" id="notes-panel-<%= app.id %>" hidden
+         style="background: var(--bg-subtle, #F1F3F5); border-radius: 8px; padding: 12px; margin-top: -4px;">
+      <textarea class="application-notes-input" id="notes-input-<%= app.id %>" rows="3"
+                placeholder="Add your notes here..."
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 6px; font-size: 13px; resize: vertical;"><%= app.notes || '' %></textarea>
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <button type="button" class="btn btn-primary btn-sm application-notes-save" data-application-id="<%= app.id %>">Save Notes</button>
+        <button type="button" class="btn btn-ghost btn-sm application-notes-cancel" data-application-id="<%= app.id %>">Cancel</button>
+      </div>
+    </div>
+    <% }); %>
+  </div>
+
+  <!-- Pagination -->
+  <% if (_totalPages > 1) { %>
+  <nav class="pagination" aria-label="Page navigation"
+       style="display: flex; justify-content: center; align-items: center; gap: 4px; margin-top: 24px;">
+    <%
+      function trackerPageUrl(p) {
+        var params = new URLSearchParams();
+        if (_activeFilter) params.set('status', _activeFilter);
+        if (_sortBy) params.set('sort', _sortBy);
+        params.set('page', p);
+        return '/tracker?' + params.toString();
+      }
+    %>
+    <% if (_page > 1) { %>
+      <a href="<%= trackerPageUrl(_page - 1) %>" class="btn btn-ghost btn-sm">&lt; Prev</a>
+    <% } %>
+    <% for (var p = Math.max(1, _page - 2); p <= Math.min(_totalPages, _page + 2); p++) { %>
+      <% if (p === _page) { %>
+        <span class="btn btn-primary btn-sm" aria-current="page"><%= p %></span>
+      <% } else { %>
+        <a href="<%= trackerPageUrl(p) %>" class="btn btn-ghost btn-sm"><%= p %></a>
+      <% } %>
+    <% } %>
+    <% if (_page < _totalPages) { %>
+      <a href="<%= trackerPageUrl(_page + 1) %>" class="btn btn-ghost btn-sm">Next &gt;</a>
+    <% } %>
+  </nav>
+  <% } %>
+
+  <% } else { %>
+  <!-- Empty state -->
+  <div style="text-align: center; padding: 48px 16px; background: var(--bg-elevated, #fff); border-radius: 12px; border: 1px solid var(--border-subtle, #E2E6EA);">
+    <h2 style="font-size: 18px; color: var(--text, #1A1D23); margin-bottom: 8px;">No tracked applications yet</h2>
+    <p style="color: var(--text-secondary, #4B5563); margin-bottom: 16px;">
+      <%= _t('tracker.empty', 'Save a job from the listings to start tracking.') %>
+    </p>
+    <a href="/jobs" class="btn btn-primary">Browse Jobs</a>
+  </div>
+  <% } %>
+</section>
+
+<script>
+(function() {
+  'use strict';
+
+  // Notes toggle
+  document.querySelectorAll('.application-notes-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = btn.getAttribute('data-application-id');
+      var panel = document.getElementById('notes-panel-' + id);
+      if (panel) panel.hidden = !panel.hidden;
+    });
+  });
+
+  // Notes cancel
+  document.querySelectorAll('.application-notes-cancel').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = btn.getAttribute('data-application-id');
+      var panel = document.getElementById('notes-panel-' + id);
+      if (panel) panel.hidden = true;
+    });
+  });
+
+  // Notes save via AJAX (manual save button)
+  function saveNotes(id) {
+    var input = document.getElementById('notes-input-' + id);
+    if (!input) return;
+    var saveBtn = document.querySelector('.application-notes-save[data-application-id="' + id + '"]');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+    fetch('/api/applications/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: input.value })
+    })
+    .then(function(res) {
+      if (!res.ok) throw new Error('Failed to save notes');
+      return res.json();
+    })
+    .then(function() {
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Notes'; }
+      if (window.Toast) window.Toast.show('Notes saved', 'success');
+    })
+    .catch(function() {
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Notes'; }
+      if (window.Toast) window.Toast.show('Could not save notes. Try again.', 'error');
+    });
+  }
+
+  document.querySelectorAll('.application-notes-save').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      saveNotes(btn.getAttribute('data-application-id'));
+    });
+  });
+
+  // Debounced auto-save for notes (1.5s after last keystroke)
+  var autoSaveTimers = {};
+  document.querySelectorAll('.application-notes-input').forEach(function(textarea) {
+    var id = textarea.id.replace('notes-input-', '');
+    textarea.addEventListener('input', function() {
+      if (autoSaveTimers[id]) clearTimeout(autoSaveTimers[id]);
+      autoSaveTimers[id] = setTimeout(function() { saveNotes(id); }, 1500);
+    });
+  });
+
+  // Status change via status badge dropdowns
+  document.addEventListener('click', function(e) {
+    var dropdownItem = e.target.closest('.status-dropdown-item');
+    if (!dropdownItem) return;
+    var wrapper = dropdownItem.closest('.status-badge-wrapper');
+    if (!wrapper) return;
+    var appId = wrapper.getAttribute('data-application-id');
+    if (!appId) return;
+    var newStatus = dropdownItem.getAttribute('data-status');
+    if (!newStatus) return;
+
+    if (newStatus === 'remove') {
+      if (!confirm('Remove this application from tracking?')) return;
+      fetch('/applications/' + appId, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(function(res) {
+        if (!res.ok) throw new Error('Failed to remove');
+        var row = document.querySelector('.application-row[data-application-id="' + appId + '"]');
+        var notesPanel = document.getElementById('notes-panel-' + appId);
+        if (row) row.remove();
+        if (notesPanel) notesPanel.remove();
+        if (window.Toast) window.Toast.show('Application removed', 'success');
+      })
+      .catch(function() {
+        if (window.Toast) window.Toast.show('Could not remove application. Try again.', 'error');
+      });
+      return;
+    }
+
+    fetch('/api/applications/' + appId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus })
+    })
+    .then(function(res) {
+      if (!res.ok) throw new Error('Failed to update status');
+      return res.json();
+    })
+    .then(function() { window.location.reload(); })
+    .catch(function() {
+      if (window.Toast) window.Toast.show('Could not update status. Try again.', 'error');
+    });
+  });
+})();
+</script>

@@ -1,0 +1,119 @@
+<% layout('layout') -%>
+
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _user = typeof user !== 'undefined' ? user : null;
+  var _jobs = typeof jobs !== 'undefined' && Array.isArray(jobs) ? jobs : [];
+  var _stats = typeof stats !== 'undefined' ? stats : {};
+  var _error = typeof error !== 'undefined' ? error : null;
+  var _state = _error ? 'error' : (_jobs.length > 0 ? 'populated' : 'empty');
+%>
+
+<!-- Hero Section -->
+<section class="hero" style="background: var(--bg-elevated, #fff); padding: 48px 0 40px; text-align: center;">
+  <div class="container" style="max-width: 720px; margin: 0 auto; padding: 0 16px;">
+    <h1 style="font-size: 28px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; color: var(--text, #1A1D23); margin-bottom: 12px;">
+      <%= _t('home.hero.title', 'Find your best-fit role across Australia') %>
+    </h1>
+    <p style="font-size: 14px; line-height: 1.6; color: var(--text-secondary, #4B5563); margin-bottom: 24px;">
+      <%= _t('home.hero.subtitle', 'AI-powered matching across Seek, LinkedIn, and APSJobs -- all in one place.') %>
+    </p>
+
+    <form class="hero-search" method="GET" action="/jobs" role="search" aria-label="Search jobs"
+          style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px;">
+      <input
+        type="text"
+        name="keyword"
+        placeholder="<%= _t('home.hero.keywordPlaceholder', 'Job title or keyword') %>"
+        aria-label="<%= _t('home.hero.keywordLabel', 'Keyword') %>"
+        style="flex: 1; min-width: 200px; max-width: 280px; padding: 10px 14px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 8px; font-size: 14px;"
+      />
+      <input
+        type="text"
+        name="location"
+        placeholder="<%= _t('home.hero.locationPlaceholder', 'City or region') %>"
+        aria-label="<%= _t('home.hero.locationLabel', 'Location') %>"
+        style="flex: 1; min-width: 160px; max-width: 220px; padding: 10px 14px; border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 8px; font-size: 14px;"
+      />
+      <button type="submit" class="btn btn-primary" style="padding: 10px 24px; font-weight: 600;">
+        <%= _t('home.hero.search', 'Search') %>
+      </button>
+    </form>
+
+    <p style="font-size: 12px; color: var(--text-muted, #6B7280); letter-spacing: 0.01em;">
+      <%= _t('home.hero.tagline', '3 platforms. One intelligent search.') %>
+    </p>
+  </div>
+</section>
+
+<!-- Platform Stats Bar -->
+<% if (_stats.bySource) { %>
+<section class="platform-stats" aria-label="Platform statistics"
+         style="display: flex; justify-content: center; align-items: center; gap: 24px; padding: 16px 0; background: var(--bg-subtle, #F1F3F5); border-top: 1px solid var(--border-subtle, #E2E6EA); border-bottom: 1px solid var(--border-subtle, #E2E6EA);">
+  <%
+    var seekCount = 0, linkedinCount = 0, apsCount = 0;
+    _stats.bySource.forEach(function(s) {
+      if (s.source === 'seek') seekCount = s.count;
+      else if (s.source === 'linkedin') linkedinCount = s.count;
+      else if (s.source === 'apsjobs') apsCount = s.count;
+    });
+  %>
+  <span style="font-size: 13px; color: var(--text-secondary, #4B5563); font-weight: 500;">
+    <span class="tag tag-seek" style="margin-right: 4px;">Seek</span> <%= seekCount %> jobs
+  </span>
+  <span style="color: var(--border-subtle, #E2E6EA);" aria-hidden="true">|</span>
+  <span style="font-size: 13px; color: var(--text-secondary, #4B5563); font-weight: 500;">
+    <span class="tag tag-linkedin" style="margin-right: 4px;">LinkedIn</span> <%= linkedinCount %> jobs
+  </span>
+  <span style="color: var(--border-subtle, #E2E6EA);" aria-hidden="true">|</span>
+  <span style="font-size: 13px; color: var(--text-secondary, #4B5563); font-weight: 500;">
+    <span class="tag tag-apsjobs" style="margin-right: 4px;">APSJobs</span> <%= apsCount %> jobs
+  </span>
+</section>
+<% } %>
+
+<!-- Latest Opportunities -->
+<section class="latest-jobs" style="max-width: 800px; margin: 0 auto; padding: 32px 16px 48px;">
+  <h2 style="font-size: 20px; font-weight: 600; line-height: 1.35; letter-spacing: -0.005em; color: var(--text, #1A1D23); margin-bottom: 20px;">
+    <%= _t('home.latest.title', 'Latest opportunities') %>
+  </h2>
+
+  <% if (_state === 'error') { %>
+    <div class="empty-state" style="text-align: center; padding: 40px 16px; background: var(--bg-elevated, #fff); border-radius: 12px; border: 1px solid var(--border-subtle, #E2E6EA);">
+      <p style="color: var(--danger, #DC2626); margin-bottom: 12px;">
+        <%= _t('home.latest.error', 'Something went wrong loading jobs. Please try again.') %>
+      </p>
+      <a href="/" class="btn btn-ghost btn-sm"><%= _t('common.retry', 'Retry') %></a>
+    </div>
+
+  <% } else if (_state === 'empty') { %>
+    <div class="empty-state" style="text-align: center; padding: 40px 16px; background: var(--bg-elevated, #fff); border-radius: 12px; border: 1px solid var(--border-subtle, #E2E6EA);">
+      <p style="color: var(--text-secondary, #4B5563);">
+        <%= _t('home.latest.empty', 'No jobs yet. Check back soon -- we are collecting listings from Seek, LinkedIn, and APSJobs.') %>
+      </p>
+    </div>
+
+  <% } else { %>
+    <!-- Loading skeleton (hidden by default, shown via JS when needed) -->
+    <div class="skeleton-container" id="home-skeleton" style="display: none;">
+      <% for (var sk = 0; sk < 4; sk++) { %>
+        <%- include('../partials/skeleton-card') %>
+      <% } %>
+    </div>
+
+    <!-- Job cards -->
+    <div class="job-list" style="display: flex; flex-direction: column; gap: 12px;">
+      <% _jobs.forEach(function(job, idx) { %>
+        <% var cardScore = (typeof job.overall_score === 'number') ? job.overall_score : null; %>
+        <%- include('../partials/job-card', { job: job, score: cardScore, index: idx }) %>
+      <% }); %>
+    </div>
+
+    <!-- Load more / View all -->
+    <div style="text-align: center; margin-top: 24px;">
+      <a href="/jobs" class="btn btn-ghost" style="padding: 10px 32px;">
+        <%= _t('home.latest.viewAll', 'View all jobs') %>
+      </a>
+    </div>
+  <% } %>
+</section>

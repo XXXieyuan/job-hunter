@@ -1,0 +1,175 @@
+<% layout('layout') -%>
+
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _profile = typeof profile !== 'undefined' ? profile : null;
+  var _flash = typeof flash !== 'undefined' ? flash : {};
+%>
+
+<link rel="stylesheet" href="/css/batch-apply.css">
+
+<section class="page-section" style="max-width: 720px; margin: 0 auto; padding: 24px 16px 48px;">
+
+  <!-- Breadcrumb -->
+  <nav aria-label="Breadcrumb" style="font-size: 0.8125rem; color: var(--color-text-muted, #64748b); margin-bottom: 16px;">
+    <a href="/" style="color: var(--color-text-muted, #64748b); text-decoration: none;">Home</a>
+    <span aria-hidden="true"> &gt; </span>
+    <a href="/batch-apply/history" style="color: var(--color-text-muted, #64748b); text-decoration: none;">Batch Apply</a>
+    <span aria-hidden="true"> &gt; </span>
+    <span aria-current="page"><%= _t('batchApply.profile.title', 'Application Profile') %></span>
+  </nav>
+
+  <!-- Page Header -->
+  <div style="margin-bottom: 8px;">
+    <h1 style="font-size: 1.5rem; font-weight: 700; line-height: 1.2; color: var(--color-text-primary, #1e293b);">
+      <%= _t('batchApply.profile.title', 'Application Profile') %>
+    </h1>
+    <% if (_profile && _profile.updated_at) { %>
+    <p class="ba-profile-updated">
+      <%= _t('batchApply.profile.lastUpdated', 'Last updated: %s').replace('%s', new Date(_profile.updated_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })) %>
+    </p>
+    <% } %>
+  </div>
+
+  <!-- Flash Messages -->
+  <% if (_flash.success) { %>
+  <div role="alert" style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-size: 0.875rem; color: #059669;">
+    <%= _flash.success %>
+  </div>
+  <% } %>
+  <% if (_flash.error) { %>
+  <div role="alert" style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-size: 0.875rem; color: #DC2626;">
+    <%= _flash.error %>
+  </div>
+  <% } %>
+
+  <form action="/batch-apply/profile" method="POST" role="form" aria-label="Application Profile" class="ba-profile-form">
+
+    <% if (!_profile) { %>
+    <!-- Hint banner for empty profiles -->
+    <div class="ba-profile-hint">
+      <svg class="ba-profile-hint__icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+      </svg>
+      <span><%= _t('batchApply.profile.hint', 'Configure your application details once — they\'ll be used to pre-fill Seek application forms.') %></span>
+    </div>
+    <% } %>
+
+    <div class="ba-profile-fields">
+      <!-- Full Name (full-width) -->
+      <div class="ba-profile-field">
+        <label for="ba-full-name" class="ba-profile-field__label ba-profile-field__label--required">
+          <%= _t('batchApply.profile.fullName', 'Full Name') %>
+        </label>
+        <input
+          type="text"
+          id="ba-full-name"
+          name="full_name"
+          class="ba-profile-field__input"
+          maxlength="100"
+          required
+          value="<%= _profile ? _profile.full_name : '' %>"
+        >
+      </div>
+
+      <!-- Email + Phone (grid row) -->
+      <div class="ba-profile-fields--grid">
+        <div class="ba-profile-field">
+          <label for="ba-email" class="ba-profile-field__label ba-profile-field__label--required">
+            <%= _t('batchApply.profile.email', 'Email Address') %>
+          </label>
+          <input
+            type="email"
+            id="ba-email"
+            name="email"
+            class="ba-profile-field__input"
+            required
+            value="<%= _profile ? _profile.email : '' %>"
+          >
+        </div>
+
+        <div class="ba-profile-field">
+          <label for="ba-phone" class="ba-profile-field__label ba-profile-field__label--required">
+            <%= _t('batchApply.profile.phone', 'Phone Number') %>
+          </label>
+          <input
+            type="tel"
+            id="ba-phone"
+            name="phone"
+            class="ba-profile-field__input"
+            maxlength="15"
+            required
+            placeholder="+61 412 345 678"
+            value="<%= _profile ? _profile.phone : '' %>"
+          >
+        </div>
+      </div>
+
+      <!-- Visa Status + Work Rights (grid row) -->
+      <div class="ba-profile-fields--grid">
+        <div class="ba-profile-field">
+          <label for="ba-visa-status" class="ba-profile-field__label ba-profile-field__label--required">
+            <%= _t('batchApply.profile.visaStatus', 'Visa Status') %>
+          </label>
+          <select id="ba-visa-status" name="visa_status" class="ba-profile-field__select" required>
+            <option value="" disabled <%= !_profile || !_profile.visa_status ? 'selected' : '' %>>Select...</option>
+            <option value="Australian Citizen" <%= _profile && _profile.visa_status === 'Australian Citizen' ? 'selected' : '' %>>Australian Citizen</option>
+            <option value="Permanent Resident" <%= _profile && _profile.visa_status === 'Permanent Resident' ? 'selected' : '' %>>Permanent Resident</option>
+            <option value="Temporary Visa" <%= _profile && _profile.visa_status === 'Temporary Visa' ? 'selected' : '' %>>Temporary Visa</option>
+          </select>
+        </div>
+
+        <div class="ba-profile-field">
+          <label for="ba-work-rights" class="ba-profile-field__label ba-profile-field__label--required">
+            <%= _t('batchApply.profile.workRights', 'Work Rights') %>
+          </label>
+          <select id="ba-work-rights" name="work_rights" class="ba-profile-field__select" required>
+            <option value="" disabled <%= !_profile || !_profile.work_rights ? 'selected' : '' %>>Select...</option>
+            <option value="Unrestricted" <%= _profile && _profile.work_rights === 'Unrestricted' ? 'selected' : '' %>>Unrestricted</option>
+            <option value="Restricted &#x2014; requires sponsorship" <%= _profile && _profile.work_rights === 'Restricted \u2014 requires sponsorship' ? 'selected' : '' %>>Restricted &#x2014; requires sponsorship</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Expected Salary + Notice Period (grid row) -->
+      <div class="ba-profile-fields--grid">
+        <div class="ba-profile-field">
+          <label for="ba-salary" class="ba-profile-field__label">
+            <%= _t('batchApply.profile.expectedSalary', 'Expected Salary') %>
+          </label>
+          <input
+            type="text"
+            id="ba-salary"
+            name="expected_salary"
+            class="ba-profile-field__input"
+            maxlength="50"
+            value="<%= _profile && _profile.expected_salary ? _profile.expected_salary : '' %>"
+          >
+          <span class="ba-profile-field__help"><%= _t('batchApply.profile.salaryHelp', 'Optional \u2014 not all Seek listings ask for this') %></span>
+        </div>
+
+        <div class="ba-profile-field">
+          <label for="ba-notice" class="ba-profile-field__label">
+            <%= _t('batchApply.profile.noticePeriod', 'Notice Period / Availability') %>
+          </label>
+          <input
+            type="text"
+            id="ba-notice"
+            name="notice_period"
+            class="ba-profile-field__input"
+            maxlength="50"
+            placeholder="2 weeks"
+            value="<%= _profile && _profile.notice_period ? _profile.notice_period : '' %>"
+          >
+        </div>
+      </div>
+    </div>
+
+    <div class="ba-profile-actions">
+      <button type="submit" class="ba-profile-actions__save">
+        <%= _t('batchApply.profile.save', 'Save Profile') %>
+      </button>
+    </div>
+  </form>
+
+</section>

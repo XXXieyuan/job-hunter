@@ -13,6 +13,10 @@
   var _scoreFeedback = typeof scoreFeedback !== 'undefined' ? scoreFeedback : null;
   var _isAps = typeof isAps !== 'undefined' ? isAps : false;
   var _duplicateSources = typeof duplicateSources !== 'undefined' && Array.isArray(duplicateSources) ? duplicateSources : [];
+  var _allScores = typeof allScores !== 'undefined' && Array.isArray(allScores) ? allScores : [];
+  var _primaryScore = typeof primaryScore !== 'undefined' ? primaryScore : null;
+  var _overrideResumeId = typeof overrideResumeId !== 'undefined' ? overrideResumeId : null;
+  var _userResumeCount = typeof _userResumeCount !== 'undefined' ? _userResumeCount : (typeof userResumeCount !== 'undefined' ? userResumeCount : 0);
 
   // Parse skill gaps if available
   var _skillGaps = {};
@@ -137,6 +141,38 @@
           <% } %>
         </div>
       </div>
+
+      <!-- Resume Match Indicator (multi-resume) -->
+      <% if (_user && _userResumeCount >= 2 && _primaryScore) { %>
+      <div class="resume-selector-wrapper" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+        <p class="resume-match-indicator" style="font-size: 0.875rem; font-weight: 500; line-height: 1.4; color: var(--color-text-primary, #1e293b); padding: 8px 12px; background: var(--color-primary-light, #dbeafe); border-radius: 8px; margin: 0;">
+          <% if (_overrideResumeId) { %>
+            <%= _t('jobs.detail.matchedWithManual', 'Matched with: {label} (manual)').replace('{label}', _primaryScore.resume_label || _t('resumes.manage.untitledResume', 'Untitled Resume')) %>
+          <% } else { %>
+            <%= _t('jobs.detail.matchedWith', 'Matched with: {label}').replace('{label}', _primaryScore.resume_label || _t('resumes.manage.untitledResume', 'Untitled Resume')) %>
+          <% } %>
+        </p>
+        <% if (_allScores.length >= 2) { %>
+        <div>
+          <select id="resume-selector" class="resume-selector" aria-label="<%= _t('jobs.detail.selectResume', 'Select resume for scoring') %>" style="font-size: 0.875rem; padding: 6px 12px; border: 1px solid var(--color-border, #e2e8f0); border-radius: 6px; background: var(--color-bg-surface, #ffffff); color: var(--color-text-primary, #1e293b); min-height: 44px; cursor: pointer;">
+            <option value="auto" <%= !_overrideResumeId ? 'selected' : '' %>>
+              <%= _t('jobs.detail.autoBestMatch', 'Auto (best match)') %>
+            </option>
+            <% _allScores.forEach(function(s) { %>
+            <option value="<%= s.resume_id %>" <%= _overrideResumeId === s.resume_id ? 'selected' : '' %>>
+              <%= s.resume_label || _t('resumes.manage.untitledResume', 'Untitled Resume') %> -- <%= Math.round(s.overall_score) %>%
+            </option>
+            <% }); %>
+          </select>
+          <form id="resume-override-form" method="POST" action="/jobs/<%= _job.id %>/resume-override" style="display: none;">
+            <input type="hidden" name="resume_id" id="override-resume-id">
+          </form>
+          <form id="resume-override-clear-form" method="POST" action="/jobs/<%= _job.id %>/resume-override/clear" style="display: none;">
+          </form>
+        </div>
+        <% } %>
+      </div>
+      <% } %>
 
       <!-- Large Score Indicator (if authenticated and scored) -->
       <% if (_user && _overallScore !== null) { %>
@@ -412,6 +448,45 @@
                   </div>
                 <% } %>
               </div>
+
+              <!-- All Scores Summary (multi-resume comparison) -->
+              <% if (_allScores.length >= 2) { %>
+              <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-subtle, #E2E6EA);">
+                <button type="button" class="all-scores-toggle" id="all-scores-toggle" aria-expanded="false" aria-controls="all-scores-content"
+                        style="display: flex; align-items: center; gap: 6px; font-size: 0.875rem; font-weight: 500; color: var(--text, #1A1D23); background: none; border: none; cursor: pointer; padding: 8px 0; min-height: 44px; width: 100%; text-align: left;">
+                  <span class="chevron" style="display: inline-block; transition: transform 0.2s; font-size: 0.75rem;">&#9660;</span>
+                  <%= _t('jobs.detail.allScores', 'All Resume Scores') %> (<%= _allScores.length %>)
+                </button>
+                <div id="all-scores-content" style="display: none;">
+                  <div class="scores-table-scroll" style="overflow-x: auto; -webkit-overflow-scrolling: touch; position: relative;">
+                    <table class="scores-comparison-table" style="width: 100%; min-width: 480px; border-collapse: collapse; font-size: 0.8125rem;">
+                      <thead>
+                        <tr>
+                          <th style="text-align: left; font-weight: 500; color: var(--text-muted, #6B7280); padding: 8px 10px; border-bottom: 2px solid var(--border-subtle, #E2E6EA); white-space: nowrap;">Resume</th>
+                          <th style="text-align: left; font-weight: 500; color: var(--text-muted, #6B7280); padding: 8px 10px; border-bottom: 2px solid var(--border-subtle, #E2E6EA); white-space: nowrap;">Overall</th>
+                          <th style="text-align: left; font-weight: 500; color: var(--text-muted, #6B7280); padding: 8px 10px; border-bottom: 2px solid var(--border-subtle, #E2E6EA); white-space: nowrap;">Semantic</th>
+                          <th style="text-align: left; font-weight: 500; color: var(--text-muted, #6B7280); padding: 8px 10px; border-bottom: 2px solid var(--border-subtle, #E2E6EA); white-space: nowrap;">Keyword</th>
+                          <th style="text-align: left; font-weight: 500; color: var(--text-muted, #6B7280); padding: 8px 10px; border-bottom: 2px solid var(--border-subtle, #E2E6EA); white-space: nowrap;">Role</th>
+                          <th style="text-align: left; font-weight: 500; color: var(--text-muted, #6B7280); padding: 8px 10px; border-bottom: 2px solid var(--border-subtle, #E2E6EA); white-space: nowrap;">Location</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <% _allScores.forEach(function(s) { %>
+                        <tr style="<%= (_primaryScore && _primaryScore.resume_id === s.resume_id) ? 'border-left: 3px solid var(--accent-primary, #2563EB); background: rgba(59, 130, 246, 0.04);' : '' %>">
+                          <td style="padding: 8px 10px; border-bottom: 1px solid var(--border-subtle, #E2E6EA); color: var(--text, #1A1D23); font-weight: 500;"><%= s.resume_label || _t('resumes.manage.untitledResume', 'Untitled Resume') %></td>
+                          <td style="padding: 8px 10px; border-bottom: 1px solid var(--border-subtle, #E2E6EA); color: var(--text, #1A1D23);"><%= Math.round(s.overall_score) %>%</td>
+                          <td style="padding: 8px 10px; border-bottom: 1px solid var(--border-subtle, #E2E6EA); color: var(--text-secondary, #4B5563);"><%= Math.round(s.semantic_score || 0) %>%</td>
+                          <td style="padding: 8px 10px; border-bottom: 1px solid var(--border-subtle, #E2E6EA); color: var(--text-secondary, #4B5563);"><%= Math.round(s.keyword_score || 0) %>%</td>
+                          <td style="padding: 8px 10px; border-bottom: 1px solid var(--border-subtle, #E2E6EA); color: var(--text-secondary, #4B5563);"><%= Math.round(s.role_alignment_score || 0) %>%</td>
+                          <td style="padding: 8px 10px; border-bottom: 1px solid var(--border-subtle, #E2E6EA); color: var(--text-secondary, #4B5563);"><%= Math.round(s.location_score || 0) %>%</td>
+                        </tr>
+                        <% }); %>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <% } %>
             <% } %>
           </div>
 
@@ -497,7 +572,7 @@
 
           <!-- Company Tab -->
           <div class="tab-pane" data-tab-id="tab-company">
-            <div id="company-content">
+            <div id="company-content" aria-live="polite">
               <% if (!_company) { %>
                 <div style="text-align: center; padding: 32px 16px;" id="company-empty">
                   <p style="color: var(--text-secondary, #4B5563); margin-bottom: 12px;">
@@ -524,8 +599,18 @@
                       <span id="company-size"><%= _company.size %></span>
                     </div>
                   <% } %>
+                  <% if (_company.headquarters) { %>
+                    <div style="font-size: 13px; color: var(--text-secondary, #4B5563);">
+                      <span style="font-weight: 500;"><%= _t('jobs.detail.company.headquarters', 'Headquarters') %>:</span>
+                      <span id="company-headquarters"><%= _company.headquarters %></span>
+                    </div>
+                  <% } %>
                   <% if (_company.description) { %>
                     <p style="font-size: 14px; line-height: 1.6; color: var(--text, #1A1D23);" id="company-description"><%= _company.description %></p>
+                  <% } else { %>
+                    <p style="font-size: 13px; line-height: 1.4; color: var(--text-secondary, #4B5563); font-style: italic;">
+                      <%= _t('jobs.detail.company.researchPending', 'Research pending — please try again later.') %>
+                    </p>
                   <% } %>
                   <% if (_company.website) { %>
                     <a href="<%= _company.website %>" target="_blank" rel="noopener noreferrer"
@@ -537,13 +622,17 @@
               <% } %>
             </div>
             <!-- Company research loading (hidden by default) -->
-            <div style="text-align: center; padding: 32px 16px; display: none;" id="company-research-loading">
+            <div style="text-align: center; padding: 32px 16px; display: none;" id="company-research-loading" aria-live="polite">
               <p style="color: var(--text-secondary, #4B5563);">Researching company... This may take a moment.</p>
             </div>
           </div>
 
         </div>
       </div>
+
+      <!-- Optimization Suggestions Panel -->
+      <%- include('../partials/optimization-suggestions') %>
+
     </div>
 
     <!-- Sidebar (desktop) -->
@@ -611,6 +700,9 @@
   </div>
 
 </section>
+
+<link rel="stylesheet" href="/css/optimization.css">
+<link rel="stylesheet" href="/css/resume-manage.css">
 
 <style>
 @media (max-width: 768px) {
@@ -922,6 +1014,7 @@
             html += '<h3 style="font-size: 17px; font-weight: 500; color: var(--text, #1A1D23);">' + escapeHtml(result.data.name) + '</h3>';
             if (result.data.industry) html += '<div style="font-size: 13px; color: var(--text-secondary, #4B5563);"><span style="font-weight: 500;">Industry:</span> ' + escapeHtml(result.data.industry) + '</div>';
             if (result.data.size) html += '<div style="font-size: 13px; color: var(--text-secondary, #4B5563);"><span style="font-weight: 500;">Size:</span> ' + escapeHtml(result.data.size) + '</div>';
+            if (result.data.headquarters) html += '<div style="font-size: 13px; color: var(--text-secondary, #4B5563);"><span style="font-weight: 500;">Headquarters:</span> ' + escapeHtml(result.data.headquarters) + '</div>';
             if (result.data.description) html += '<p style="font-size: 14px; line-height: 1.6; color: var(--text, #1A1D23);">' + escapeHtml(result.data.description) + '</p>';
             if (result.data.website) html += '<a href="' + escapeHtml(result.data.website) + '" target="_blank" rel="noopener noreferrer" style="font-size: 13px; color: var(--accent-primary, #2563EB);">' + escapeHtml(result.data.website) + ' &rarr;</a>';
             html += '</div>';
@@ -938,6 +1031,52 @@
     });
   }
 
+
+  // ── Resume Selector Dropdown (multi-resume override) ──
+  var resumeSelector = document.getElementById('resume-selector');
+  if (resumeSelector) {
+    resumeSelector.addEventListener('change', function() {
+      resumeSelector.disabled = true;
+      var val = resumeSelector.value;
+      if (val === 'auto') {
+        var clearForm = document.getElementById('resume-override-clear-form');
+        if (clearForm) clearForm.submit();
+      } else {
+        var overrideForm = document.getElementById('resume-override-form');
+        var overrideInput = document.getElementById('override-resume-id');
+        if (overrideForm && overrideInput) {
+          overrideInput.value = val;
+          overrideForm.submit();
+        }
+      }
+    });
+  }
+
+  // ── All Scores Summary Toggle ──
+  var allScoresToggle = document.getElementById('all-scores-toggle');
+  var allScoresContent = document.getElementById('all-scores-content');
+  if (allScoresToggle && allScoresContent) {
+    allScoresToggle.addEventListener('click', function() {
+      var expanded = allScoresToggle.getAttribute('aria-expanded') === 'true';
+      allScoresToggle.setAttribute('aria-expanded', !expanded);
+      allScoresContent.style.display = expanded ? 'none' : 'block';
+      var chevron = allScoresToggle.querySelector('.chevron');
+      if (chevron) chevron.style.transform = expanded ? '' : 'rotate(180deg)';
+    });
+
+    // Scroll fade gradient detection
+    var scrollContainer = allScoresContent.querySelector('.scores-table-scroll');
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', function() {
+        var atEnd = scrollContainer.scrollLeft + scrollContainer.clientWidth >= scrollContainer.scrollWidth - 2;
+        if (atEnd) {
+          scrollContainer.classList.add('scrolled-end');
+        } else {
+          scrollContainer.classList.remove('scrolled-end');
+        }
+      });
+    }
+  }
 
   // ── Score Feedback ──
   var feedbackContainer = document.getElementById('score-feedback-container');
@@ -980,3 +1119,4 @@
   }
 })();
 </script>
+<script src="/js/optimization.js"></script>

@@ -1,0 +1,58 @@
+<% layout('layout') -%>
+
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _user = typeof user !== 'undefined' ? user : null;
+%>
+
+<link rel="stylesheet" href="/css/alerts.css" />
+
+<section style="max-width: 800px; margin: 0 auto; padding: 48px 16px;">
+  <h1 style="font-size: 28px; font-weight: 700; color: var(--text, #1A1D23); margin-bottom: 24px;">
+    <%= _t('alerts.title', 'Job Alerts') %>
+  </h1>
+
+  <!-- Stats Bar -->
+  <div class="alert-stats-bar" id="alert-stats-bar">
+    <span id="alert-stats-text"></span>
+    <button class="alert-stats-bar__mark-all" id="mark-all-read" disabled>
+      <%= _t('alerts.mark_all_read', 'Mark all as read') %>
+    </button>
+  </div>
+
+  <!-- Filter Tabs -->
+  <div class="filter-tabs" role="tablist" aria-label="Filter notifications">
+    <button class="filter-tabs__tab filter-tabs__tab--active" role="tab" aria-selected="true" data-filter="all">
+      <%= _t('alerts.filter.all', 'All') %> <span class="filter-tabs__count" id="count-all"></span>
+    </button>
+    <button class="filter-tabs__tab" role="tab" aria-selected="false" data-filter="unread">
+      <%= _t('alerts.filter.unread', 'Unread') %> <span class="filter-tabs__count" id="count-unread"></span>
+    </button>
+    <button class="filter-tabs__tab" role="tab" aria-selected="false" data-filter="read">
+      <%= _t('alerts.filter.read', 'Read') %> <span class="filter-tabs__count" id="count-read"></span>
+    </button>
+  </div>
+
+  <!-- Loading skeleton -->
+  <div id="alerts-skeleton">
+    <div class="alert-skeleton"><div class="alert-skeleton__line alert-skeleton__line--title"></div><div class="alert-skeleton__line alert-skeleton__line--meta"></div><div class="alert-skeleton__line alert-skeleton__line--skills"></div></div>
+    <div class="alert-skeleton"><div class="alert-skeleton__line alert-skeleton__line--title"></div><div class="alert-skeleton__line alert-skeleton__line--meta"></div><div class="alert-skeleton__line alert-skeleton__line--skills"></div></div>
+    <div class="alert-skeleton"><div class="alert-skeleton__line alert-skeleton__line--title"></div><div class="alert-skeleton__line alert-skeleton__line--meta"></div><div class="alert-skeleton__line alert-skeleton__line--skills"></div></div>
+  </div>
+
+  <!-- Notification list -->
+  <div class="alert-list" id="alert-list" role="list" aria-label="Notifications" style="display: none;"></div>
+
+  <!-- Empty state -->
+  <div class="alert-empty-state" id="alert-empty" style="display: none;">
+    <svg class="alert-empty-state__icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2"><path d="M24 4a14 14 0 0114 14v8l4 6H2l4-6v-8A14 14 0 0124 4z"/><path d="M18 38a6 6 0 0012 0"/></svg>
+    <h2 class="alert-empty-state__heading" id="empty-heading"></h2>
+    <p class="alert-empty-state__description" id="empty-description"></p>
+    <a href="/settings" class="alert-empty-state__cta" id="empty-cta" style="display: none;"><%= _t('alerts.empty.no_alerts_cta', 'Configure Alerts') %></a>
+  </div>
+
+  <!-- Pagination -->
+  <nav class="alert-pagination" id="alert-pagination" role="navigation" aria-label="Pagination" style="display: none;"></nav>
+</section>
+
+<script src="/js/alerts.js"></script>

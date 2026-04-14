@@ -40,12 +40,12 @@ function insertResume(resume) {
     `INSERT INTO resumes (
       user_id, name, file_path, file_type, summary,
       skills_json, experience_json, education_json,
-      certifications_json, raw_text, is_confirmed
+      certifications_json, raw_text, is_confirmed, label
     )
     VALUES (
       @user_id, @name, @file_path, @file_type, @summary,
       @skills_json, @experience_json, @education_json,
-      @certifications_json, @raw_text, @is_confirmed
+      @certifications_json, @raw_text, @is_confirmed, @label
     )`
   );
   const info = stmt.run({
@@ -60,6 +60,7 @@ function insertResume(resume) {
     certifications_json: resume.certifications_json || null,
     raw_text: resume.raw_text || null,
     is_confirmed: resume.is_confirmed || 0,
+    label: resume.label || null,
   });
   return info.lastInsertRowid;
 }
@@ -105,6 +106,7 @@ function deleteResume(id, user_id) {
   // Cascade-delete dependent records to avoid FK constraint errors
   db.prepare('DELETE FROM job_fit_scores WHERE resume_id = ?').run(id);
   db.prepare('DELETE FROM cover_letters WHERE resume_id = ?').run(id);
+  db.prepare('DELETE FROM resume_overrides WHERE resume_id = ?').run(id);
   if (user_id !== undefined) {
     return db
       .prepare('DELETE FROM resumes WHERE id = ? AND user_id = ?')
@@ -143,6 +145,59 @@ function getMainResume() {
     .get();
 }
 
+function countResumesForUser(user_id) {
+  const db = getDbInstance();
+  const row = db
+    .prepare('SELECT COUNT(*) AS c FROM resumes WHERE user_id = ?')
+    .get(user_id);
+  return row ? row.c : 0;
+}
+
+function countConfirmedResumesForUser(user_id) {
+  const db = getDbInstance();
+  const row = db.prepare(
+    'SELECT COUNT(*) AS c FROM resumes WHERE user_id = ? AND is_confirmed = 1'
+  ).get(user_id);
+  return row ? row.c : 0;
+}
+
+function getConfirmedResumesForUser(user_id) {
+  const db = getDbInstance();
+  return db
+    .prepare(
+      'SELECT * FROM resumes WHERE user_id = ? AND is_confirmed = 1 ORDER BY created_at DESC'
+    )
+    .all(user_id);
+}
+
+function getResumesWithCascadeCounts(user_id) {
+  const db = getDbInstance();
+  return db
+    .prepare(
+      `SELECT r.id, r.label, r.name AS file_name, r.created_at, r.is_confirmed,
+              COALESCE(sc.cnt, 0) AS score_count,
+              COALESCE(cl.cnt, 0) AS cover_letter_count
+       FROM resumes r
+       LEFT JOIN (SELECT resume_id, COUNT(*) AS cnt FROM job_fit_scores GROUP BY resume_id) sc
+         ON sc.resume_id = r.id
+       LEFT JOIN (SELECT resume_id, COUNT(*) AS cnt FROM cover_letters GROUP BY resume_id) cl
+         ON cl.resume_id = r.id
+       WHERE r.user_id = ?
+       ORDER BY r.created_at DESC`
+    )
+    .all(user_id);
+}
+
+function updateLabel(id, user_id, label) {
+  const db = getDbInstance();
+  const info = db
+    .prepare(
+      'UPDATE resumes SET label = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?'
+    )
+    .run(label, id, user_id);
+  return info.changes;
+}
+
 function countUsersWithResume() {
   const db = getDbInstance();
   const row = db.prepare(
@@ -162,6 +217,11 @@ module.exports = {
   updateEmbedding,
   deleteResume,
   getConfirmedResumeForUser,
+  countResumesForUser,
+  countConfirmedResumesForUser,
+  getConfirmedResumesForUser,
+  getResumesWithCascadeCounts,
+  updateLabel,
   clearMainResume,
   setMainResume,
   getMainResume,

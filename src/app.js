@@ -9,7 +9,12 @@ const authRoutes = require('./routes/authRoutes');
 const applicationRoutes = require('./routes/applicationRoutes');
 const coverLetterRoutes = require('./routes/coverLetterRoutes');
 const scoreFeedbackRoutes = require('./routes/scoreFeedbackRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
+const alertRoutes = require('./routes/alertRoutes');
+const salaryRoutes = require('./routes/salaryRoutes');
+const batchApplyRoutes = require('./routes/batchApplyRoutes');
 const { optionalAuth, csrfProtection } = require('./middleware/auth');
+const { alertBadge } = require('./middleware/alertBadge');
 const { rateLimiter } = require('./middleware/rateLimiter');
 const { AppError, errorRingBuffer } = require('./utils/errors');
 const { getLogger } = require('./logger');
@@ -61,11 +66,22 @@ app.use(express.json({ limit: '2mb' }));
 // Global rate limiter: 120 requests per minute per IP
 app.use(rateLimiter({ windowMs: 60 * 1000, max: 120 }));
 
-// CSRF protection for state-changing requests
-app.use(csrfProtection);
+// CSRF protection for state-changing requests (exempt unsubscribe — uses bearer token)
+app.use((req, res, next) => {
+  if (req.path.startsWith('/alerts/unsubscribe/')) {
+    return next();
+  }
+  return csrfProtection(req, res, next);
+});
 
 // Attach req.user from session cookie if present (browse-first)
 app.use(optionalAuth);
+
+// Alert badge — injects unread count into res.locals for nav badge
+app.use(alertBadge);
+
+// Batch-apply readiness — injects profile/resume flags into res.locals for job listing
+app.use(batchApplyRoutes.batchApplyReadiness);
 
 // Basic request logging middleware
 app.use((req, res, next) => {
@@ -121,6 +137,10 @@ app.use('/', resumeRoutes);
 app.use('/', applicationRoutes);
 app.use('/', coverLetterRoutes);
 app.use('/', scoreFeedbackRoutes);
+app.use('/', settingsRoutes);
+app.use('/', alertRoutes);
+app.use('/', salaryRoutes);
+app.use('/', batchApplyRoutes);
 
 // 404 handler — must come after all routes
 app.use((req, res, next) => {
@@ -182,6 +202,7 @@ app.use((err, req, res, next) => {
   }
 
   // Unhandled / unexpected error
+  const isProduction = process.env.NODE_ENV === 'production';
   errorLogger.error('Unhandled error', {
     message: err.message,
     stack: err.stack,
@@ -189,15 +210,17 @@ app.use((err, req, res, next) => {
     method: req.method,
   });
 
+  const safeMessage = isProduction ? 'An unexpected error occurred' : (err.message || 'An unexpected error occurred');
+
   if (isApiOrAdmin) {
     return res.status(500).json({
-      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
+      error: { code: 'INTERNAL_ERROR', message: safeMessage },
     });
   }
 
   res.status(500).render('errors/500', {
     statusCode: 500,
-    message: 'An unexpected error occurred',
+    message: safeMessage,
   });
 });
 

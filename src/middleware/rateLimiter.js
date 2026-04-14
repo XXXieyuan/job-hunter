@@ -55,6 +55,7 @@ cleanupTimer.unref();
  * @param {string} [options.prefix='']       - Optional prefix for key namespacing (avoids collisions between limiters).
  * @param {function} [options.keyGenerator]  - Optional custom function(req) => string for key.
  * @param {string} [options.message]         - Custom 429 response message.
+ * @param {string} [options.errorShape='nested'] - Response shape: 'nested' ({error:{code,message}}) or 'flat' ({error:"<string>"}).
  * @returns {function} Express middleware
  */
 function rateLimiter(options = {}) {
@@ -63,6 +64,7 @@ function rateLimiter(options = {}) {
   const scope = options.scope || 'ip';
   const prefix = options.prefix || '';
   const message = options.message || 'Too many requests, please try again later.';
+  const errorShape = options.errorShape || 'nested';
   const keyGenerator =
     options.keyGenerator ||
     ((req) => {
@@ -98,7 +100,7 @@ function rateLimiter(options = {}) {
       logger.warn('Rate limit exceeded', { key, count: timestamps.length, max, windowMs });
 
       return res.status(429).json({
-        error: { code: 'RATE_LIMITED', message },
+        error: errorShape === 'flat' ? message : { code: 'RATE_LIMITED', message },
       });
     }
 
@@ -156,6 +158,15 @@ const resumeUploadLimiter = rateLimiter({
   message: 'Too many resume uploads, please try again later.',
 });
 
+// Pre-configured rate limiter for optimization suggestions (5 per minute per user)
+const optimizationLimiter = rateLimiter({
+  windowMs: 60 * 1000,
+  max: 5,
+  scope: 'user',
+  prefix: 'optimization',
+  message: 'Too many requests — try again in a minute.',
+});
+
 // Pre-configured rate limiter for scraper runs (6 per hour global)
 const scraperRunLimiter = rateLimiter({
   windowMs: 60 * 60 * 1000,
@@ -163,6 +174,44 @@ const scraperRunLimiter = rateLimiter({
   scope: 'global',
   prefix: 'scraper',
   message: 'Too many scraper triggers, please try again later.',
+});
+
+// Pre-configured rate limiter for salary API (30 per minute per IP)
+const salaryApiLimiter = rateLimiter({
+  windowMs: 60 * 1000,
+  max: 30,
+  scope: 'ip',
+  prefix: 'salary-api',
+  message: 'Too many requests — try again shortly',
+  errorShape: 'flat',
+});
+
+// Pre-configured rate limiter for resume override (30 per minute per IP)
+const resumeOverrideLimiter = rateLimiter({
+  windowMs: 60 * 1000,
+  max: 30,
+  scope: 'ip',
+  prefix: 'resume-override',
+  message: 'Too many requests, please try again later.',
+});
+
+// Pre-configured rate limiter for company research (10 per minute per IP, flat error)
+const companyResearchLimiter = rateLimiter({
+  windowMs: 60 * 1000,
+  max: 10,
+  scope: 'ip',
+  prefix: 'company-research',
+  message: 'Too many company research requests, please try again later.',
+  errorShape: 'flat',
+});
+
+// Pre-configured rate limiter for batch company research (2 per hour per IP)
+const batchCompanyResearchLimiter = rateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 2,
+  scope: 'ip',
+  prefix: 'batch-company-research',
+  message: 'Too many batch research requests, please try again later.',
 });
 
 // Export store for testing purposes
@@ -173,6 +222,11 @@ module.exports = {
   coverLetterLimiter,
   scoringLimiter,
   resumeUploadLimiter,
+  optimizationLimiter,
   scraperRunLimiter,
+  salaryApiLimiter,
+  resumeOverrideLimiter,
+  companyResearchLimiter,
+  batchCompanyResearchLimiter,
   _store: store,
 };

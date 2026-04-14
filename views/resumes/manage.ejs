@@ -1,324 +1,226 @@
 <% layout('layout') -%>
 
-<section class="page-section resume-manage-page">
-  <div class="section-header">
-    <h1>Your Resumes</h1>
-    <p class="section-subtitle">Upload and manage your resume versions. Match scores are calculated from your confirmed resume.</p>
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _user = typeof user !== 'undefined' ? user : null;
+  var _resumes = typeof resumes !== 'undefined' && Array.isArray(resumes) ? resumes : [];
+  var _resumeCount = typeof resumeCount !== 'undefined' ? resumeCount : _resumes.length;
+  var _maxResumes = typeof maxResumes !== 'undefined' ? maxResumes : 5;
+  var _flash = typeof flash !== 'undefined' ? flash : {};
+%>
+
+<link rel="stylesheet" href="/css/resume-manage.css">
+
+<section class="page-section" style="max-width: 800px; margin: 0 auto; padding: 24px 16px 48px;">
+
+  <!-- Page Header -->
+  <div class="section-header" style="margin-bottom: 8px;">
+    <h1 style="font-size: 1.5rem; font-weight: 600; line-height: 1.3; color: var(--color-text-primary, #1e293b);">
+      <%= _t('resumes.manage.title', 'My Resumes') %>
+    </h1>
+    <p style="font-size: 0.875rem; color: var(--color-text-muted, #64748b); margin-top: 4px;">
+      Upload and manage your resume versions. Scoring runs against all confirmed resumes.
+    </p>
   </div>
 
+  <!-- Resume Count Indicator -->
+  <p class="resume-count-indicator" style="font-size: 0.875rem; color: <%= _resumeCount >= _maxResumes ? 'var(--color-warning, #e67e22)' : 'var(--color-text-muted, #64748b)' %>; margin-bottom: 24px;">
+    <%= _resumeCount %> of <%= _maxResumes %> resumes
+  </p>
+
+  <!-- Flash Messages -->
+  <% if (_flash.success) { %>
+  <div role="alert" style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-size: 0.875rem; color: #059669;">
+    <%= _flash.success %>
+  </div>
+  <% } %>
+  <% if (_flash.error) { %>
+  <div role="alert" style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-size: 0.875rem; color: #DC2626;">
+    <%= _flash.error %>
+  </div>
+  <% } %>
+  <% if (_flash.info) { %>
+  <div role="alert" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-size: 0.875rem; color: #1e40af;">
+    <%= _flash.info %>
+  </div>
+  <% } %>
+
   <!-- Upload Zone -->
-  <div class="resume-upload-zone" id="resume-upload-zone">
-    <form
-      action="/resumes/upload"
-      method="POST"
-      enctype="multipart/form-data"
-      id="resume-upload-form"
-    >
-      <div class="upload-dropzone" id="upload-dropzone">
-        <div class="upload-dropzone-default" id="upload-default-state">
-          <svg class="upload-icon" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true">
+  <div class="resume-upload-zone" style="margin-bottom: 32px;">
+    <% if (_resumeCount >= _maxResumes) { %>
+    <div class="upload-disabled-overlay" aria-disabled="true" style="background: var(--color-bg-surface, #ffffff); border: 2px dashed var(--color-border, #e2e8f0); border-radius: 12px; padding: 32px 16px; text-align: center; opacity: 0.6;">
+      <p style="font-size: 0.875rem; color: var(--color-text-muted, #64748b);">
+        <%= _t('resumes.manage.atLimit', 'Maximum 5 resumes. Delete one to upload a new one.') %>
+      </p>
+    </div>
+    <% } else { %>
+    <form action="/resumes/upload" method="POST" enctype="multipart/form-data" id="resume-upload-form">
+      <div class="upload-dropzone" id="upload-dropzone" style="background: var(--color-bg-surface, #ffffff); border: 2px dashed var(--color-border, #e2e8f0); border-radius: 12px; padding: 24px 16px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s;">
+        <div id="upload-default-state">
+          <svg viewBox="0 0 48 48" width="48" height="48" aria-hidden="true" style="color: var(--color-text-muted, #64748b); margin-bottom: 8px;">
             <path d="M24 4L14 16h7v12h6V16h7L24 4z" fill="currentColor" opacity="0.6"/>
             <path d="M8 34v6c0 2.2 1.8 4 4 4h24c2.2 0 4-1.8 4-4v-6H8z" fill="currentColor" opacity="0.3"/>
           </svg>
-          <p class="upload-text">Drag and drop your resume or <label for="resume-file-input" class="upload-browse-link">browse files</label></p>
-          <p class="upload-hint">PDF or Word (.docx), max 10MB</p>
+          <p style="font-size: 0.875rem; color: var(--color-text-primary, #1e293b); margin-bottom: 4px;">
+            Drag and drop your resume or <label for="resume-file-input" style="color: var(--color-primary, #3b82f6); cursor: pointer; text-decoration: underline;">browse files</label>
+          </p>
+          <p style="font-size: 0.8125rem; color: var(--color-text-muted, #64748b);">Word (.docx), max 10MB</p>
         </div>
 
-        <div class="upload-file-selected" id="upload-selected-state" hidden>
-          <div class="upload-file-info">
-            <span class="upload-file-icon" aria-hidden="true">&#128196;</span>
-            <span class="upload-file-name" id="upload-file-name"></span>
-            <span class="upload-file-size" id="upload-file-size"></span>
-            <button type="button" class="btn btn-ghost btn-sm upload-file-remove" id="upload-file-remove">Remove</button>
+        <div id="upload-selected-state" hidden>
+          <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span aria-hidden="true">&#128196;</span>
+            <span id="upload-file-name" style="font-size: 0.875rem; font-weight: 500;"></span>
+            <span id="upload-file-size" style="font-size: 0.8125rem; color: var(--color-text-muted, #64748b);"></span>
+            <button type="button" class="btn btn-ghost btn-sm" id="upload-file-remove">Remove</button>
           </div>
         </div>
 
-        <div class="upload-progress" id="upload-progress-state" hidden>
-          <div class="progress-bar">
-            <div class="progress-bar-fill" id="upload-progress-fill"></div>
-          </div>
-          <p class="upload-progress-text">Uploading...</p>
-        </div>
-
-        <input
-          type="file"
-          name="resume"
-          id="resume-file-input"
-          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          hidden
-        />
+        <input type="file" name="resume" id="resume-file-input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden />
       </div>
 
-      <div class="upload-actions" id="upload-actions" hidden>
+      <!-- Label Input -->
+      <div class="upload-label-group" style="margin-top: 16px;">
+        <label for="resume-label-input" style="display: block; font-size: 0.875rem; font-weight: 500; color: var(--color-text-primary, #1e293b); margin-bottom: 4px;">
+          <%= _t('resumes.upload.labelField', 'Resume Label') %>
+        </label>
+        <input type="text" id="resume-label-input" name="label" maxlength="50" required
+               placeholder="<%= _t('resumes.upload.labelPlaceholder', 'e.g., Technical, Management, General') %>"
+               style="width: 100%; padding: 8px 12px; border: 1px solid var(--color-border, #e2e8f0); border-radius: 6px; font-size: 0.875rem; color: var(--color-text-primary, #1e293b); background: var(--color-bg-surface, #ffffff);">
+        <p style="font-size: 0.75rem; color: var(--color-text-muted, #64748b); margin-top: 4px;">
+          <%= _t('resumes.upload.labelHelp', 'A short name to identify this resume (max 50 characters)') %>
+        </p>
+
+        <!-- Suggested Label Chips -->
+        <div class="label-chip-row" role="group" aria-label="<%= _t('resumes.manage.suggestedLabels', 'Suggested labels:') %>" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+          <span style="font-size: 0.8125rem; color: var(--color-text-muted, #64748b); align-self: center; margin-right: 4px;"><%= _t('resumes.manage.suggestedLabels', 'Suggested labels:') %></span>
+          <button type="button" class="label-chip">Technical</button>
+          <button type="button" class="label-chip">Management</button>
+          <button type="button" class="label-chip">General</button>
+          <button type="button" class="label-chip">Government</button>
+          <button type="button" class="label-chip">Career Change</button>
+        </div>
+      </div>
+
+      <div class="upload-actions" style="margin-top: 12px;">
         <button type="submit" class="btn btn-primary" id="upload-submit-btn">
-          Upload
+          <%= _t('resumes.manage.uploadButton', 'Upload Resume') %>
         </button>
       </div>
     </form>
-
-    <div class="upload-error" id="upload-error" hidden>
-      <p class="text-danger" id="upload-error-text"></p>
-    </div>
+    <% } %>
   </div>
 
-  <!-- Resume List -->
-  <% if (typeof resumes !== 'undefined' && resumes && resumes.length > 0) { %>
-  <div class="resume-list-section">
-    <h2>Your resumes</h2>
-    <div class="resume-card-list" id="resume-card-list">
-      <% resumes.forEach(function(resume) { %>
-      <%
-        var statusClass = resume.is_confirmed ? 'confirmed' : 'needs-review';
-        var statusLabel = resume.is_confirmed ? 'Confirmed' : 'Needs Review';
-        var skills = [];
-        try { skills = JSON.parse(resume.skills_json || '[]'); } catch(e) { skills = []; }
-        var experience = [];
-        try { experience = JSON.parse(resume.experience_json || '[]'); } catch(e) { experience = []; }
-        var education = [];
-        try { education = JSON.parse(resume.education_json || '[]'); } catch(e) { education = []; }
-        var uploadDate = resume.uploaded_at || resume.created_at || '';
-      %>
-      <div class="resume-card resume-card--<%= statusClass %>" data-resume-id="<%= resume.id %>">
-        <div class="resume-card-header">
-          <div class="resume-card-info">
-            <div class="resume-card-icon" aria-hidden="true">
-              <% if (resume.file_type === 'pdf' || (resume.original_filename && resume.original_filename.endsWith('.pdf'))) { %>
-                &#128196;
-              <% } else { %>
-                &#128209;
-              <% } %>
-            </div>
-            <div class="resume-card-meta">
-              <h3 class="resume-card-name"><%= resume.label || resume.original_filename || 'Resume #' + resume.id %></h3>
-              <p class="resume-card-details body-small text-secondary">
-                <span class="resume-card-type"><%= resume.file_type || 'PDF' %></span>
-                <span class="meta-dot" aria-hidden="true"></span>
-                <span>Uploaded <%= uploadDate %></span>
-              </p>
-            </div>
-          </div>
-          <div class="resume-card-status">
-            <span class="badge badge-resume-<%= statusClass %>">
-              <% if (resume.is_confirmed) { %>
-                &#10003; <%= statusLabel %>
-              <% } else { %>
-                &#9888; <%= statusLabel %>
-              <% } %>
-            </span>
-          </div>
-        </div>
-
-        <div class="resume-card-summary body-small text-secondary">
-          <span><%= skills.length %> skills</span>
-          <span class="meta-dot" aria-hidden="true"></span>
-          <span><%= experience.length %> roles</span>
-          <span class="meta-dot" aria-hidden="true"></span>
-          <span><%= education.length %> degrees</span>
-        </div>
-
-        <div class="resume-card-actions">
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm resume-toggle-detail"
-            data-resume-id="<%= resume.id %>"
-            aria-expanded="false"
-          >View Details</button>
-          <form action="/resumes/<%= resume.id %>/delete" method="POST" class="inline-form"
-                onsubmit="return confirm('Delete this resume? This cannot be undone.');">
-            <button type="submit" class="btn btn-ghost btn-sm text-danger">Delete</button>
-          </form>
-        </div>
-
-        <!-- Expanded detail view (hidden by default) -->
-        <div class="resume-detail-expanded" id="resume-detail-<%= resume.id %>" hidden>
-          <div class="resume-detail-section">
-            <h4>Skills</h4>
-            <% if (skills.length > 0) { %>
-            <div class="skill-pills">
-              <% skills.forEach(function(skill) { %>
-              <span class="skill-pill"><%= typeof skill === 'string' ? skill : skill.name || skill %></span>
-              <% }); %>
-            </div>
-            <% } else { %>
-            <p class="text-muted body-small">No skills extracted yet.</p>
-            <% } %>
-          </div>
-
-          <div class="resume-detail-section">
-            <h4>Experience</h4>
-            <% if (experience.length > 0) { %>
-            <div class="experience-entries">
-              <% experience.forEach(function(exp) { %>
-              <div class="experience-entry">
-                <p class="experience-title"><strong><%= exp.title || exp.role || 'Untitled role' %></strong></p>
-                <p class="body-small text-secondary">
-                  <%= exp.company || '' %>
-                  <% if (exp.dates || exp.start_date) { %>
-                    <span class="meta-dot" aria-hidden="true"></span>
-                    <%= exp.dates || (exp.start_date + (exp.end_date ? ' - ' + exp.end_date : '')) %>
-                  <% } %>
-                </p>
-                <% if (exp.description) { %>
-                <p class="body-small"><%= exp.description %></p>
-                <% } %>
-              </div>
-              <% }); %>
-            </div>
-            <% } else { %>
-            <p class="text-muted body-small">No experience entries extracted yet.</p>
-            <% } %>
-          </div>
-
-          <div class="resume-detail-section">
-            <h4>Education</h4>
-            <% if (education.length > 0) { %>
-            <div class="education-entries">
-              <% education.forEach(function(edu) { %>
-              <div class="education-entry">
-                <p><strong><%= edu.degree || edu.qualification || 'Qualification' %></strong></p>
-                <p class="body-small text-secondary">
-                  <%= edu.institution || '' %>
-                  <% if (edu.year || edu.graduation_year) { %>
-                    <span class="meta-dot" aria-hidden="true"></span>
-                    <%= edu.year || edu.graduation_year %>
-                  <% } %>
-                </p>
-              </div>
-              <% }); %>
-            </div>
-            <% } else { %>
-            <p class="text-muted body-small">No education entries extracted yet.</p>
-            <% } %>
-          </div>
-
-          <div class="resume-detail-actions">
-            <form action="/resumes/<%= resume.id %>/confirm" method="POST" class="inline-form">
-              <button type="submit" class="btn btn-primary btn-sm">Confirm</button>
-            </form>
-            <button type="button" class="btn btn-ghost btn-sm" disabled title="Coming soon">Edit</button>
-            <button type="button" class="btn btn-ghost btn-sm" disabled title="Coming soon">Reparse</button>
-          </div>
-        </div>
+  <!-- Resume Card List -->
+  <% if (_resumes.length > 0) { %>
+  <div class="resume-card-list" role="list" style="display: flex; flex-direction: column; gap: 16px;">
+    <% _resumes.forEach(function(resume) { %>
+    <%
+      var resumeLabel = resume.label || _t('resumes.manage.untitledResume', 'Untitled Resume');
+      var isConfirmed = resume.is_confirmed === 1 || resume.is_confirmed === true;
+      var scoreCount = typeof resume.score_count === 'number' ? resume.score_count : 0;
+      var coverLetterCount = typeof resume.cover_letter_count === 'number' ? resume.cover_letter_count : 0;
+      var uploadDate = resume.created_at || '';
+    %>
+    <div class="resume-card" role="listitem" data-resume-id="<%= resume.id %>" style="background: var(--color-bg-surface, #ffffff); border: 1px solid var(--color-border, #e2e8f0); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: box-shadow 0.2s, background 0.2s;">
+      <div class="resume-card-header" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px;">
+        <h3 class="resume-card-label" style="font-size: 1rem; font-weight: 600; line-height: 1.4; color: var(--color-text-primary, #1e293b); margin: 0;">
+          <%= resumeLabel %>
+          <% if (!resume.label) { %>
+            <button type="button" class="edit-label-btn" data-resume-id="<%= resume.id %>" data-current-label=""
+                    style="font-size: 0.75rem; font-weight: 400; color: var(--color-primary, #3b82f6); background: none; border: none; cursor: pointer; text-decoration: underline; margin-left: 4px;">
+              Add label
+            </button>
+          <% } %>
+        </h3>
+        <span class="badge" role="status" style="display: inline-block; padding: 2px 10px; font-size: 0.75rem; font-weight: 500; line-height: 1.0; border-radius: 12px; white-space: nowrap; <%= isConfirmed ? 'background: #22c55e; color: #1e293b;' : 'background: #e67e22; color: #1e293b;' %>">
+          <% if (isConfirmed) { %>
+            &#10003; <%= _t('resumes.manage.confirmed', 'Confirmed') %>
+          <% } else { %>
+            <%= _t('resumes.manage.needsReview', 'Needs Review') %>
+          <% } %>
+        </span>
       </div>
-      <% }); %>
+
+      <div class="resume-card-meta" style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.8125rem; color: var(--color-text-muted, #64748b); margin-bottom: 12px;">
+        <span class="resume-card-filename"><%= resume.file_name || resume.original_filename || 'Unknown file' %></span>
+        <span aria-hidden="true" style="color: var(--color-border, #e2e8f0);">|</span>
+        <span class="resume-card-date">Uploaded <%= uploadDate %></span>
+        <span aria-hidden="true" style="color: var(--color-border, #e2e8f0);">|</span>
+        <span class="resume-card-counts"><%= scoreCount %> scores, <%= coverLetterCount %> cover letters</span>
+      </div>
+
+      <div class="resume-card-actions" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+        <% if (!isConfirmed) { %>
+          <a href="/resumes/<%= resume.id %>/confirm" class="btn btn-primary btn-sm">
+            <%= _t('resumes.manage.confirmResume', 'Confirm') %>
+          </a>
+        <% } %>
+        <button type="button" class="btn btn-ghost btn-sm edit-label-btn"
+                data-resume-id="<%= resume.id %>"
+                data-current-label="<%= resume.label || '' %>">
+          <%= _t('resumes.manage.editLabel', 'Edit Label') %>
+        </button>
+        <button type="button" class="btn btn-danger btn-sm delete-resume-btn"
+                data-resume-id="<%= resume.id %>"
+                data-resume-label="<%= resumeLabel %>"
+                data-score-count="<%= scoreCount %>"
+                data-cover-letter-count="<%= coverLetterCount %>">
+          <%= _t('resumes.manage.deleteResume', 'Delete') %>
+        </button>
+      </div>
     </div>
+    <% }); %>
   </div>
+
   <% } else { %>
-  <!-- Empty state -->
-  <div class="empty-state">
-    <div class="empty-state-icon" aria-hidden="true">
-      <svg viewBox="0 0 64 64" width="64" height="64">
-        <rect x="16" y="8" width="32" height="48" rx="4" fill="none" stroke="currentColor" stroke-width="2" opacity="0.4"/>
-        <path d="M24 24h16M24 32h12M24 40h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.3"/>
-      </svg>
-    </div>
-    <h2>Upload your first resume</h2>
-    <p class="text-secondary">Upload your first resume to unlock match scores and cover letter generation.</p>
+  <!-- Empty State -->
+  <div style="text-align: center; padding: 40px 16px;">
+    <p style="font-size: 0.875rem; color: var(--color-text-muted, #64748b);">
+      <%= _t('resumes.manage.emptyState', 'Upload your first resume to start matching with jobs.') %>
+    </p>
   </div>
   <% } %>
+
 </section>
 
-<script>
-(function() {
-  'use strict';
+<!-- Edit Label Modal -->
+<div id="edit-label-modal" role="dialog" aria-labelledby="edit-label-modal-title" aria-modal="true" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1000;">
+  <div class="modal-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4);"></div>
+  <div class="modal-content" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--color-bg-surface, #ffffff); border-radius: 12px; padding: 24px; width: 90%; max-width: 400px; box-shadow: 0 4px 24px rgba(0,0,0,0.2);">
+    <h3 id="edit-label-modal-title" style="font-size: 1rem; font-weight: 600; margin-bottom: 16px; color: var(--color-text-primary, #1e293b);">
+      <%= _t('resumes.manage.editLabel', 'Edit Label') %>
+    </h3>
+    <form id="edit-label-form" method="POST" action="">
+      <input type="text" name="label" id="edit-label-input" maxlength="50" required
+             style="width: 100%; padding: 8px 12px; border: 1px solid var(--color-border, #e2e8f0); border-radius: 6px; font-size: 0.875rem; margin-bottom: 16px;">
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button type="button" class="btn btn-ghost btn-sm" id="edit-label-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">
+          <%= _t('resumes.manage.saveLabel', 'Save Label') %>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
 
-  var dropzone = document.getElementById('upload-dropzone');
-  var fileInput = document.getElementById('resume-file-input');
-  var defaultState = document.getElementById('upload-default-state');
-  var selectedState = document.getElementById('upload-selected-state');
-  var fileName = document.getElementById('upload-file-name');
-  var fileSize = document.getElementById('upload-file-size');
-  var removeBtn = document.getElementById('upload-file-remove');
-  var uploadActions = document.getElementById('upload-actions');
-  var uploadError = document.getElementById('upload-error');
-  var uploadErrorText = document.getElementById('upload-error-text');
+<!-- Delete Confirmation Dialog -->
+<div id="delete-confirm-dialog" role="alertdialog" aria-labelledby="delete-confirm-title" aria-describedby="delete-confirm-body" aria-modal="true" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1000;">
+  <div class="modal-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4);"></div>
+  <div class="modal-content" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--color-bg-surface, #ffffff); border-radius: 12px; padding: 24px; width: 90%; max-width: 400px; box-shadow: 0 4px 24px rgba(0,0,0,0.2);">
+    <h3 id="delete-confirm-title" style="font-size: 1rem; font-weight: 600; margin-bottom: 8px; color: var(--color-text-primary, #1e293b);">
+      <%= _t('resumes.manage.deleteConfirmTitle', 'Delete Resume') %>
+    </h3>
+    <p id="delete-confirm-body" style="font-size: 0.875rem; color: var(--color-text-muted, #64748b); margin-bottom: 16px;"></p>
+    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+      <button type="button" class="btn btn-ghost btn-sm" id="delete-confirm-cancel">Cancel</button>
+      <form id="delete-confirm-form" method="POST" action="" style="display: inline;">
+        <button type="submit" class="btn btn-danger btn-sm">
+          <%= _t('resumes.manage.deleteResume', 'Delete') %>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
 
-  if (!dropzone || !fileInput) return;
-
-  function formatSize(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-
-  function showFile(file) {
-    if (!file) return;
-    var ext = file.name.split('.').pop().toLowerCase();
-    if (ext !== 'pdf' && ext !== 'docx') {
-      showError('Only PDF and Word (.docx) files are accepted.');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      showError('File exceeds the 10MB limit.');
-      return;
-    }
-    hideError();
-    fileName.textContent = file.name;
-    fileSize.textContent = formatSize(file.size);
-    defaultState.hidden = true;
-    selectedState.hidden = false;
-    uploadActions.hidden = false;
-  }
-
-  function resetUpload() {
-    fileInput.value = '';
-    defaultState.hidden = false;
-    selectedState.hidden = true;
-    uploadActions.hidden = true;
-  }
-
-  function showError(msg) {
-    uploadErrorText.textContent = msg;
-    uploadError.hidden = false;
-  }
-
-  function hideError() {
-    uploadError.hidden = true;
-  }
-
-  // Drag and drop
-  dropzone.addEventListener('dragover', function(e) {
-    e.preventDefault();
-    dropzone.classList.add('dropzone-active');
-  });
-  dropzone.addEventListener('dragleave', function(e) {
-    e.preventDefault();
-    dropzone.classList.remove('dropzone-active');
-  });
-  dropzone.addEventListener('drop', function(e) {
-    e.preventDefault();
-    dropzone.classList.remove('dropzone-active');
-    var files = e.dataTransfer.files;
-    if (files.length > 0) {
-      fileInput.files = e.dataTransfer.files;
-      showFile(files[0]);
-    }
-  });
-
-  fileInput.addEventListener('change', function() {
-    if (fileInput.files.length > 0) {
-      showFile(fileInput.files[0]);
-    }
-  });
-
-  if (removeBtn) {
-    removeBtn.addEventListener('click', function() {
-      resetUpload();
-    });
-  }
-
-  // Toggle detail views
-  var toggleBtns = document.querySelectorAll('.resume-toggle-detail');
-  toggleBtns.forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var id = btn.getAttribute('data-resume-id');
-      var detail = document.getElementById('resume-detail-' + id);
-      if (!detail) return;
-      var isHidden = detail.hidden;
-      detail.hidden = !isHidden;
-      btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
-      btn.textContent = isHidden ? 'Hide Details' : 'View Details';
-    });
-  });
-})();
-</script>
+<script src="/js/resume-manage.js"></script>

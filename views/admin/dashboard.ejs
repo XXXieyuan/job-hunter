@@ -324,6 +324,26 @@
       </div>
     </div>
 
+    <!-- Company Research Panel (T-G.1) -->
+    <%
+      var _totalCompanies = typeof totalCompanies !== 'undefined' ? totalCompanies : 0;
+      var _unresearchedCount = typeof unresearchedCount !== 'undefined' ? unresearchedCount : 0;
+      var _researchedCount = _totalCompanies - _unresearchedCount;
+    %>
+    <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px;">
+      <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Company Research</h3>
+      <p style="font-size: 13px; color: var(--text-secondary, #4B5563); margin-bottom: 12px;">
+        <%= _researchedCount %> of <%= _totalCompanies %> companies researched
+      </p>
+      <% if (_unresearchedCount > 0) { %>
+        <form method="POST" action="/admin/company-research/run">
+          <button type="submit" class="btn btn-primary btn-sm">Research Companies</button>
+        </form>
+      <% } else { %>
+        <button type="button" class="btn btn-ghost btn-sm" disabled>All companies researched.</button>
+      <% } %>
+    </div>
+
     <!-- Deduplication Panel -->
     <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px;">
       <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Deduplication</h2>

@@ -28,6 +28,10 @@ const analysisRunsRepo = require('../repositories/analysisRunsRepo');
 const duplicateGroupsRepo = require('../repositories/duplicateGroupsRepo');
 const coverLettersRepo = require('../repositories/coverLettersRepo');
 const sessionsRepo = require('../repositories/sessionsRepo');
+const optimizationSuggestionsRepo = require('../repositories/optimizationSuggestionsRepo');
+const companiesRepo = require('../repositories/companiesRepo');
+const companyService = require('../services/companyService');
+const { batchCompanyResearchLimiter } = require('../middleware/rateLimiter');
 const { getDbSizeMb } = require('../db/connection');
 const { getLogger } = require('../logger');
 
@@ -110,12 +114,19 @@ router.get('/admin', (req, res) => {
   const fitStats = fitScoresRepo.getStats();
   const scraperRuns = scraperRunsRepo.getRecentRuns(20);
 
+  // Company research stats for admin dashboard (T-G.1)
+  const allCompanies = companiesRepo.getAll();
+  const totalCompanies = allCompanies.length;
+  const unresearchedCount = allCompanies.filter(c => !c.description).length;
+
   res.render('admin/dashboard', {
     isAdmin: true,
     lastRun,
     jobCounts,
     fitStats,
     scraperRuns,
+    totalCompanies,
+    unresearchedCount,
   });
 });
 
@@ -339,7 +350,7 @@ router.get('/admin/errors', (req, res) => {
 router.post('/admin/cleanup', express.json({ limit: '1mb' }), (req, res) => {
   const { type } = req.body || {};
   const cleanupType = type || 'all';
-  const validTypes = ['raw_json', 'inactive', 'sessions', 'all'];
+  const validTypes = ['raw_json', 'inactive', 'sessions', 'notifications', 'all'];
 
   if (!validTypes.includes(cleanupType)) {
     return res.status(400).json({
@@ -350,6 +361,8 @@ router.post('/admin/cleanup', express.json({ limit: '1mb' }), (req, res) => {
   let raw_json_cleared = 0;
   let archived_jobs = 0;
   let sessions_cleaned = 0;
+  let notifications_cleaned = 0;
+  let optimization_suggestions_cleaned = 0;
 
   if (cleanupType === 'raw_json' || cleanupType === 'all') {
     raw_json_cleared = jobsRepo.clearRawJsonOlderThan(30);
@@ -363,12 +376,23 @@ router.post('/admin/cleanup', express.json({ limit: '1mb' }), (req, res) => {
     sessions_cleaned = sessionsRepo.deleteExpired();
   }
 
-  logger.info('Admin cleanup completed', { type: cleanupType, raw_json_cleared, archived_jobs, sessions_cleaned });
+  if (cleanupType === 'notifications' || cleanupType === 'all') {
+    const notificationsRepo = require('../repositories/notificationsRepo');
+    notifications_cleaned = notificationsRepo.deleteOlderThan(90);
+  }
+
+  if (cleanupType === 'all') {
+    optimization_suggestions_cleaned = optimizationSuggestionsRepo.deleteOlderThan(30);
+  }
+
+  logger.info('Admin cleanup completed', { type: cleanupType, raw_json_cleared, archived_jobs, sessions_cleaned, notifications_cleaned, optimization_suggestions_cleaned });
 
   res.json({
     raw_json_cleared,
     archived_jobs,
     sessions_cleaned,
+    notifications_cleaned,
+    optimization_suggestions_cleaned,
   });
 });
 
@@ -591,6 +615,30 @@ router.post('/admin/dedup/resolve', express.json({ limit: '1mb' }), (req, res) =
   }
 
   res.json({ resolved: true, action, group_id });
+});
+
+// ──────────────────────────────────────────────────────────────
+// T-F.1: POST /admin/company-research/run — Trigger batch company research
+// ──────────────────────────────────────────────────────────────
+
+backgroundQueue.registerHandler('company-research', async (params) => {
+  await companyService.batchResearchCompanies({ onProgress: params.onProgress });
+});
+
+router.post('/admin/company-research/run', batchCompanyResearchLimiter, (req, res) => {
+  const allCompanies = companiesRepo.getAll();
+  const unresearched = allCompanies.filter(c => !c.description || c.description.trim() === '');
+
+  if (unresearched.length === 0) {
+    return res.redirect(302, '/admin?flash=' + encodeURIComponent('All companies already researched.'));
+  }
+
+  backgroundQueue.enqueue('company-research', {}, {
+    description: `Batch company research: ${unresearched.length} companies`,
+  });
+
+  logger.info('Admin triggered batch company research', { count: unresearched.length });
+  res.redirect(302, '/admin?flash=' + encodeURIComponent(`Batch company research started. Processing ${unresearched.length} companies.`));
 });
 
 // ──────────────────────────────────────────────────────────────

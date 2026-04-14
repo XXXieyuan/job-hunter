@@ -1,0 +1,263 @@
+<%
+  /**
+   * Optimization Suggestions partial
+   * Expects locals:
+   *   optimizationSuggestions — cached suggestion data (or undefined)
+   *   optimizationSuggestionsStale — boolean (or undefined)
+   *   job — current job object
+   *   user — current user (or null)
+   *   hasResume — boolean
+   *   score — fit score object (or null)
+   *   t — locale function
+   */
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _optUser = typeof user !== 'undefined' ? user : null;
+  var _optJob = typeof job !== 'undefined' ? job : {};
+  var _optHasResume = typeof hasResume !== 'undefined' ? hasResume : false;
+  var _optScore = typeof score !== 'undefined' ? score : null;
+  var _optSuggestions = typeof optimizationSuggestions !== 'undefined' ? optimizationSuggestions : null;
+  var _optStale = typeof optimizationSuggestionsStale !== 'undefined' ? optimizationSuggestionsStale : false;
+
+  // Preconditions: user authenticated + has resume + has fit score
+  var _optPreconditionsMet = _optUser && _optHasResume && _optScore;
+
+  // Determine if we have cached non-stale suggestions
+  var _optHasCached = _optSuggestions && !_optStale;
+  var _optHasStale = _optSuggestions && _optStale;
+
+  // Parse suggestions array
+  var _optItems = [];
+  if (_optSuggestions && _optSuggestions.suggestions_json) {
+    try {
+      _optItems = typeof _optSuggestions.suggestions_json === 'string'
+        ? JSON.parse(_optSuggestions.suggestions_json)
+        : _optSuggestions.suggestions_json;
+    } catch(e) { _optItems = []; }
+  }
+
+  // Category badge helpers
+  var _catMap = {
+    add_keyword: { label: _t('optimization.categoryAddKeyword', 'Add Keyword'), cls: 'opt-badge--keyword' },
+    rephrase_experience: { label: _t('optimization.categoryRephraseExperience', 'Rephrase Experience'), cls: 'opt-badge--rephrase' },
+    add_missing_skill: { label: _t('optimization.categoryAddMissingSkill', 'Add Missing Skill'), cls: 'opt-badge--skill' }
+  };
+
+  // Score tier colour class helper
+  function _optScoreTier(val) {
+    if (val >= 75) return 'opt-score--high';
+    if (val >= 50) return 'opt-score--mid';
+    return 'opt-score--low';
+  }
+%>
+
+<% if (_optPreconditionsMet) { %>
+<div id="optimization-panel"
+     class="optimization-panel"
+     role="region"
+     aria-labelledby="optimization-heading"
+     data-job-id="<%= _optJob.id %>">
+
+  <h3 id="optimization-heading" class="optimization-panel__heading" tabindex="-1">
+    <%= _t('optimization.improveResume', 'Improve Resume') %>
+  </h3>
+
+  <!-- Error container (hidden by default) -->
+  <div id="optimization-error" class="optimization-error" role="alert" style="display: none;">
+    <svg class="optimization-error__icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 1.5L1 14h14L8 1.5z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+      <path d="M8 6v4M8 11.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <span id="optimization-error-text"></span>
+  </div>
+
+  <!-- Stale Banner -->
+  <% if (_optHasStale) { %>
+  <div class="optimization-banner optimization-banner--stale">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 1a7 7 0 100 14A7 7 0 008 1z" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M10.5 5.5L5.5 10.5M8 3v2M8 11v2M3 8h2M11 8h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+    </svg>
+    <span><%= _t('optimization.staleWarning', 'Your resume has changed — generate updated suggestions.') %></span>
+  </div>
+  <% } %>
+
+  <!-- Buttons: Improve Resume / View Suggestions -->
+  <div id="optimization-buttons" class="optimization-buttons">
+    <% if (_optHasCached) { %>
+      <button type="button" id="opt-view-btn" class="opt-btn opt-btn--secondary">
+        <span><%= _t('optimization.viewSuggestions', 'View Suggestions') %></span>
+        <svg class="opt-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    <% } %>
+    <% if (!_optHasCached) { %>
+      <button type="button" id="opt-improve-btn" class="opt-btn opt-btn--primary">
+        <svg class="opt-btn__icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M8 2l1.5 3.5L13 7l-3.5 1.5L8 12l-1.5-3.5L3 7l3.5-1.5L8 2z" fill="currentColor"/>
+        </svg>
+        <span id="opt-improve-text"><%= _t('optimization.improveResume', 'Improve Resume') %></span>
+      </button>
+    <% } %>
+  </div>
+
+  <!-- Loading Skeleton (hidden by default) -->
+  <div id="optimization-skeleton" class="optimization-skeleton" aria-live="polite" aria-busy="true" style="display: none;">
+    <p class="optimization-skeleton__text"><%= _t('optimization.analyzingResume', 'Analyzing your resume against this job...') %></p>
+    <div class="optimization-skeleton__rings">
+      <div class="optimization-skeleton__ring"></div>
+      <div class="optimization-skeleton__arrow"></div>
+      <div class="optimization-skeleton__ring"></div>
+    </div>
+    <div class="optimization-skeleton__cards">
+      <div class="optimization-skeleton__card">
+        <div class="optimization-skeleton__badge"></div>
+        <div class="optimization-skeleton__line optimization-skeleton__line--long"></div>
+        <div class="optimization-skeleton__line optimization-skeleton__line--short"></div>
+      </div>
+      <div class="optimization-skeleton__card">
+        <div class="optimization-skeleton__badge"></div>
+        <div class="optimization-skeleton__line optimization-skeleton__line--long"></div>
+        <div class="optimization-skeleton__line optimization-skeleton__line--short"></div>
+      </div>
+      <div class="optimization-skeleton__card">
+        <div class="optimization-skeleton__badge"></div>
+        <div class="optimization-skeleton__line optimization-skeleton__line--long"></div>
+        <div class="optimization-skeleton__line optimization-skeleton__line--short"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Suggestions Content (pre-rendered if cached) -->
+  <div id="optimization-content" class="optimization-content" style="<%= (_optHasCached || _optHasStale) ? '' : 'display: none;' %><%= _optHasStale ? 'opacity: 0.6;' : '' %>">
+
+    <% if (_optItems.length > 0) { %>
+    <!-- Before/After Score Visualization -->
+    <div class="optimization-scores">
+      <div class="optimization-scores__ring-container">
+        <svg class="optimization-scores__ring" viewBox="0 0 36 36" role="img"
+             aria-label="<%= _t('optimization.currentScore', 'Current Score') %>: <%= Math.round(_optSuggestions.current_score) %> out of 100">
+          <circle class="optimization-scores__track" cx="18" cy="18" r="15.9155"/>
+          <circle class="optimization-scores__fill <%= _optScoreTier(_optSuggestions.current_score) %>"
+                  cx="18" cy="18" r="15.9155"
+                  style="stroke-dashoffset: <%= 100 - Math.round(_optSuggestions.current_score) %>;"
+                  data-target-offset="<%= 100 - Math.round(_optSuggestions.current_score) %>"/>
+          <text class="optimization-scores__number" x="18" y="18" text-anchor="middle" dominant-baseline="central">
+            <%= Math.round(_optSuggestions.current_score) %>
+          </text>
+        </svg>
+        <span class="optimization-scores__label"><%= _t('optimization.currentScore', 'Current Score') %></span>
+      </div>
+
+      <div class="optimization-scores__arrow optimization-scores__arrow--right" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="optimization-scores__arrow optimization-scores__arrow--down" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M12 5v14M6 13l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <div class="optimization-scores__ring-container">
+        <svg class="optimization-scores__ring" viewBox="0 0 36 36" role="img"
+             aria-label="<%= _t('optimization.predictedScore', 'Predicted Score') %>: <%= Math.round(_optSuggestions.predicted_score) %> out of 100">
+          <circle class="optimization-scores__track" cx="18" cy="18" r="15.9155"/>
+          <circle class="optimization-scores__fill <%= _optScoreTier(_optSuggestions.predicted_score) %><%= Boolean(_optSuggestions.partial) ? ' optimization-scores__fill--partial' : '' %>"
+                  cx="18" cy="18" r="15.9155"
+                  style="stroke-dashoffset: <%= 100 - Math.round(_optSuggestions.predicted_score) %>;"
+                  data-target-offset="<%= 100 - Math.round(_optSuggestions.predicted_score) %>"/>
+          <text class="optimization-scores__number" x="18" y="18" text-anchor="middle" dominant-baseline="central">
+            <%= Boolean(_optSuggestions.partial) ? '~' : '' %><%= Math.round(_optSuggestions.predicted_score) %>
+          </text>
+        </svg>
+        <span class="optimization-scores__label"><%= _t('optimization.predictedScore', 'Predicted Score') %></span>
+      </div>
+    </div>
+
+    <!-- Score Delta Summary -->
+    <p class="optimization-scores__delta">
+      +<%= Math.round(_optSuggestions.predicted_score - _optSuggestions.current_score) %> pts potential improvement
+    </p>
+
+    <!-- Partial Results Indicator -->
+    <% if (Boolean(_optSuggestions.partial)) { %>
+    <div class="optimization-banner optimization-banner--partial">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.2"/>
+        <path d="M8 5v4M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>
+        <%= _t('optimization.partialResults', 'Showing {count} of potentially more suggestions. Tap to generate more.').replace('{count}', _optItems.length) %>
+      </span>
+    </div>
+    <% } %>
+
+    <!-- Suggestion Cards -->
+    <div class="optimization-cards" role="list">
+      <% _optItems.forEach(function(item, idx) {
+        var cat = _catMap[item.category] || { label: item.category, cls: '' };
+      %>
+      <article class="optimization-card<%= idx >= 3 ? ' optimization-card--hidden' : '' %>"
+               role="listitem"
+               data-suggestion-index="<%= idx %>">
+        <div class="optimization-card__header">
+          <span class="opt-badge <%= cat.cls %>"><%= cat.label %></span>
+          <span class="optimization-card__delta">~+<%= item.predicted_delta %> pts</span>
+        </div>
+        <p class="optimization-card__action"><%= item.what %></p>
+        <div class="optimization-card__meta">
+          <span class="optimization-card__section">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1"/>
+              <path d="M3 4h6M3 6h4M3 8h5" stroke="currentColor" stroke-width="0.8" stroke-linecap="round"/>
+            </svg>
+            <%= item.where %>
+          </span>
+          <span class="optimization-card__addresses">
+            Addresses: <%= item.addresses %>
+          </span>
+        </div>
+      </article>
+      <% }); %>
+    </div>
+
+    <!-- Show More Expander -->
+    <% if (_optItems.length > 3) { %>
+    <button type="button" id="opt-show-more-btn" class="opt-show-more">
+      <span id="opt-show-more-text"><%= _t('optimization.showMore', 'Show more suggestions') %> (+<%= _optItems.length - 3 %> more)</span>
+      <svg class="opt-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <% } %>
+
+    <!-- Fewer Suggestions Note -->
+    <% if (_optItems.length > 0 && _optItems.length < 3) { %>
+    <p class="optimization-fewer">
+      <%= _t('optimization.fewerSuggestions', 'We found {count} suggestions for this job.').replace('{count}', _optItems.length) %>
+    </p>
+    <% } %>
+
+    <!-- Footer: Update Resume link + Generated Timestamp -->
+    <div class="optimization-footer">
+      <a href="/resumes" class="optimization-footer__link">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M6 1v10M1 6l5 5 5-5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <%= _t('optimization.updateResume', 'Update Your Resume') %>
+      </a>
+      <% if (_optSuggestions.created_at) { %>
+      <time class="optimization-footer__time"
+            datetime="<%= _optSuggestions.created_at %>"
+            data-generated-at="<%= _optSuggestions.created_at %>">
+        <%= _t('optimization.generatedAt', 'Generated {time}').replace('{time}', '') %>
+      </time>
+      <% } %>
+    </div>
+    <% } %>
+  </div>
+
+</div>
+<% } %>

@@ -1,8 +1,9 @@
 const express = require('express');
 const { getJobsWithScore, getJobById, searchJobs, getJobCounts, getJobsApi, searchJobsApi, countJobs, countSearchJobs, getDuplicateSourcesForJob, getJobApplicationForUser } = require('../repositories/jobsRepo');
-const { getBestFitScoreForJob, getScoreForJobAndResume } = require('../repositories/fitScoresRepo');
+const { getBestFitScoreForJob, getScoreForJobAndResume, getScoresForJobByUser, getBestScorePerJobForUser, getBestScorePerJobForUserWithOverrides, getFitScore } = require('../repositories/fitScoresRepo');
 const { getSourceFreshness } = require('../repositories/scraperRunsRepo');
-const { getConfirmedResumeForUser } = require('../repositories/resumesRepo');
+const { getConfirmedResumeForUser, countConfirmedResumesForUser, getResumeByIdAndUser } = require('../repositories/resumesRepo');
+const resumeOverridesRepo = require('../repositories/resumeOverridesRepo');
 const backgroundQueue = require('../services/backgroundQueue');
 const { AppError } = require('../utils/errors');
 const { getCoverLetter } = require('../repositories/coverLettersRepo');
@@ -13,6 +14,9 @@ const { getPrimaryResume } = require('../services/resumeService');
 const { isApsRole, getRecommendedModes } = require('../services/coverLetterService');
 const { ensureCompanyForJob } = require('../services/companyService');
 const { requireAuth } = require('../middleware/auth');
+const { optimizationLimiter, companyResearchLimiter, resumeOverrideLimiter } = require('../middleware/rateLimiter');
+const optimizationSuggestionsRepo = require('../repositories/optimizationSuggestionsRepo');
+const optimizationService = require('../services/optimizationService');
 const { sanitizeFtsQuery } = require('../utils/ftsQuerySanitizer');
 const { getLogger } = require('../logger');
 
@@ -105,6 +109,38 @@ router.get('/jobs', (req, res) => {
     const user = req.user || null;
     const resume = user ? getPrimaryResume() : null;
 
+    // Multi-resume: compute best score per job with resume label
+    let _userResumeCount = 0;
+    let bestScoreMap = {};
+    if (user) {
+      _userResumeCount = countConfirmedResumesForUser(user.id);
+      if (_userResumeCount >= 1) {
+        try {
+          const hasOverrides = resumeOverridesRepo.hasOverrides(user.id);
+          const bestScores = hasOverrides
+            ? getBestScorePerJobForUserWithOverrides(user.id)
+            : getBestScorePerJobForUser(user.id);
+          for (const row of bestScores) {
+            bestScoreMap[row.job_id] = row;
+          }
+        } catch (e) {
+          logger.warn('Failed to load best scores per job', { error: e.message });
+        }
+      }
+    }
+
+    // Attach display_score and display_label to each job
+    for (const job of jobs) {
+      const best = bestScoreMap[job.id];
+      if (best) {
+        job.display_score = best.display_score;
+        job.display_label = best.display_label || null;
+      } else {
+        job.display_score = null;
+        job.display_label = null;
+      }
+    }
+
     // Source freshness timestamps
     let sourceFreshness = {};
     try { sourceFreshness = getSourceFreshness(); } catch (e) { /* ignore */ }
@@ -138,6 +174,7 @@ router.get('/jobs', (req, res) => {
       hasResume: !!resume,
       sourceFreshness,
       scoringInProgress,
+      _userResumeCount,
       currentPath: '/jobs',
     });
   } catch (err) {
@@ -167,12 +204,89 @@ router.get('/jobs/:id', (req, res, next) => {
   const job = getJobById(id);
   if (!job) return next();
 
+  // Side effect: mark notification as read from email link
+  const alertRead = req.query.alert_read;
+  if (alertRead && /^[a-f0-9]{32}$/.test(alertRead)) {
+    try {
+      const { markReadByToken } = require('../repositories/notificationsRepo');
+      markReadByToken(alertRead);
+    } catch {
+      // silently ignore
+    }
+  }
+
   const user = req.user || null;
   const resume = user ? getPrimaryResume() : null;
 
+  // Multi-resume: load all per-resume scores and compute primary score
+  let _userResumeCount = 0;
+  let allScores = [];
+  let primaryScore = null;
+  let overrideResumeId = null;
+
   let score = null;
   let breakdown = { matched_keywords: [], missing_skills: [], total_keywords: 0 };
-  if (resume) {
+
+  if (user) {
+    _userResumeCount = countConfirmedResumesForUser(user.id);
+
+    if (_userResumeCount >= 1) {
+      try {
+        // Get all scores for this job across user's resumes
+        const rawScores = getScoresForJobByUser(job.id, user.id);
+        allScores = rawScores.map(s => {
+          let matched_skills = [];
+          try {
+            const bd = JSON.parse(s.breakdown_json || '{}');
+            matched_skills = bd.matched_skills || [];
+          } catch { /* ignore */ }
+          let missing_skills = [];
+          try {
+            missing_skills = JSON.parse(s.skill_gaps_json || '[]');
+          } catch { /* ignore */ }
+          return {
+            resume_id: s.resume_id,
+            resume_label: s.resume_label,
+            overall_score: s.overall_score,
+            semantic_score: s.semantic_score,
+            keyword_score: s.keyword_score,
+            role_alignment_score: s.role_alignment_score,
+            location_score: s.location_score,
+            matched_skills,
+            missing_skills,
+          };
+        });
+
+        // Check for manual override
+        const override = resumeOverridesRepo.getOverride(job.id, user.id);
+        if (override) {
+          overrideResumeId = override.resume_id;
+          const overrideScore = allScores.find(s => s.resume_id === override.resume_id);
+          if (overrideScore) {
+            primaryScore = overrideScore;
+          }
+        }
+
+        // Fallback to best (highest) score
+        if (!primaryScore && allScores.length > 0) {
+          primaryScore = allScores[0]; // already sorted DESC by overall_score
+        }
+      } catch (e) {
+        logger.warn('Failed to load multi-resume scores for job detail', { jobId: job.id, error: e.message });
+      }
+    }
+  }
+
+  // Use primaryScore for backward-compatible score/breakdown variables
+  if (primaryScore) {
+    score = primaryScore;
+    breakdown = {
+      matched_keywords: primaryScore.matched_skills || [],
+      missing_skills: primaryScore.missing_skills || [],
+      total_keywords: (primaryScore.matched_skills || []).length + (primaryScore.missing_skills || []).length,
+    };
+  } else if (resume) {
+    // Fallback for single-resume or legacy behavior
     const fit = getBestFitScoreForJob(job.id);
     if (fit) {
       score = fit;
@@ -190,13 +304,15 @@ router.get('/jobs/:id', (req, res, next) => {
       : null;
 
   // Get cover letter - try English first, then Chinese
-  let coverLetter = resume ? getCoverLetter(job.id, resume.id, 'en', 'english_cover_letter') : null;
-  if (!coverLetter && resume) {
-    coverLetter = getCoverLetter(job.id, resume.id, 'zh', 'chinese_cover_letter');
+  // Use primaryScore's resume_id if available, otherwise fall back to primary resume
+  const coverLetterResumeId = (primaryScore && primaryScore.resume_id) || (resume && resume.id);
+  let coverLetter = coverLetterResumeId ? getCoverLetter(job.id, coverLetterResumeId, 'en', 'english_cover_letter') : null;
+  if (!coverLetter && coverLetterResumeId) {
+    coverLetter = getCoverLetter(job.id, coverLetterResumeId, 'zh', 'chinese_cover_letter');
   }
   // Legacy fallback
-  if (!coverLetter && resume) {
-    coverLetter = getCoverLetter(job.id, resume.id, 'zh');
+  if (!coverLetter && coverLetterResumeId) {
+    coverLetter = getCoverLetter(job.id, coverLetterResumeId, 'zh');
   }
 
   // Application tracking status
@@ -213,6 +329,28 @@ router.get('/jobs/:id', (req, res, next) => {
   let duplicateSources = [];
   try { duplicateSources = getDuplicateSourcesForJob(job.id) || []; } catch (e) { /* ignore */ }
 
+  // Optimization suggestions (SSR injection)
+  let optimizationSuggestions = undefined;
+  let optimizationSuggestionsStale = false;
+  const optResumeId = (primaryScore && primaryScore.resume_id) || (resume && resume.id);
+  if (user && optResumeId && score) {
+    try {
+      const cached = optimizationSuggestionsRepo.getByJobAndResume(job.id, optResumeId, user.id);
+      if (cached) {
+        if (cached.stale) {
+          optimizationSuggestionsStale = true;
+        } else {
+          optimizationSuggestions = optimizationService.formatResponse(cached);
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  // Flash from query params
+  const flash = {};
+  if (req.query.success) flash.success = req.query.success;
+  if (req.query.error) flash.error = req.query.error;
+
   logger.debug('Rendering job detail', {
     jobId: job.id,
     hasUser: !!user,
@@ -222,6 +360,8 @@ router.get('/jobs/:id', (req, res, next) => {
     hasCoverLetter: !!coverLetter,
     applicationStatus: application ? application.status : null,
     isAps,
+    allScoresCount: allScores.length,
+    overrideResumeId,
   });
 
   res.render('jobs/detail', {
@@ -231,6 +371,10 @@ router.get('/jobs/:id', (req, res, next) => {
     hasResume: !!resume,
     score,
     breakdown,
+    allScores,
+    primaryScore,
+    overrideResumeId,
+    _userResumeCount,
     company,
     coverLetter,
     application,
@@ -238,14 +382,71 @@ router.get('/jobs/:id', (req, res, next) => {
     isAps,
     recommendedModes,
     duplicateSources,
+    optimizationSuggestions,
+    optimizationSuggestionsStale,
+    flash,
     currentPath: `/jobs/${job.id}`,
   });
 });
 
 /**
+ * POST /jobs/:id/resume-override — manually select a resume for this job's scoring
+ */
+router.post('/jobs/:id/resume-override', requireAuth, resumeOverrideLimiter, (req, res, next) => {
+  const jobId = Number(req.params.id);
+  if (!Number.isFinite(jobId)) {
+    return next(new AppError('NOT_FOUND', 'Job not found'));
+  }
+
+  const job = getJobById(jobId);
+  if (!job) {
+    return next(new AppError('NOT_FOUND', 'Job not found'));
+  }
+
+  const resumeId = Number(req.body.resume_id);
+  if (!Number.isFinite(resumeId)) {
+    return res.redirect(`/jobs/${jobId}?error=` + encodeURIComponent('Invalid resume selection.'));
+  }
+
+  // Validate resume ownership
+  const resume = getResumeByIdAndUser(resumeId, req.user.id);
+  if (!resume) {
+    return next(new AppError('NOT_FOUND', 'Resume not found'));
+  }
+
+  // Validate resume is confirmed
+  if (resume.is_confirmed !== 1) {
+    return res.redirect(`/jobs/${jobId}?error=` + encodeURIComponent('Resume must be confirmed before use.'));
+  }
+
+  // Validate score exists for this job+resume
+  const existingScore = getFitScore(jobId, resumeId);
+  if (!existingScore) {
+    return res.redirect(`/jobs/${jobId}?error=` + encodeURIComponent('Resume has not been scored for this job.'));
+  }
+
+  resumeOverridesRepo.upsertOverride(jobId, req.user.id, resumeId);
+  return res.redirect(`/jobs/${jobId}`);
+});
+
+/**
+ * POST /jobs/:id/resume-override/clear — revert to automatic best match
+ */
+router.post('/jobs/:id/resume-override/clear', requireAuth, resumeOverrideLimiter, (req, res) => {
+  const jobId = Number(req.params.id);
+  if (!Number.isFinite(jobId)) {
+    return res.redirect('/jobs');
+  }
+
+  resumeOverridesRepo.deleteOverride(jobId, req.user.id);
+  const msg = res.locals.t('jobs.detail.overrideCleared', 'Reverted to automatic best match.');
+  return res.redirect(`/jobs/${jobId}?success=` + encodeURIComponent(msg));
+});
+
+/**
  * POST /jobs/:id/company-research — trigger company research for a job
  */
-router.post('/jobs/:id/company-research', requireAuth, async (req, res) => {
+router.post('/jobs/:id/company-research', requireAuth, companyResearchLimiter, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) {
     return res.status(400).json({ error: 'Invalid job ID' });
@@ -257,27 +458,27 @@ router.post('/jobs/:id/company-research', requireAuth, async (req, res) => {
   }
 
   if (!job.company_name) {
-    return res.status(400).json({ error: 'Job has no company name' });
+    return res.status(400).json({ error: 'No company name available for this job' });
   }
 
   try {
-    const company = await ensureCompanyForJob(job);
-    if (!company || !company.description) {
-      return res.status(503).json({ error: 'Company research unavailable. AI service may be down.' });
+    const company = await ensureCompanyForJob(job, { forceResearch: true });
+    if (!company) {
+      return res.status(500).json({ error: 'Company research failed' });
     }
 
     logger.info('Company research triggered', { jobId: id, company: company.name });
     res.json({
       name: company.name,
-      description: company.description,
-      industry: company.industry,
-      size: company.size,
-      headquarters: company.headquarters,
-      website: company.website,
+      industry: company.industry || null,
+      size: company.size || null,
+      description: company.description || null,
+      headquarters: company.headquarters || null,
+      website: company.website || null,
     });
   } catch (err) {
     logger.error('Company research failed', { jobId: id, error: err.message });
-    res.status(500).json({ error: 'Failed to research company' });
+    res.status(500).json({ error: 'Company research failed' });
   }
 });
 
@@ -544,6 +745,74 @@ router.get('/api/jobs/:jobId/score', requireAuth, (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+/**
+ * POST /api/jobs/:jobId/optimization-suggestions — Generate optimization suggestions
+ */
+/**
+ * Wraps the shared optimizationLimiter to return { error: string } per INTERFACE_CONTRACT.md.
+ * The shared rateLimiter factory returns { error: { code, message } } (nested object),
+ * but the contract specifies all error responses as { "error": "<string>" }.
+ */
+function flatErrorLimiter(req, res, next) {
+  const originalJson = res.json.bind(res);
+  res.json = function(body) {
+    if (res.statusCode === 429 && body && body.error && typeof body.error === 'object') {
+      return originalJson({ error: body.error.message });
+    }
+    return originalJson(body);
+  };
+  optimizationLimiter(req, res, next);
+}
+
+router.post('/api/jobs/:jobId/optimization-suggestions', requireAuth, flatErrorLimiter, async (req, res) => {
+  const jobId = Number(req.params.jobId);
+  if (!Number.isFinite(jobId)) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+
+  const job = getJobById(jobId);
+  if (!job) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+
+  try {
+    const result = await optimizationService.generateSuggestions(jobId, req.user.id);
+    res.json(result);
+  } catch (err) {
+    if (err instanceof AppError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
+    logger.error('Optimization suggestion generation failed', { jobId, userId: req.user.id, error: err.message });
+    res.status(500).json({ error: 'Something went wrong. Please try again later.' });
+  }
+});
+
+/**
+ * GET /api/jobs/:jobId/optimization-suggestions — Retrieve cached suggestions
+ */
+router.get('/api/jobs/:jobId/optimization-suggestions', requireAuth, (req, res) => {
+  const jobId = Number(req.params.jobId);
+  if (!Number.isFinite(jobId)) {
+    return res.status(404).json({ error: 'No suggestions found — click Improve Resume to generate' });
+  }
+
+  const resume = getConfirmedResumeForUser(req.user.id);
+  if (!resume) {
+    return res.status(404).json({ error: 'No suggestions found — click Improve Resume to generate' });
+  }
+
+  const cached = optimizationSuggestionsRepo.getByJobAndResume(jobId, resume.id, req.user.id);
+  if (!cached) {
+    return res.status(404).json({ error: 'No suggestions found — click Improve Resume to generate' });
+  }
+
+  const response = optimizationService.formatResponse(cached);
+  res.json(response);
 });
 
 module.exports = router;

@@ -1,5 +1,6 @@
 const { hasOpenAIKey, generateEmbedding, chatCompletion } = require('./openAIClient');
 const fitScoresRepo = require('../repositories/fitScoresRepo');
+const resumesRepo = require('../repositories/resumesRepo');
 const { getLogger } = require('../logger');
 
 const logger = getLogger('scoringService');
@@ -559,8 +560,77 @@ async function scoreJobAgainstResume(job, resume, opts = {}) {
   };
 }
 
+// ──────────────────────────────────────────────
+// Multi-Resume Scoring Orchestration
+// Per WBS T-D.1: loop over all confirmed resumes per user
+// ──────────────────────────────────────────────
+
+/**
+ * Score all given jobs against all confirmed resumes for a user.
+ * For each (job, resume) pair, checks cache first and skips if already scored.
+ * Single-resume users experience identical behavior to the old single-resume path.
+ *
+ * @param {number} userId - User ID whose confirmed resumes to score against
+ * @param {object[]} jobs - Array of job records from DB
+ * @param {object} [opts] - Options
+ * @param {function} [opts.onProgress] - Progress callback: ({ scored, skipped, errors, total }) => void
+ * @param {object} [opts.resumesRepoOverride] - Override resumesRepo (for testing)
+ * @param {object} [opts.fitScoresRepoOverride] - Override fitScoresRepo (for testing)
+ * @param {function} [opts.scoreOneOverride] - Override scoreJobAgainstResume (for testing)
+ * @returns {Promise<{ scored: number, skipped: number, errors: number, total: number }>}
+ */
+async function scoreAllJobsForUser(userId, jobs, opts = {}) {
+  const rRepo = opts.resumesRepoOverride || resumesRepo;
+  const fsRepo = opts.fitScoresRepoOverride || fitScoresRepo;
+  const scoreFn = opts.scoreOneOverride || scoreJobAgainstResume;
+  const onProgress = opts.onProgress || null;
+
+  const confirmedResumes = rRepo.getConfirmedResumesForUser(userId);
+  if (!confirmedResumes || confirmedResumes.length === 0) {
+    logger.info('No confirmed resumes for user, skipping scoring', { userId });
+    return { scored: 0, skipped: 0, errors: 0, total: 0 };
+  }
+
+  const total = jobs.length * confirmedResumes.length;
+  let scored = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const job of jobs) {
+    for (const resume of confirmedResumes) {
+      // Check cache: skip if already scored
+      const existing = fsRepo.getFitScore(job.id, resume.id);
+      if (existing) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        await scoreFn(job, resume);
+        scored++;
+      } catch (err) {
+        errors++;
+        logger.error('Failed to score job against resume', {
+          jobId: job.id,
+          resumeId: resume.id,
+          error: err.message,
+        });
+      }
+
+      // Report progress after each scoring attempt
+      if (onProgress) {
+        onProgress({ scored, skipped, errors, total });
+      }
+    }
+  }
+
+  logger.info('Multi-resume scoring complete', { userId, scored, skipped, errors, total });
+  return { scored, skipped, errors, total };
+}
+
 module.exports = {
   scoreJobAgainstResume,
+  scoreAllJobsForUser,
   buildResumeEmbeddingText,
   // Exported for testing
   cosineSimilarity,

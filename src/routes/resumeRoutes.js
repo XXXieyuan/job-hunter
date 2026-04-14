@@ -12,7 +12,12 @@ const {
   getConfirmedResumeForUser,
   deleteResume,
   updateEmbedding,
+  countResumesForUser,
+  getResumesWithCascadeCounts,
+  updateLabel,
 } = require('../repositories/resumesRepo');
+const { deleteScoresForResume, countScoresForResume } = require('../repositories/fitScoresRepo');
+const { countForResume: countCoverLettersForResume } = require('../repositories/coverLettersRepo');
 const {
   createResumeFromUpload,
   deleteResumeWithFile,
@@ -61,16 +66,25 @@ const upload = multer({
 
 // GET /resumes — render manage page (requireAuth)
 router.get('/resumes', requireAuth, (req, res) => {
+  const MAX_RESUMES = 5;
   let resumes;
   try {
-    // Try user-scoped query first, fall back to all resumes
-    resumes = typeof getResumesByUser === 'function'
-      ? getResumesByUser(req.user.id)
-      : getAllResumes();
+    resumes = getResumesWithCascadeCounts(req.user.id);
   } catch (e) {
-    resumes = getAllResumes();
+    try {
+      resumes = getResumesByUser(req.user.id);
+    } catch (e2) {
+      resumes = [];
+    }
   }
-  res.render('resumes/manage', { resumes });
+  const resumeCount = resumes.length;
+
+  // Flash messages from query params
+  const flash = {};
+  if (req.query.success) flash.success = req.query.success;
+  if (req.query.error) flash.error = req.query.error;
+
+  res.render('resumes/manage', { resumes, resumeCount, maxResumes: MAX_RESUMES, flash });
 });
 
 // GET /resumes/:id — resume detail JSON (for AJAX)
@@ -118,8 +132,32 @@ router.post('/resumes/upload', requireAuth, upload.single('resume'), validateFil
     return res.status(400).send('Please select a resume file to upload.');
   }
 
+  // Enforce 5-resume limit
+  const currentCount = countResumesForUser(req.user.id);
+  if (currentCount >= 5) {
+    // Clean up the uploaded file since we're rejecting
+    try { fs.unlinkSync(req.file.path); } catch (e) { /* ignore */ }
+    const msg = res.locals.t('resumes.flash.limitReached', 'Maximum 5 resumes allowed. Delete an existing resume to upload a new one.');
+    return res.redirect('/resumes?error=' + encodeURIComponent(msg));
+  }
+
+  // Validate label
+  const label = (req.body.label || '').trim();
+  if (!label) {
+    try { fs.unlinkSync(req.file.path); } catch (e) { /* ignore */ }
+    return res.redirect('/resumes?error=' + encodeURIComponent('Label must be between 1 and 50 characters.'));
+  }
+  if (label.length > 50) {
+    try { fs.unlinkSync(req.file.path); } catch (e) { /* ignore */ }
+    return res.redirect('/resumes?error=' + encodeURIComponent('Label must be between 1 and 50 characters.'));
+  }
+
   try {
-    await createResumeFromUpload(req.file, req.user ? req.user.id : null);
+    const result = await createResumeFromUpload(req.file, req.user ? req.user.id : null);
+    // Set label on the newly created resume if provided
+    if (label && result && result.id) {
+      updateLabel(result.id, req.user.id, label);
+    }
     return res.redirect('/resumes');
   } catch (err) {
     logger.error('Failed to process uploaded resume', {
@@ -158,6 +196,28 @@ router.get('/resumes/:id/confirm', requireAuth, (req, res, next) => {
   });
 });
 
+// POST /resumes/:id/label — edit resume label
+router.post('/resumes/:id/label', requireAuth, (req, res, next) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    return next(new AppError('NOT_FOUND', 'Resume not found'));
+  }
+
+  const resume = getResumeByIdAndUser(id, req.user.id);
+  if (!resume) {
+    return next(new AppError('NOT_FOUND', 'Resume not found'));
+  }
+
+  const label = (req.body.label || '').trim();
+  if (!label || label.length > 50) {
+    return res.redirect('/resumes?error=' + encodeURIComponent('Label must be between 1 and 50 characters.'));
+  }
+
+  updateLabel(id, req.user.id, label);
+  const msg = res.locals.t('resumes.flash.labelUpdated', 'Resume label updated.');
+  return res.redirect('/resumes?success=' + encodeURIComponent(msg));
+});
+
 // POST /resumes/:id/confirm — confirm extracted data
 router.post('/resumes/:id/confirm', requireAuth, (req, res) => {
   const id = Number(req.params.id);
@@ -165,7 +225,7 @@ router.post('/resumes/:id/confirm', requireAuth, (req, res) => {
     return res.status(400).send('Invalid resume ID');
   }
 
-  const existing = getResumeById(id);
+  const existing = getResumeByIdAndUser(id, req.user.id);
   if (!existing) {
     return res.status(404).send('Resume not found');
   }
@@ -176,12 +236,15 @@ router.post('/resumes/:id/confirm', requireAuth, (req, res) => {
     } else if (typeof setMainResume === 'function') {
       setMainResume(id);
     }
+    // Invalidate existing scores for this resume so they are recomputed
+    deleteScoresForResume(id);
   } catch (err) {
     logger.error('Failed to confirm resume', { err, resumeId: id });
     return res.status(500).send('Failed to confirm resume. Please try again.');
   }
 
-  return res.redirect('/resumes');
+  const msg = res.locals.t('resumes.flash.confirmed', 'Resume confirmed. Scores will be updated on next analysis run.');
+  return res.redirect('/resumes?success=' + encodeURIComponent(msg));
 });
 
 // POST /resumes/:id/delete — delete resume
@@ -191,13 +254,21 @@ router.post('/resumes/:id/delete', requireAuth, (req, res) => {
     return res.status(400).send('Invalid resume ID');
   }
 
-  const existing = getResumeById(id);
+  const existing = getResumeByIdAndUser(id, req.user.id);
   if (!existing) {
     return res.status(404).send('Resume not found');
   }
 
+  // Capture cascade counts before deletion
+  const scoreCount = countScoresForResume(id);
+  const coverLetterCount = countCoverLettersForResume(id);
+
   deleteResumeWithFile(id);
-  return res.redirect('/resumes');
+
+  const flashMsg = res.locals.t('resumes.flash.deleted', 'Resume deleted. {scoreCount} scores and {coverLetterCount} cover letters removed.')
+    .replace('{scoreCount}', scoreCount)
+    .replace('{coverLetterCount}', coverLetterCount);
+  return res.redirect('/resumes?success=' + encodeURIComponent(flashMsg));
 });
 
 // ---------------------------------------------------------------------------
@@ -292,6 +363,26 @@ router.delete('/api/resumes/:id', requireAuth, (req, res, next) => {
       ? resume.file_path
       : path.join(__dirname, '..', '..', resume.file_path);
     try { fs.unlinkSync(fullPath); } catch {}
+  }
+
+  // Auto-disable alerts if no confirmed resumes remain
+  try {
+    const { countConfirmedResumesForUser } = require('../repositories/resumesRepo');
+    const remaining = countConfirmedResumesForUser(req.user.id);
+    if (remaining === 0) {
+      const usersRepo = require('../repositories/usersRepo');
+      const user = usersRepo.findById(req.user.id);
+      if (user && user.notification_prefs_json) {
+        const prefs = JSON.parse(user.notification_prefs_json);
+        if (prefs.alerts_enabled) {
+          prefs.alerts_enabled = false;
+          usersRepo.updateNotificationPrefs(req.user.id, prefs);
+          logger.info('Auto-disabled alerts: no confirmed resumes remain', { userId: req.user.id });
+        }
+      }
+    }
+  } catch (err) {
+    logger.error('Failed to check/disable alerts after resume deletion', { error: err.message });
   }
 
   res.json({ deleted: true });

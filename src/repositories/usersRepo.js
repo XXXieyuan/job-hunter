@@ -60,6 +60,29 @@ function getCount() {
   return db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
 }
 
+/**
+ * Find all users that have notification preferences set (non-null notification_prefs_json).
+ */
+function findWithNotificationPrefs() {
+  const db = getDbInstance();
+  return db.prepare(
+    'SELECT * FROM users WHERE notification_prefs_json IS NOT NULL'
+  ).all();
+}
+
+/**
+ * Update a user's notification_prefs_json column.
+ * @param {number} id - User ID
+ * @param {object} prefs - Preferences object to serialize as JSON
+ */
+function updateNotificationPrefs(id, prefs) {
+  const db = getDbInstance();
+  const info = db.prepare(
+    'UPDATE users SET notification_prefs_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+  ).run(JSON.stringify(prefs), id);
+  return info.changes;
+}
+
 module.exports = {
   create,
   findByEmail,
@@ -68,4 +91,6 @@ module.exports = {
   updateProfile,
   deleteUser,
   getCount,
+  findWithNotificationPrefs,
+  updateNotificationPrefs,
 };

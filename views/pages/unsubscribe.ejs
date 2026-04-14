@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Unsubscribe - Job Hunter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/main.css" />
+    <link rel="stylesheet" href="/css/alerts.css" />
+  </head>
+  <body>
+    <section style="max-width: 800px; margin: 0 auto; padding: 48px 16px;">
+      <div class="unsubscribe-card">
+        <% if (!valid) { %>
+          <!-- Invalid/expired token -->
+          <svg class="unsubscribe-card__icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="24" cy="24" r="20"/>
+            <path d="M16 16l16 16M32 16L16 32"/>
+          </svg>
+          <h1 class="unsubscribe-card__title">Invalid Link</h1>
+          <p class="unsubscribe-card__description">This unsubscribe link is invalid or has expired. Please check your email for a valid link, or manage your alert preferences from the settings page.</p>
+          <a href="/settings" class="unsubscribe-card__link">Go to Settings</a>
+
+        <% } else if (success) { %>
+          <!-- Successfully unsubscribed -->
+          <svg class="unsubscribe-card__success-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="24" cy="24" r="20"/>
+            <path d="M14 24l7 7 13-13"/>
+          </svg>
+          <h1 class="unsubscribe-card__title unsubscribe-card__success">Unsubscribed</h1>
+          <p class="unsubscribe-card__description">You have been unsubscribed from job alert emails. You will no longer receive notifications about new matching jobs.</p>
+          <p class="unsubscribe-card__description">You can re-enable alerts at any time from your settings page.</p>
+          <a href="/settings" class="unsubscribe-card__link">Go to Settings</a>
+
+        <% } else { %>
+          <!-- Confirmation (valid token, GET) -->
+          <svg class="unsubscribe-card__icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M24 4a14 14 0 0114 14v8l4 6H2l4-6v-8A14 14 0 0124 4z"/>
+            <path d="M18 38a6 6 0 0012 0"/>
+            <line x1="24" y1="14" x2="24" y2="22"/>
+            <circle cx="24" cy="26" r="1" fill="currentColor"/>
+          </svg>
+          <h1 class="unsubscribe-card__title">Unsubscribe from Job Alerts</h1>
+          <p class="unsubscribe-card__description">Are you sure you want to stop receiving job alert emails? You can always re-enable them from your settings page.</p>
+          <form method="POST" action="/alerts/unsubscribe/<%= token %>">
+            <button type="submit" class="unsubscribe-card__btn unsubscribe-card__btn--danger" autofocus>Unsubscribe</button>
+          </form>
+          <a href="/" class="unsubscribe-card__link">Cancel</a>
+        <% } %>
+      </div>
+    </section>
+  </body>
+</html>

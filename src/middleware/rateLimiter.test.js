@@ -1,6 +1,6 @@
 const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { rateLimiter, _store } = require('./rateLimiter');
+const { rateLimiter, companyResearchLimiter, batchCompanyResearchLimiter, resumeOverrideLimiter, _store } = require('./rateLimiter');
 
 function createMockReq(overrides = {}) {
   return {
@@ -168,5 +168,112 @@ describe('rateLimiter', () => {
     const retryAfter = parseInt(res2.headers['Retry-After'], 10);
     assert.equal(retryAfter, Math.ceil(retryAfter)); // Must be integer
     assert.ok(retryAfter > 0);
+  });
+
+  // T-12: Company research rate limiter instances
+  describe('companyResearchLimiter', () => {
+    it('is exported as a function', () => {
+      assert.equal(typeof companyResearchLimiter, 'function');
+    });
+
+    it('allows 10 requests then returns 429 with flat error shape', () => {
+      let passedCount = 0;
+
+      for (let i = 0; i < 10; i++) {
+        const req = createMockReq({ ip: '10.10.10.10' });
+        const res = createMockRes();
+        companyResearchLimiter(req, res, () => { passedCount++; });
+      }
+      assert.equal(passedCount, 10);
+
+      // 11th request should be rate limited
+      const req = createMockReq({ ip: '10.10.10.10' });
+      const res = createMockRes();
+      let nextCalled = false;
+      companyResearchLimiter(req, res, () => { nextCalled = true; });
+
+      assert.equal(nextCalled, false);
+      assert.equal(res.statusCode, 429);
+      // Flat error shape: { error: "string" }, not { error: { code, message } }
+      assert.equal(typeof res.jsonBody.error, 'string', 'error should be a flat string');
+      assert.ok(res.headers['Retry-After']);
+    });
+  });
+
+  // T-E.2: Resume override rate limiter (30 req/min per IP)
+  describe('resumeOverrideLimiter', () => {
+    it('is exported as a function', () => {
+      assert.equal(typeof resumeOverrideLimiter, 'function');
+    });
+
+    it('allows 30 requests then returns 429', () => {
+      let passedCount = 0;
+
+      for (let i = 0; i < 30; i++) {
+        const req = createMockReq({ ip: '30.30.30.30' });
+        const res = createMockRes();
+        resumeOverrideLimiter(req, res, () => { passedCount++; });
+      }
+      assert.equal(passedCount, 30);
+
+      // 31st request should be rate limited
+      const req = createMockReq({ ip: '30.30.30.30' });
+      const res = createMockRes();
+      let nextCalled = false;
+      resumeOverrideLimiter(req, res, () => { nextCalled = true; });
+
+      assert.equal(nextCalled, false);
+      assert.equal(res.statusCode, 429);
+      assert.ok(res.headers['Retry-After']);
+      // Nested error shape (default)
+      assert.equal(typeof res.jsonBody.error, 'object');
+      assert.equal(res.jsonBody.error.code, 'RATE_LIMITED');
+    });
+
+    it('different IPs have independent counters', () => {
+      // Fill up IP A
+      for (let i = 0; i < 30; i++) {
+        const req = createMockReq({ ip: '40.40.40.40' });
+        const res = createMockRes();
+        resumeOverrideLimiter(req, res, () => {});
+      }
+
+      // IP B should still be allowed
+      const req = createMockReq({ ip: '50.50.50.50' });
+      const res = createMockRes();
+      let nextCalled = false;
+      resumeOverrideLimiter(req, res, () => { nextCalled = true; });
+      assert.ok(nextCalled);
+    });
+  });
+
+  describe('batchCompanyResearchLimiter', () => {
+    it('is exported as a function', () => {
+      assert.equal(typeof batchCompanyResearchLimiter, 'function');
+    });
+
+    it('allows 2 requests then returns 429 with nested error shape', () => {
+      let passedCount = 0;
+
+      for (let i = 0; i < 2; i++) {
+        const req = createMockReq({ ip: '20.20.20.20' });
+        const res = createMockRes();
+        batchCompanyResearchLimiter(req, res, () => { passedCount++; });
+      }
+      assert.equal(passedCount, 2);
+
+      // 3rd request should be rate limited
+      const req = createMockReq({ ip: '20.20.20.20' });
+      const res = createMockRes();
+      let nextCalled = false;
+      batchCompanyResearchLimiter(req, res, () => { nextCalled = true; });
+
+      assert.equal(nextCalled, false);
+      assert.equal(res.statusCode, 429);
+      // Nested error shape (default): { error: { code, message } }
+      assert.equal(typeof res.jsonBody.error, 'object', 'error should be nested object');
+      assert.equal(res.jsonBody.error.code, 'RATE_LIMITED');
+      assert.ok(res.headers['Retry-After']);
+    });
   });
 });

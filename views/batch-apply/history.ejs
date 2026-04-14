@@ -1,0 +1,147 @@
+<% layout('layout') -%>
+
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _sessions = typeof sessions !== 'undefined' && Array.isArray(sessions) ? sessions : [];
+  var _pagination = typeof pagination !== 'undefined' ? pagination : { page: 1, totalPages: 1, totalSessions: 0 };
+  var _flash = typeof flash !== 'undefined' ? flash : {};
+
+  function sessionStatusBadge(status) {
+    if (status === 'completed') return 'ba-job-badge--applied';
+    if (status === 'in-progress') return 'ba-job-badge--in-progress';
+    if (status === 'pending') return 'ba-job-badge--pending';
+    return 'ba-job-badge--skipped';
+  }
+
+  function sessionStatusLabel(status) {
+    if (status === 'completed') return _t('batchApply.history.statusCompleted', 'Completed');
+    if (status === 'in-progress') return _t('batchApply.history.statusInProgress', 'In Progress');
+    if (status === 'pending') return _t('batchApply.history.statusPending', 'Starting...');
+    return _t('batchApply.history.statusCancelled', 'Cancelled');
+  }
+%>
+
+<link rel="stylesheet" href="/css/batch-apply.css">
+
+<section class="page-section ba-history-container" style="padding: 24px 16px 48px;">
+
+  <!-- Breadcrumb -->
+  <nav aria-label="Breadcrumb" style="font-size: 0.8125rem; color: var(--color-text-muted, #64748b); margin-bottom: 16px;">
+    <a href="/" style="color: var(--color-text-muted, #64748b); text-decoration: none;">Home</a>
+    <span aria-hidden="true"> &gt; </span>
+    <a href="/batch-apply/history" style="color: var(--color-text-muted, #64748b); text-decoration: none;">Batch Apply</a>
+    <span aria-hidden="true"> &gt; </span>
+    <span aria-current="page"><%= _t('batchApply.history.title', 'Apply History') %></span>
+  </nav>
+
+  <!-- Flash Messages -->
+  <% if (_flash.error) { %>
+  <div role="alert" style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-size: 0.875rem; color: #DC2626;">
+    <%= _flash.error %>
+  </div>
+  <% } %>
+
+  <h1 style="font-size: 1.5rem; font-weight: 700; line-height: 1.2; color: var(--color-text-primary, #1e293b); margin-bottom: 24px;">
+    <%= _t('batchApply.history.title', 'Apply History') %>
+  </h1>
+
+  <% if (_sessions.length === 0) { %>
+  <!-- Empty State -->
+  <div class="ba-history-empty">
+    <svg class="ba-history-empty__icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" aria-hidden="true">
+      <rect x="8" y="6" width="32" height="36" rx="4" stroke-width="2.5"/>
+      <path d="M16 18h16M16 26h10" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+    <h2 class="ba-history-empty__heading">No apply sessions yet</h2>
+    <p class="ba-history-empty__description"><%= _t('batchApply.history.empty', 'No batch apply sessions yet. Select jobs from the listing to get started.') %></p>
+    <a href="/jobs" class="ba-history-empty__cta"><%= _t('batchApply.history.browseJobs', 'Browse Jobs') %></a>
+  </div>
+
+  <% } else { %>
+  <!-- Sessions Table -->
+  <table class="ba-history-table">
+    <thead>
+      <tr>
+        <th scope="col">Date</th>
+        <th scope="col">Status</th>
+        <th scope="col">Total</th>
+        <th scope="col"><span style="color: var(--success, #059669);" aria-label="Applied">&#10003;</span></th>
+        <th scope="col"><span style="color: var(--danger, #DC2626);" aria-label="Failed">&#10007;</span></th>
+        <th scope="col"><span style="color: var(--text-muted, #6B7280);" aria-label="Skipped">&#9193;</span></th>
+        <th scope="col"><span class="visually-hidden">Detail</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% _sessions.forEach(function(s) { %>
+      <tr class="ba-history-row" style="cursor: pointer;" onclick="window.location='/batch-apply/progress/<%= s.id %>'">
+        <td class="ba-history-row__date" data-label="Date">
+          <%= new Date(s.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: '2-digit' }) %>
+        </td>
+        <td data-label="Status">
+          <span class="ba-job-badge <%= sessionStatusBadge(s.status) %>" role="status">
+            <% if (s.status === 'completed') { %>
+            <svg class="ba-job-badge__icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm3.3 5.3l-4 4a.75.75 0 01-1.1 0l-2-2a.75.75 0 111.1-1.1L6.8 8.7l3.4-3.4a.75.75 0 111.1 1.1z"/></svg>
+            <% } else if (s.status === 'in-progress') { %>
+            <svg class="ba-job-badge__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><path d="M8 1.5A6.5 6.5 0 0114.5 8" stroke-width="2" stroke-linecap="round"/></svg>
+            <% } else if (s.status === 'pending') { %>
+            <svg class="ba-job-badge__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke-width="2"/><path d="M8 4v4l3 1.5" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <% } else { %>
+            <svg class="ba-job-badge__icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm2.8 9.2a.75.75 0 01-1.1 1.1L8 9.6 6.3 11.3a.75.75 0 01-1.1-1.1L6.9 8.5 5.2 6.8a.75.75 0 011.1-1.1L8 7.4l1.7-1.7a.75.75 0 011.1 1.1L9.1 8.5l1.7 1.7z"/></svg>
+            <% } %>
+            <%= sessionStatusLabel(s.status) %>
+          </span>
+        </td>
+        <td data-label="Total"><%= s.total_jobs %></td>
+        <td data-label="Applied">
+          <% if ((s.applied_count || 0) > 0) { %>
+          <span class="ba-history-row__count--applied"><%= s.applied_count %></span>
+          <% } else { %>
+          <span style="color: var(--text-muted, #6B7280);">&ndash;</span>
+          <% } %>
+        </td>
+        <td data-label="Failed">
+          <% if ((s.failed_count || 0) > 0) { %>
+          <span class="ba-history-row__count--failed"><%= s.failed_count %></span>
+          <% } else { %>
+          <span style="color: var(--text-muted, #6B7280);">&ndash;</span>
+          <% } %>
+        </td>
+        <td data-label="Skipped">
+          <% if ((s.skipped_count || 0) > 0) { %>
+          <span class="ba-history-row__count--skipped"><%= s.skipped_count %></span>
+          <% } else { %>
+          <span style="color: var(--text-muted, #6B7280);">&ndash;</span>
+          <% } %>
+        </td>
+        <td>
+          <a href="/batch-apply/progress/<%= s.id %>" class="ba-history-row__link" aria-label="<%= _t('batchApply.history.viewDetail', 'View Details') %>">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M6.3 3.7a.75.75 0 011.1 0l3.5 3.5a.75.75 0 010 1.1l-3.5 3.5a.75.75 0 01-1.1-1.1L9.1 8 6.3 4.8a.75.75 0 010-1.1z"/></svg>
+          </a>
+        </td>
+      </tr>
+      <% }); %>
+    </tbody>
+  </table>
+
+  <!-- Pagination -->
+  <% if (_pagination.totalPages > 1) { %>
+  <nav aria-label="Pagination" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 24px;">
+    <% if (_pagination.page > 1) { %>
+    <a href="/batch-apply/history?page=<%= _pagination.page - 1 %>" class="btn btn-ghost btn-sm" aria-label="Previous page">&larr;</a>
+    <% } %>
+    <% for (var p = 1; p <= _pagination.totalPages; p++) { %>
+    <a href="/batch-apply/history?page=<%= p %>"
+       class="btn btn-ghost btn-sm<%= p === _pagination.page ? ' active' : '' %>"
+       style="<%= p === _pagination.page ? 'font-weight: 600; color: var(--accent-primary, #2563EB);' : '' %>"
+       aria-label="Page <%= p %>"
+       <%= p === _pagination.page ? 'aria-current="page"' : '' %>><%= p %></a>
+    <% } %>
+    <% if (_pagination.page < _pagination.totalPages) { %>
+    <a href="/batch-apply/history?page=<%= _pagination.page + 1 %>" class="btn btn-ghost btn-sm" aria-label="Next page">&rarr;</a>
+    <% } %>
+  </nav>
+  <% } %>
+
+  <% } %>
+
+</section>

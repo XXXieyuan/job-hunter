@@ -1,0 +1,151 @@
+<% layout('layout') %>
+
+<link rel="stylesheet" href="/css/salary.css">
+
+<div class="salary-page">
+  <%# Page Header %>
+  <div class="salary-page-header">
+    <h1><%= t('salary.title', 'Salary Insights') %></h1>
+    <% if (meta.listings_with_salary > 0) { %>
+      <p class="salary-subtitle"><%= t('salary.subtitle', 'Based on {{count}} job listings').replace('{{count}}', meta.listings_with_salary) %></p>
+    <% } else { %>
+      <p class="salary-subtitle"><%= t('salary.empty.no_data', 'No salary data available yet. Salary information will appear as jobs are scraped.') %></p>
+    <% } %>
+  </div>
+
+  <%# Data Coverage Banner %>
+  <% if (meta.coverage_pct > 0 && meta.coverage_pct < 30) { %>
+    <div class="salary-banner salary-banner-warning" role="alert" id="salary-coverage-banner">
+      <%= t('salary.banner.low_coverage', 'Salary data is available for {{pct}}% of listings. Results may not be representative.').replace('{{pct}}', meta.coverage_pct) %>
+    </div>
+  <% } %>
+
+  <%# Filter Bar %>
+  <div class="salary-filter-bar" role="search" aria-label="Salary data filters">
+    <div class="salary-filter-group">
+      <label for="salary-filter-keyword"><%= t('salary.filter.keyword', 'Role keyword') %></label>
+      <input
+        type="text"
+        id="salary-filter-keyword"
+        maxlength="100"
+        placeholder="<%= t('salary.filter.keyword.placeholder', 'e.g. Data Analyst') %>"
+        autocomplete="off"
+      >
+    </div>
+
+    <div class="salary-filter-group">
+      <label for="salary-filter-location"><%= t('salary.filter.location', 'Location') %></label>
+      <select id="salary-filter-location">
+        <option value=""><%= t('salary.filter.all_locations', 'All Locations') %></option>
+        <% filterOptions.locations.forEach(function(loc) { %>
+          <option value="<%= loc %>"><%= loc %></option>
+        <% }); %>
+      </select>
+    </div>
+
+    <div class="salary-filter-group">
+      <label for="salary-filter-source"><%= t('salary.filter.source', 'Platform') %></label>
+      <select id="salary-filter-source">
+        <option value=""><%= t('salary.filter.all_platforms', 'All Platforms') %></option>
+        <% filterOptions.sources.forEach(function(src) { %>
+          <option value="<%= src %>"><%= src %></option>
+        <% }); %>
+      </select>
+    </div>
+
+    <div class="salary-filter-group">
+      <label for="salary-filter-aps"><%= t('salary.filter.aps_level', 'APS Level') %></label>
+      <select id="salary-filter-aps">
+        <option value=""><%= t('salary.filter.all_levels', 'All Levels') %></option>
+        <option value="all"><%= t('salary.filter.show_all_aps', 'Show All APS Bands') %></option>
+        <% filterOptions.aps_classifications.forEach(function(cls) { %>
+          <option value="<%= cls %>"><%= cls %></option>
+        <% }); %>
+      </select>
+    </div>
+
+    <button type="button" class="salary-filter-reset" id="salary-filter-reset">
+      <%= t('salary.filter.reset', 'Reset Filters') %>
+    </button>
+  </div>
+
+  <%# Active Filter Summary %>
+  <div class="salary-active-filters" id="salary-active-filters" aria-live="polite"></div>
+
+  <%# Group-by Indicator %>
+  <div class="salary-group-indicator" id="salary-group-indicator"></div>
+
+  <%# Chart Container %>
+  <div class="salary-chart-container" id="salary-chart-container">
+    <canvas id="salary-chart" role="img" aria-label="<%= t('salary.chart.aria_label', 'Salary distribution chart') %>"></canvas>
+  </div>
+
+  <%# Truncation Notice %>
+  <div class="salary-banner salary-banner-info" id="salary-truncation-notice" style="display:none;">
+    <%= t('salary.banner.truncated', 'Showing statistics from a representative sample of 10,000 listings.') %>
+  </div>
+
+  <%# Outlier Exclusion Footnote %>
+  <div class="salary-footnote" id="salary-footnote">
+    <%= t('salary.footnote.outlier_exclusion', 'Statistics exclude listings with salaries outside the $20K–$500K range.') %>
+  </div>
+
+  <%# SR-Only Data Table %>
+  <table class="sr-only" id="salary-sr-table" aria-label="Salary distribution data">
+    <thead>
+      <tr>
+        <th>Label</th>
+        <th>Count</th>
+        <th>Min</th>
+        <th>Q1</th>
+        <th>Median</th>
+        <th>Q3</th>
+        <th>Max</th>
+      </tr>
+    </thead>
+    <tbody id="salary-sr-tbody"></tbody>
+  </table>
+
+  <%# Empty State %>
+  <div class="salary-empty-state" id="salary-empty-state" style="display:none;">
+    <p id="salary-empty-message"></p>
+  </div>
+
+  <%# Error State %>
+  <div class="salary-error-state" id="salary-error-state" style="display:none;">
+    <p id="salary-error-message"></p>
+    <button type="button" class="salary-retry-btn" id="salary-retry-btn">
+      <%= t('salary.error.retry', 'Retry') %>
+    </button>
+  </div>
+
+  <%# Loading State %>
+  <div class="salary-loading-indicator" id="salary-loading" style="display:none;" aria-busy="true">
+    Loading...
+  </div>
+
+  <%# Live Region for Screen Readers %>
+  <div aria-live="polite" id="salary-live-region" class="sr-only"></div>
+</div>
+
+<%# Embed data for client-side rendering %>
+<script>
+  window.__salaryData = <%- JSON.stringify(initialData).replace(/</g, '\\u003c') %>;
+  window.__salaryLocale = <%- JSON.stringify(salaryLocale).replace(/</g, '\\u003c') %>;
+</script>
+
+<%# Chart.js CDN with SRI %>
+<script
+  src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"
+  integrity="sha384-UPIssOjNMqMfObSGjY0jEZbSWsp6JSwOfeOO0r28IdkFKYN5GHLbRYSGBOOoN7n4"
+  crossorigin="anonymous"
+  onerror="window.__chartjsFailed = true"
+></script>
+<script
+  src="https://cdn.jsdelivr.net/npm/chartjs-chart-error-bars@4.4.2/build/index.umd.min.js"
+  integrity="sha384-BWWzj9DLCX7p4MjVnAIen+GQoGeig/hHoGFz97YN2sEhFMa+VGiR00ynyeHkKfK"
+  crossorigin="anonymous"
+  onerror="window.__chartjsErrorBarsFailed = true"
+></script>
+
+<script src="/js/salary.js" defer></script>

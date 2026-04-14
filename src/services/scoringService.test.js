@@ -1,6 +1,6 @@
 'use strict';
 
-const { describe, it, mock } = require('node:test');
+const { describe, it, mock, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 
 // T-126 through T-129, T-139: Scoring and OpenAI Client Tests
@@ -348,5 +348,194 @@ describe('Scoring Service — extractSkills', () => {
     assert.deepEqual(extractSkills({}), []);
     assert.deepEqual(extractSkills({ skills_json: null }), []);
     assert.deepEqual(extractSkills({ skills_json: 'invalid' }), []);
+  });
+});
+
+// ──────────────────────────────────────────────
+// T-D.1 / T-06: Multi-resume scoring iteration loop
+// ──────────────────────────────────────────────
+
+describe('Scoring Service — scoreAllJobsForUser (T-D.1)', () => {
+  function makeJobs(n) {
+    const jobs = [];
+    for (let i = 1; i <= n; i++) {
+      jobs.push({ id: i, title: `Job ${i}`, description: `Desc ${i}`, location: 'Sydney' });
+    }
+    return jobs;
+  }
+
+  function makeResumes(n) {
+    const resumes = [];
+    for (let i = 1; i <= n; i++) {
+      resumes.push({
+        id: i,
+        label: `Resume ${i}`,
+        summary: 'summary',
+        skills_json: '[]',
+        experience_json: '[]',
+        education_json: '[]',
+      });
+    }
+    return resumes;
+  }
+
+  it('3 resumes x 5 jobs triggers 15 scoreJobAgainstResume calls (T-06)', async () => {
+    const { scoreAllJobsForUser } = require('./scoringService');
+
+    const jobs = makeJobs(5);
+    const resumes = makeResumes(3);
+    let scoreCalls = 0;
+
+    const result = await scoreAllJobsForUser(1, jobs, {
+      resumesRepoOverride: {
+        getConfirmedResumesForUser: () => resumes,
+      },
+      fitScoresRepoOverride: {
+        getFitScore: () => null, // no cache hits
+      },
+      scoreOneOverride: async () => {
+        scoreCalls++;
+        return { overall_score: 75 };
+      },
+    });
+
+    assert.equal(scoreCalls, 15, 'Should call scoreJobAgainstResume 15 times');
+    assert.equal(result.scored, 15);
+    assert.equal(result.skipped, 0);
+    assert.equal(result.errors, 0);
+    assert.equal(result.total, 15);
+  });
+
+  it('pre-seeded score for (job1, resume1) is skipped (T-06)', async () => {
+    const { scoreAllJobsForUser } = require('./scoringService');
+
+    const jobs = makeJobs(5);
+    const resumes = makeResumes(3);
+    const scoredPairs = [];
+
+    const result = await scoreAllJobsForUser(1, jobs, {
+      resumesRepoOverride: {
+        getConfirmedResumesForUser: () => resumes,
+      },
+      fitScoresRepoOverride: {
+        getFitScore: (jobId, resumeId) => {
+          // Pre-seeded: job 1, resume 1
+          if (jobId === 1 && resumeId === 1) return { id: 1, overall_score: 80 };
+          return null;
+        },
+      },
+      scoreOneOverride: async (job, resume) => {
+        scoredPairs.push({ jobId: job.id, resumeId: resume.id });
+        return { overall_score: 75 };
+      },
+    });
+
+    assert.equal(result.scored, 14, 'Should score 14 pairs (15 - 1 cached)');
+    assert.equal(result.skipped, 1, 'Should skip 1 cached pair');
+    assert.equal(result.total, 15);
+
+    // Verify the cached pair was not scored
+    const wasScored = scoredPairs.some((p) => p.jobId === 1 && p.resumeId === 1);
+    assert.ok(!wasScored, 'Cached pair (job1, resume1) should not be scored');
+  });
+
+  it('progress callback receives total = jobs * resumes (T-06)', async () => {
+    const { scoreAllJobsForUser } = require('./scoringService');
+
+    const jobs = makeJobs(5);
+    const resumes = makeResumes(3);
+    const progressUpdates = [];
+
+    await scoreAllJobsForUser(1, jobs, {
+      resumesRepoOverride: {
+        getConfirmedResumesForUser: () => resumes,
+      },
+      fitScoresRepoOverride: {
+        getFitScore: () => null,
+      },
+      scoreOneOverride: async () => ({ overall_score: 75 }),
+      onProgress: (progress) => {
+        progressUpdates.push({ ...progress });
+      },
+    });
+
+    assert.ok(progressUpdates.length > 0, 'Should have progress updates');
+    // Every progress update should have total = 15
+    for (const p of progressUpdates) {
+      assert.equal(p.total, 15, 'Progress total should be 15');
+    }
+    // Last progress update should have scored = 15
+    const last = progressUpdates[progressUpdates.length - 1];
+    assert.equal(last.scored, 15);
+  });
+
+  it('single resume triggers 1 call per job — backward compatible (T-16)', async () => {
+    const { scoreAllJobsForUser } = require('./scoringService');
+
+    const jobs = makeJobs(5);
+    const resumes = makeResumes(1); // single resume
+    let scoreCalls = 0;
+
+    const result = await scoreAllJobsForUser(1, jobs, {
+      resumesRepoOverride: {
+        getConfirmedResumesForUser: () => resumes,
+      },
+      fitScoresRepoOverride: {
+        getFitScore: () => null,
+      },
+      scoreOneOverride: async () => {
+        scoreCalls++;
+        return { overall_score: 75 };
+      },
+    });
+
+    assert.equal(scoreCalls, 5, 'Single resume: exactly 1 call per job');
+    assert.equal(result.scored, 5);
+    assert.equal(result.total, 5);
+  });
+
+  it('returns zeros when no confirmed resumes exist', async () => {
+    const { scoreAllJobsForUser } = require('./scoringService');
+
+    const jobs = makeJobs(5);
+
+    const result = await scoreAllJobsForUser(1, jobs, {
+      resumesRepoOverride: {
+        getConfirmedResumesForUser: () => [],
+      },
+      fitScoresRepoOverride: {
+        getFitScore: () => null,
+      },
+    });
+
+    assert.equal(result.scored, 0);
+    assert.equal(result.total, 0);
+  });
+
+  it('counts errors without stopping the loop', async () => {
+    const { scoreAllJobsForUser } = require('./scoringService');
+
+    const jobs = makeJobs(3);
+    const resumes = makeResumes(1);
+    let callCount = 0;
+
+    const result = await scoreAllJobsForUser(1, jobs, {
+      resumesRepoOverride: {
+        getConfirmedResumesForUser: () => resumes,
+      },
+      fitScoresRepoOverride: {
+        getFitScore: () => null,
+      },
+      scoreOneOverride: async (job) => {
+        callCount++;
+        if (job.id === 2) throw new Error('API timeout');
+        return { overall_score: 75 };
+      },
+    });
+
+    assert.equal(callCount, 3, 'Should attempt all 3 jobs');
+    assert.equal(result.scored, 2);
+    assert.equal(result.errors, 1);
+    assert.equal(result.total, 3);
   });
 });

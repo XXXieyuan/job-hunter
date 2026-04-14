@@ -1,0 +1,98 @@
+<% layout('layout') -%>
+
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _user = typeof user !== 'undefined' ? user : null;
+%>
+
+<link rel="stylesheet" href="/css/alerts.css" />
+
+<section style="max-width: 800px; margin: 0 auto; padding: 48px 16px;">
+  <h1 style="font-size: 28px; font-weight: 700; color: var(--text, #1A1D23); margin-bottom: 8px;">
+    <%= _t('settings.alerts.heading', 'Job Alert Preferences') %>
+  </h1>
+  <p style="font-size: 14px; color: var(--text-secondary, #4B5563); margin-bottom: 32px;">
+    <%= _t('settings.alerts.toggle_description', 'Get notified when new jobs match your resume above your score threshold.') %>
+  </p>
+
+  <div class="alert-settings" id="alert-settings">
+    <!-- Loading skeleton -->
+    <div id="settings-skeleton">
+      <div class="alert-skeleton" style="margin-bottom: 16px;">
+        <div class="alert-skeleton__line alert-skeleton__line--title"></div>
+        <div class="alert-skeleton__line alert-skeleton__line--meta"></div>
+        <div class="alert-skeleton__line alert-skeleton__line--skills"></div>
+      </div>
+    </div>
+
+    <!-- Settings form (hidden until loaded) -->
+    <div id="settings-form" style="display: none;">
+      <!-- Toggle Section -->
+      <div class="alert-settings__section">
+        <label class="alert-toggle" id="alert-toggle" role="switch" aria-checked="false">
+          <input type="checkbox" class="alert-toggle__input" id="alerts-enabled" aria-label="<%= _t('settings.alerts.toggle_label', 'Enable Job Alerts') %>">
+          <div class="alert-toggle__track">
+            <div class="alert-toggle__knob"></div>
+          </div>
+          <span style="font-weight: 500; color: var(--text, #1A1D23);">
+            <%= _t('settings.alerts.toggle_label', 'Enable Job Alerts') %>
+          </span>
+        </label>
+      </div>
+
+      <!-- Conditional children (visible when enabled) -->
+      <div class="alert-settings__children" id="settings-children">
+        <!-- Threshold Slider -->
+        <div class="alert-settings__section">
+          <div class="threshold-slider">
+            <div class="threshold-slider__label-row">
+              <label for="score-threshold" style="font-weight: 500; color: var(--text, #1A1D23);">
+                <%= _t('settings.alerts.slider_label', 'Minimum Score Threshold') %>
+              </label>
+              <span class="threshold-slider__readout threshold-slider__readout--medium" id="threshold-readout">70</span>
+            </div>
+            <input type="range" class="threshold-slider__input" id="score-threshold" min="50" max="100" value="70" aria-valuemin="50" aria-valuemax="100" aria-valuenow="70" aria-label="<%= _t('settings.alerts.slider_label', 'Minimum Score Threshold') %>">
+            <span class="threshold-slider__hint"><%= _t('settings.alerts.slider_hint', "You'll only be alerted for jobs scoring at or above this value.") %></span>
+          </div>
+        </div>
+
+        <!-- Frequency Section -->
+        <div class="alert-settings__section">
+          <h2 class="alert-settings__section-title"><%= _t('settings.alerts.frequency_heading', 'Email Frequency') %></h2>
+          <div class="frequency-cards" role="radiogroup" aria-label="<%= _t('settings.alerts.frequency_heading', 'Email Frequency') %>">
+            <label class="frequency-card frequency-card--selected" id="freq-immediate-card">
+              <input type="radio" name="frequency" value="immediate" class="frequency-card__input" id="freq-immediate" checked>
+              <span class="frequency-card__label"><%= _t('settings.alerts.immediate_label', 'Immediate') %></span>
+              <span class="frequency-card__description"><%= _t('settings.alerts.immediate_description', "Receive an email for each matching job as soon as it's scored.") %></span>
+            </label>
+            <label class="frequency-card" id="freq-digest-card">
+              <input type="radio" name="frequency" value="digest" class="frequency-card__input" id="freq-digest">
+              <span class="frequency-card__label"><%= _t('settings.alerts.digest_label', 'Daily Digest') %></span>
+              <span class="frequency-card__description"><%= _t('settings.alerts.digest_description', 'Receive one summary email per day with all matching jobs.') %></span>
+            </label>
+          </div>
+
+          <!-- Digest Hour Picker -->
+          <div class="digest-hour-picker" id="digest-hour-picker" style="display: none;">
+            <label for="digest-hour" style="font-size: 14px; color: var(--text-secondary, #4B5563); margin-right: 8px;">
+              <%= _t('settings.alerts.digest_hour_label', 'Digest send time (UTC)') %>
+            </label>
+            <select class="digest-hour-picker__select" id="digest-hour">
+              <% for (var h = 0; h < 24; h++) { %>
+                <option value="<%= h %>" <%= h === 22 ? 'selected' : '' %>><%= String(h).padStart(2, '0') %>:00 UTC</option>
+              <% } %>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Save indicator -->
+      <div class="save-indicator" id="save-indicator" aria-live="polite">
+        <svg class="save-indicator__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l3 3 7-7"/></svg>
+        <span><%= _t('settings.alerts.save_confirmation', 'Alert preferences saved.') %></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="/js/settings-alerts.js"></script>

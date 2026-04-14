@@ -20,12 +20,12 @@ function upsertCompany(company) {
   if (existing) {
     const stmt = db.prepare(
       `UPDATE companies
-       SET website = @website,
-           description = @description,
-           industry = @industry,
-           size = @size,
-           logo_url = @logo_url,
-           headquarters = @headquarters,
+       SET website = COALESCE(@website, website),
+           description = COALESCE(@description, description),
+           industry = COALESCE(@industry, industry),
+           size = COALESCE(@size, size),
+           logo_url = COALESCE(@logo_url, logo_url),
+           headquarters = COALESCE(@headquarters, headquarters),
            raw_json = @raw_json,
            researched_at = CURRENT_TIMESTAMP,
            updated_at = CURRENT_TIMESTAMP

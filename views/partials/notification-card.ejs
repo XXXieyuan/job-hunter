@@ -1,0 +1,79 @@
+<%
+  /**
+   * Notification Card Partial
+   * Expects locals:
+   *   notification — { id, job_id, job_title, company_name, location, source,
+   *                     score, top_matched_skills, visa_match, is_read, created_at }
+   *   _t — translation function (fallback: identity)
+   */
+  var n = typeof notification !== 'undefined' ? notification : {};
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+
+  var isUnread = !n.is_read;
+  var readClass = isUnread ? 'notification-card--unread' : 'notification-card--read';
+
+  // Score colour tier (colour-blind-safe: blue 0-59, teal 60-74, orange 75+)
+  var scoreClass = 'notification-card__score--low';
+  if (n.score >= 75) scoreClass = 'notification-card__score--high';
+  else if (n.score >= 60) scoreClass = 'notification-card__score--medium';
+
+  // Relative timestamp
+  var createdDate = n.created_at ? new Date(n.created_at) : null;
+  var relativeTime = '';
+  if (createdDate) {
+    var diffSec = Math.floor((Date.now() - createdDate.getTime()) / 1000);
+    if (diffSec < 60) relativeTime = _t('alerts.time.just_now', 'Just now');
+    else if (diffSec < 3600) relativeTime = _t('alerts.time.minutes_ago', Math.floor(diffSec / 60) + 'm ago').replace('{count}', Math.floor(diffSec / 60));
+    else if (diffSec < 86400) relativeTime = _t('alerts.time.hours_ago', Math.floor(diffSec / 3600) + 'h ago').replace('{count}', Math.floor(diffSec / 3600));
+    else relativeTime = _t('alerts.time.days_ago', Math.floor(diffSec / 86400) + 'd ago').replace('{count}', Math.floor(diffSec / 86400));
+  }
+
+  // Skill pills (max 3)
+  var skills = [];
+  if (Array.isArray(n.top_matched_skills)) {
+    skills = n.top_matched_skills.slice(0, 3);
+  }
+
+  // Source badge class
+  var sourceLabel = n.source || '';
+%>
+<div
+  class="notification-card <%= readClass %>"
+  role="listitem"
+  data-id="<%= n.id %>"
+  data-job-id="<%= n.job_id %>"
+>
+  <div class="notification-card__unread-dot"></div>
+  <div class="notification-card__content">
+    <div class="notification-card__header">
+      <span class="notification-card__job-title">
+        <a href="/jobs/<%= n.job_id %>"><%= n.job_title || 'Untitled' %></a>
+      </span>
+      <span class="notification-card__time" title="<%= n.created_at || '' %>"><%= relativeTime %></span>
+    </div>
+    <div class="notification-card__meta">
+      <span><%= n.company_name || '' %></span>
+      <% if (n.location) { %>
+        <span class="notification-card__meta-dot"></span>
+        <span><%= n.location %></span>
+      <% } %>
+      <% if (sourceLabel) { %>
+        <span class="notification-card__meta-dot"></span>
+        <span class="tag-<%= sourceLabel %>"><%= sourceLabel %></span>
+      <% } %>
+    </div>
+    <% if (skills.length > 0) { %>
+    <div class="notification-card__skills">
+      <% skills.forEach(function(skill) { %>
+        <span class="notification-card__skill-pill"><%= skill %></span>
+      <% }); %>
+    </div>
+    <% } %>
+    <% if (n.visa_match !== null && typeof n.visa_match !== 'undefined') { %>
+    <span class="notification-card__visa <%= n.visa_match === 1 ? 'notification-card__visa--eligible' : 'notification-card__visa--required' %>">
+      <%= n.visa_match === 1 ? _t('alerts.card.visa_eligible', 'Visa eligible') : _t('alerts.card.visa_required', 'Visa required') %>
+    </span>
+    <% } %>
+  </div>
+  <%- include('score-indicator', { score: n.score, size: 'sm', scoring: false }) %>
+</div>

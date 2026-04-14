@@ -12,6 +12,9 @@
   var _staggerDelay = Math.min(_index, 8) * 40;
   var _matchedSkills = typeof matchedSkills !== 'undefined' && Array.isArray(matchedSkills) ? matchedSkills : [];
   var _applicationStatus = typeof applicationStatus !== 'undefined' ? applicationStatus : null;
+  var _userResumeCount = typeof _userResumeCount !== 'undefined' ? _userResumeCount : (typeof userResumeCount !== 'undefined' ? userResumeCount : 0);
+  var _displayLabel = _job.display_label || null;
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
   var _closesAt = _job.closes_at ? new Date(_job.closes_at) : null;
   var _isExpired = _closesAt && _closesAt < new Date();
 %>
@@ -38,7 +41,12 @@
     </div>
 
     <% if (_score !== null && _score !== undefined && !isNaN(_score)) { %>
-      <%- include('./score-indicator', { score: _score, size: 'compact' }) %>
+      <div>
+        <%- include('./score-indicator', { score: _score, size: 'compact' }) %>
+        <% if (_userResumeCount >= 2) { %>
+          <span class="resume-label-indicator" style="display: block; font-size: 0.75rem; font-weight: 400; line-height: 1.2; color: var(--color-text-muted, #64748b); margin-top: 4px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><%= _displayLabel || _t('resumes.manage.untitledResume', 'Untitled Resume') %></span>
+        <% } %>
+      </div>
     <% } else { %>
       <div class="score-indicator">
         <div class="score-ring score-ring--compact score-ring--empty">

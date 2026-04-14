@@ -6,6 +6,9 @@ const { closeDb } = require('./db/connection');
 const { ensureSampleResumeSeeded } = require('./services/resumeService');
 const backgroundQueue = require('./services/backgroundQueue');
 const sessionsRepo = require('./repositories/sessionsRepo');
+const emailService = require('./services/emailService');
+const digestScheduler = require('./services/digestScheduler');
+const alertPoller = require('./services/alertPoller');
 const { getLogger } = require('./logger');
 
 const logger = getLogger('server');
@@ -30,6 +33,14 @@ async function start() {
     require('./services/analysisService');
     logger.info('Background queue handlers registered');
 
+    // Verify SMTP connection (gracefully degrades if unavailable)
+    await emailService.verifyConnection();
+
+    // Start background alert services
+    digestScheduler.start();
+    alertPoller.start();
+    logger.info('Alert services started (digest scheduler + alert poller)');
+
     const server = app.listen(PORT, () => {
       logger.info(`Job Hunter listening on port ${PORT}`);
     });
@@ -37,6 +48,12 @@ async function start() {
     // Graceful shutdown
     function shutdown(signal) {
       logger.info(`Received ${signal}, shutting down gracefully...`);
+
+      // Stop background alert services
+      digestScheduler.stop();
+      alertPoller.stop();
+      logger.info('Alert services stopped');
+
       server.close(() => {
         logger.info('HTTP server closed');
         try {

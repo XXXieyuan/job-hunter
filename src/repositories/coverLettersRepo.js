@@ -106,6 +106,14 @@ function getCount() {
   return db.prepare('SELECT COUNT(*) AS c FROM cover_letters').get().c;
 }
 
+function countForResume(resume_id) {
+  const db = getDbInstance();
+  const row = db
+    .prepare('SELECT COUNT(*) AS c FROM cover_letters WHERE resume_id = ?')
+    .get(resume_id);
+  return row ? row.c : 0;
+}
+
 module.exports = {
   getCoverLetter,
   getCoverLetterById,
@@ -115,4 +123,5 @@ module.exports = {
   updateUserEditedContent,
   deleteCoverLetter,
   getCount,
+  countForResume,
 };

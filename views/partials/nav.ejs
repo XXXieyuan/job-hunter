@@ -29,6 +29,11 @@
         class="nav-link <%= _currentPath.startsWith('/jobs') ? 'active' : '' %>"
       ><%= _t('nav.jobs', 'Jobs') %></a>
 
+      <a
+        href="/salary-insights"
+        class="nav-link <%= _currentPath.startsWith('/salary-insights') ? 'active' : '' %>"
+      ><%= _t('nav.salaryInsights', 'Salary Insights') %></a>
+
       <% if (_user) { %>
       <a
         href="/resumes"
@@ -39,6 +44,12 @@
         href="/applications"
         class="nav-link <%= _currentPath.startsWith('/applications') ? 'active' : '' %>"
       ><%= _t('nav.applications', 'Applications') %></a>
+
+      <a
+        href="/alerts"
+        class="nav-link <%= _currentPath.startsWith('/alerts') ? 'active' : '' %>"
+        aria-label="<%= _t('nav.alerts_badge_aria', '{count} unread alerts').replace('{count}', typeof unreadAlertCount !== 'undefined' ? unreadAlertCount : 0) %>"
+      ><%= _t('nav.alerts', 'Alerts') %><% if (typeof unreadAlertCount !== 'undefined' && unreadAlertCount > 0) { %><span class="nav-alert-badge" id="nav-alert-badge"><%= unreadAlertCount > 99 ? '99+' : unreadAlertCount %></span><% } %></a>
       <% } %>
 
       <a

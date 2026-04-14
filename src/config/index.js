@@ -37,6 +37,18 @@ const RESUME_MAX_SIZE_BYTES = parseInt(process.env.RESUME_MAX_SIZE_BYTES, 10) ||
 const RESUME_UPLOAD_DIR = process.env.RESUME_UPLOAD_DIR ||
   path.join(__dirname, '..', '..', 'data', 'resumes');
 
+// SMTP / Email (job alerts)
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT, 10) || 587;
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_SECURE = process.env.SMTP_SECURE !== undefined
+  ? process.env.SMTP_SECURE === 'true'
+  : true;
+const EMAIL_FROM = process.env.EMAIL_FROM || '';
+const EMAIL_ENABLED = process.env.EMAIL_ENABLED === 'true';
+const APP_BASE_URL = process.env.APP_BASE_URL || `http://localhost:${PORT}`;
+
 module.exports = {
   PORT,
   DB_PATH,
@@ -56,4 +68,12 @@ module.exports = {
   PYTHON_PATH,
   RESUME_MAX_SIZE_BYTES,
   RESUME_UPLOAD_DIR,
+  SMTP_HOST,
+  SMTP_PORT,
+  SMTP_USER,
+  SMTP_PASS,
+  SMTP_SECURE,
+  EMAIL_FROM,
+  EMAIL_ENABLED,
+  APP_BASE_URL,
 };

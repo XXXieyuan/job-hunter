@@ -13,3 +13,10 @@ scrapers/__pycache__/
 
 # Editor / agent artifacts
 .coding-agent/
+.claude/
+
+# Scraper stderr logs
+*_stderr*.log
+
+# Scraper run data
+runs/

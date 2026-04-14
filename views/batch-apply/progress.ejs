@@ -1,0 +1,311 @@
+<% layout('layout') -%>
+
+<%
+  var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
+  var _session = typeof session !== 'undefined' ? session : {};
+  var _jobs = typeof jobs !== 'undefined' && Array.isArray(jobs) ? jobs : [];
+  var _flash = typeof flash !== 'undefined' ? flash : {};
+
+  var _isActive = _session.status === 'pending' || _session.status === 'in-progress';
+  var _totalProcessed = (_session.applied_count || 0) + (_session.failed_count || 0) + (_session.skipped_count || 0);
+  var _totalJobs = _session.total_jobs || 0;
+
+  function progressPct(count) {
+    return _totalJobs > 0 ? ((count / _totalJobs) * 100).toFixed(1) : '0';
+  }
+
+  /* Find the currently awaiting-submit job for the overlay */
+  var _activeJob = null;
+  for (var i = 0; i < _jobs.length; i++) {
+    if (_jobs[i].status === 'awaiting-submit') { _activeJob = _jobs[i]; break; }
+  }
+
+  function statusBadgeClass(status) {
+    var map = {
+      'pending': 'ba-job-badge--pending',
+      'in-progress': 'ba-job-badge--in-progress',
+      'awaiting-submit': 'ba-job-badge--awaiting-submit',
+      'applied': 'ba-job-badge--applied',
+      'failed': 'ba-job-badge--failed',
+      'skipped': 'ba-job-badge--skipped'
+    };
+    return map[status] || 'ba-job-badge--pending';
+  }
+
+  function statusCardClass(status) {
+    var map = {
+      'pending': 'ba-job-card--pending',
+      'in-progress': 'ba-job-card--in-progress',
+      'awaiting-submit': 'ba-job-card--awaiting-submit',
+      'applied': 'ba-job-card--applied',
+      'failed': 'ba-job-card--failed',
+      'skipped': 'ba-job-card--skipped'
+    };
+    return map[status] || 'ba-job-card--pending';
+  }
+
+  function statusLabel(status) {
+    var map = {
+      'pending': _t('batchApply.progress.pending', 'Pending'),
+      'in-progress': _t('batchApply.progress.inProgress', 'In Progress'),
+      'awaiting-submit': _t('batchApply.progress.awaitingSubmit', 'Awaiting Submit'),
+      'applied': _t('batchApply.progress.applied', 'Applied'),
+      'failed': _t('batchApply.progress.failed', 'Failed'),
+      'skipped': _t('batchApply.progress.skipped', 'Skipped')
+    };
+    return map[status] || status;
+  }
+%>
+
+<link rel="stylesheet" href="/css/batch-apply.css">
+
+<section class="page-section ba-progress-container" style="padding: 24px 16px 48px;"
+         data-session-id="<%= _session.id %>"
+         data-session-status="<%= _session.status %>">
+
+  <!-- Breadcrumb -->
+  <nav aria-label="Breadcrumb" style="font-size: 0.8125rem; color: var(--color-text-muted, #64748b); margin-bottom: 16px;">
+    <a href="/" style="color: var(--color-text-muted, #64748b); text-decoration: none;">Home</a>
+    <span aria-hidden="true"> &gt; </span>
+    <a href="/batch-apply/history" style="color: var(--color-text-muted, #64748b); text-decoration: none;">Batch Apply</a>
+    <span aria-hidden="true"> &gt; </span>
+    <span aria-current="page"><%= _t('batchApply.progress.title', 'Batch Apply') %></span>
+  </nav>
+
+  <!-- Flash Messages -->
+  <% if (_flash.error) { %>
+  <div role="alert" style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-size: 0.875rem; color: #DC2626;">
+    <%= _flash.error %>
+  </div>
+  <% } %>
+
+  <!-- Session Header -->
+  <div class="ba-progress-header">
+    <div>
+      <h1 class="ba-progress-header__title"><%= _t('batchApply.progress.title', 'Batch Apply') %></h1>
+      <div class="ba-progress-session">
+        <span class="ba-job-badge <%= _session.status === 'pending' ? 'ba-job-badge--pending' : _session.status === 'in-progress' ? 'ba-job-badge--in-progress' : _session.status === 'completed' ? 'ba-job-badge--applied' : 'ba-job-badge--skipped' %>" role="status" aria-label="Status: <%= statusLabel(_session.status) %>">
+          <% if (_session.status === 'in-progress' || _session.status === 'pending') { %>
+          <svg class="ba-job-badge__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke-width="2"/><path d="M8 4v4l3 1.5" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <% } else if (_session.status === 'completed') { %>
+          <svg class="ba-job-badge__icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm3.3 5.3l-4 4a.75.75 0 01-1.1 0l-2-2a.75.75 0 111.1-1.1L6.8 8.7l3.4-3.4a.75.75 0 111.1 1.1z"/></svg>
+          <% } else { %>
+          <svg class="ba-job-badge__icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm2.8 9.2a.75.75 0 01-1.1 1.1L8 9.6 6.3 11.3a.75.75 0 01-1.1-1.1L6.9 8.5 5.2 6.8a.75.75 0 011.1-1.1L8 7.4l1.7-1.7a.75.75 0 011.1 1.1L9.1 8.5l1.7 1.7z"/></svg>
+          <% } %>
+          <%= statusLabel(_session.status) %>
+        </span>
+        <span><%= _totalProcessed %>/<%= _totalJobs %> processed</span>
+        <% if (_session.completed_at) { %>
+        <span><%= new Date(_session.completed_at).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) %></span>
+        <% } %>
+      </div>
+    </div>
+    <% if (_isActive) { %>
+    <button type="button" class="ba-progress-cancel" id="ba-cancel-btn"
+            data-session-id="<%= _session.id %>">
+      <%= _t('batchApply.progress.cancelBatch', 'Cancel Batch') %>
+    </button>
+    <% } %>
+  </div>
+
+  <!-- Progress Bar -->
+  <div class="ba-progress-bar" role="progressbar"
+       aria-valuenow="<%= _totalProcessed %>" aria-valuemin="0" aria-valuemax="<%= _totalJobs %>"
+       id="ba-progress-bar">
+    <div class="ba-progress-bar__segment ba-progress-bar__segment--applied" id="ba-bar-applied"
+         style="width: <%= progressPct(_session.applied_count || 0) %>%;"></div>
+    <div class="ba-progress-bar__segment ba-progress-bar__segment--failed" id="ba-bar-failed"
+         style="width: <%= progressPct(_session.failed_count || 0) %>%;"></div>
+    <div class="ba-progress-bar__segment ba-progress-bar__segment--skipped" id="ba-bar-skipped"
+         style="width: <%= progressPct(_session.skipped_count || 0) %>%;"></div>
+  </div>
+
+  <!-- CAPTCHA Notice (hidden by default, shown via SSE) -->
+  <div class="ba-notice ba-notice--captcha" id="ba-captcha-notice" style="display: none;" role="alert" aria-live="assertive">
+    <svg class="ba-notice__icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+    </svg>
+    <span><%= _t('batchApply.progress.captcha', 'Seek is showing a CAPTCHA. Please solve it in the browser window, then the batch will continue automatically.') %></span>
+  </div>
+
+  <!-- Rate Limit Warning (hidden by default) -->
+  <div class="ba-notice ba-notice--rate-limited" id="ba-rate-limited-notice" style="display: none;" role="alert" aria-live="assertive">
+    <svg class="ba-notice__icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+    </svg>
+    <span><%= _t('batchApply.progress.rateLimited', 'Seek has rate-limited this session. Remaining jobs have been paused.') %></span>
+  </div>
+
+  <!-- Session Error Banner (hidden by default) -->
+  <div class="ba-notice ba-notice--error" id="ba-error-notice" style="display: none;" role="alert" aria-live="assertive">
+    <svg class="ba-notice__icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+    </svg>
+    <span id="ba-error-message"></span>
+  </div>
+
+  <!-- Active Job Overlay -->
+  <% if (_activeJob) { %>
+  <div class="ba-progress-overlay" id="ba-active-overlay" role="alert" aria-live="assertive">
+    <span class="ba-progress-overlay__text">
+      <%- _t('batchApply.progress.nowReviewing', 'Now reviewing: %s at %s').replace('%s', '<strong>' + _activeJob.title.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') + '</strong>').replace('%s', '<strong>' + _activeJob.company_name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') + '</strong>') %>
+    </span>
+    <button type="button" class="ba-job-skip" id="ba-overlay-skip"
+            data-session-id="<%= _session.id %>" data-job-id="<%= _activeJob.id %>">
+      <%= _t('batchApply.progress.skipJob', 'Skip This Job') %>
+    </button>
+  </div>
+  <% } else { %>
+  <div class="ba-progress-overlay" id="ba-active-overlay" style="display: none;" role="alert" aria-live="assertive">
+    <span class="ba-progress-overlay__text" id="ba-overlay-text"></span>
+    <button type="button" class="ba-job-skip" id="ba-overlay-skip" data-session-id="<%= _session.id %>" data-job-id="">
+      <%= _t('batchApply.progress.skipJob', 'Skip This Job') %>
+    </button>
+  </div>
+  <% } %>
+
+  <!-- Job Queue -->
+  <ol role="list" aria-label="Application queue" style="list-style: none; padding: 0; margin: 0;" id="ba-job-list">
+    <% _jobs.forEach(function(job, idx) { %>
+    <%
+      var filledFields = [];
+      var warnings = [];
+      try { if (job.filled_fields) filledFields = JSON.parse(job.filled_fields); } catch(e) {}
+      try { if (job.warnings) warnings = JSON.parse(job.warnings); } catch(e) {}
+    %>
+    <li role="listitem">
+      <div class="ba-job-card <%= statusCardClass(job.status) %>"
+           id="ba-job-<%= job.id %>"
+           data-job-id="<%= job.id %>"
+           data-status="<%= job.status %>">
+        <div class="ba-job-card__content">
+          <div class="ba-job-card__header">
+            <div>
+              <span class="ba-job-card__title"><%= job.title %></span>
+              <span class="ba-job-card__company"><%= job.company_name %></span>
+            </div>
+            <span class="ba-job-badge <%= statusBadgeClass(job.status) %>" role="status" aria-label="Status: <%= statusLabel(job.status) %>">
+              <% if (job.status === 'pending') { %>
+              <svg class="ba-job-badge__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke-width="2"/><path d="M8 4v4l3 1.5" stroke-width="1.5" stroke-linecap="round"/></svg>
+              <% } else if (job.status === 'in-progress') { %>
+              <svg class="ba-job-badge__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><path d="M8 1.5A6.5 6.5 0 0114.5 8" stroke-width="2" stroke-linecap="round"/></svg>
+              <% } else if (job.status === 'awaiting-submit') { %>
+              <svg class="ba-job-badge__icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 3C4.7 3 2 5.1 1 8c1 2.9 3.7 5 7 5s6-2.1 7-5c-1-2.9-3.7-5-7-5zm0 8a3 3 0 110-6 3 3 0 010 6z"/></svg>
+              <% } else if (job.status === 'applied') { %>
+              <svg class="ba-job-badge__icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm3.3 5.3l-4 4a.75.75 0 01-1.1 0l-2-2a.75.75 0 111.1-1.1L6.8 8.7l3.4-3.4a.75.75 0 111.1 1.1z"/></svg>
+              <% } else if (job.status === 'failed') { %>
+              <svg class="ba-job-badge__icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm2.8 9.2a.75.75 0 01-1.1 1.1L8 9.6 6.3 11.3a.75.75 0 01-1.1-1.1L6.9 8.5 5.2 6.8a.75.75 0 011.1-1.1L8 7.4l1.7-1.7a.75.75 0 011.1 1.1L9.1 8.5l1.7 1.7z"/></svg>
+              <% } else { %>
+              <svg class="ba-job-badge__icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4.3 3.7a.75.75 0 011.1 0L8 6.3l2.6-2.6a.75.75 0 111.1 1.1L9.1 7.4l2.6 2.6a.75.75 0 01-1.1 1.1L8 8.5 5.4 11.1a.75.75 0 01-1.1-1.1L6.9 7.4 4.3 4.8a.75.75 0 010-1.1z"/></svg>
+              <% } %>
+              <%= statusLabel(job.status) %>
+            </span>
+          </div>
+
+          <% if (job.status === 'pending') { %>
+          <div style="font-size: 0.8125rem; color: var(--color-text-muted, #64748b); margin-top: 4px;">
+            <%= idx + 1 %> of <%= _totalJobs %>
+          </div>
+          <% } %>
+
+          <% if (job.applied_at) { %>
+          <div style="font-size: 0.8125rem; color: var(--color-text-muted, #64748b); margin-top: 4px;">
+            Applied at <%= new Date(job.applied_at).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) %>
+          </div>
+          <% } %>
+
+          <!-- Filled fields chips -->
+          <% if (filledFields.length > 0 && (job.status === 'awaiting-submit' || job.status === 'applied')) { %>
+          <div class="ba-job-card__actions" style="flex-wrap: wrap;">
+            <% filledFields.forEach(function(field) { %>
+            <span style="display: inline-flex; align-items: center; gap: 2px; padding: 1px 8px; border-radius: 12px; font-size: 0.75rem; background: rgba(5, 150, 105, 0.1); color: #059669;">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M12.2 4.8a.75.75 0 010 1.1l-5 5a.75.75 0 01-1.1 0l-2.5-2.5a.75.75 0 011.1-1.1L6.7 9.3l4.4-4.5a.75.75 0 011.1 0z"/></svg>
+              <%= field %>
+            </span>
+            <% }); %>
+          </div>
+          <% } %>
+
+          <!-- Warning chips -->
+          <% if (warnings.length > 0) { %>
+          <div class="ba-job-card__actions" style="flex-wrap: wrap; margin-top: 4px;">
+            <% warnings.forEach(function(warning) { %>
+            <span style="display: inline-flex; align-items: center; gap: 2px; padding: 1px 8px; border-radius: 12px; font-size: 0.75rem; background: rgba(217, 119, 6, 0.1); color: #D97706;">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8.3 1.5a.5.5 0 00-.9 0L1 13.5a.5.5 0 00.4.8h12.2a.5.5 0 00.4-.8L8.3 1.5zM8 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 018 5zm0 8a1 1 0 100-2 1 1 0 000 2z"/></svg>
+              <%= warning %>
+            </span>
+            <% }); %>
+          </div>
+          <% } %>
+
+          <!-- Error accordion -->
+          <% if (job.status === 'failed' && job.error_reason) { %>
+          <details class="ba-job-error">
+            <summary class="ba-job-error__toggle">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm2.8 9.2a.75.75 0 01-1.1 1.1L8 9.6 6.3 11.3a.75.75 0 01-1.1-1.1L6.9 8.5 5.2 6.8a.75.75 0 011.1-1.1L8 7.4l1.7-1.7a.75.75 0 011.1 1.1L9.1 8.5l1.7 1.7z"/></svg>
+              View error details
+            </summary>
+            <div class="ba-job-error__detail ba-job-error__detail--open">
+              <%= job.error_reason %>
+            </div>
+          </details>
+          <% } %>
+
+          <!-- Skip button for awaiting-submit jobs -->
+          <% if (job.status === 'awaiting-submit') { %>
+          <div class="ba-job-card__actions">
+            <button type="button" class="ba-job-skip ba-job-skip-btn"
+                    data-session-id="<%= _session.id %>" data-job-id="<%= job.id %>">
+              <%= _t('batchApply.progress.skipJob', 'Skip This Job') %>
+            </button>
+          </div>
+          <% } %>
+        </div>
+      </div>
+    </li>
+    <% }); %>
+  </ol>
+
+  <!-- Summary Panel -->
+  <div class="ba-progress-summary" role="complementary" aria-label="Batch summary" id="ba-summary">
+    <h2 class="ba-progress-summary__title"><%= _t('batchApply.progress.summary', 'Summary') %></h2>
+    <div class="ba-progress-summary__stats" aria-live="polite">
+      <div class="ba-progress-summary__stat ba-progress-summary__stat--applied">
+        <svg class="ba-progress-summary__stat-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm3.3 5.3l-4 4a.75.75 0 01-1.1 0l-2-2a.75.75 0 111.1-1.1L6.8 8.7l3.4-3.4a.75.75 0 111.1 1.1z"/></svg>
+        <span class="ba-progress-summary__stat-count" id="ba-summary-applied"><%= _session.applied_count || 0 %></span>
+        <span><%= _t('batchApply.progress.applied', 'Applied') %></span>
+      </div>
+      <div class="ba-progress-summary__stat ba-progress-summary__stat--failed">
+        <svg class="ba-progress-summary__stat-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm2.8 9.2a.75.75 0 01-1.1 1.1L8 9.6 6.3 11.3a.75.75 0 01-1.1-1.1L6.9 8.5 5.2 6.8a.75.75 0 011.1-1.1L8 7.4l1.7-1.7a.75.75 0 011.1 1.1L9.1 8.5l1.7 1.7z"/></svg>
+        <span class="ba-progress-summary__stat-count" id="ba-summary-failed"><%= _session.failed_count || 0 %></span>
+        <span><%= _t('batchApply.progress.failed', 'Failed') %></span>
+      </div>
+      <div class="ba-progress-summary__stat ba-progress-summary__stat--skipped">
+        <svg class="ba-progress-summary__stat-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4.3 3.7a.75.75 0 011.1 0L8 6.3l2.6-2.6a.75.75 0 111.1 1.1L9.1 7.4l2.6 2.6a.75.75 0 01-1.1 1.1L8 8.5 5.4 11.1a.75.75 0 01-1.1-1.1L6.9 7.4 4.3 4.8a.75.75 0 010-1.1z"/></svg>
+        <span class="ba-progress-summary__stat-count" id="ba-summary-skipped"><%= _session.skipped_count || 0 %></span>
+        <span><%= _t('batchApply.progress.skipped', 'Skipped') %></span>
+      </div>
+    </div>
+    <div class="ba-progress-summary__actions">
+      <a href="/batch-apply/history" class="ba-progress-summary__link"><%= _t('batchApply.history.title', 'Apply History') %></a>
+      <a href="/jobs" class="ba-progress-summary__link">Back to Jobs</a>
+    </div>
+  </div>
+
+</section>
+
+<!-- Cancel Batch Confirmation Dialog -->
+<div class="ba-dialog-backdrop" id="ba-cancel-dialog" role="alertdialog" aria-modal="true" aria-labelledby="ba-cancel-dialog-title">
+  <div class="ba-dialog">
+    <h3 class="ba-dialog__title" id="ba-cancel-dialog-title"><%= _t('batchApply.progress.cancelBatch', 'Cancel Batch') %></h3>
+    <p class="ba-dialog__body"><%= _t('batchApply.progress.cancelConfirm', 'Cancel this batch? Jobs already applied will not be affected. Remaining jobs will be skipped.') %></p>
+    <div class="ba-dialog__actions">
+      <button type="button" class="ba-dialog__btn ba-dialog__btn--cancel" id="ba-cancel-dialog-dismiss">Keep Going</button>
+      <button type="button" class="ba-dialog__btn ba-dialog__btn--danger" id="ba-cancel-dialog-confirm">
+        <%= _t('batchApply.progress.cancelBatch', 'Cancel Batch') %>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/batch-apply.js"></script>

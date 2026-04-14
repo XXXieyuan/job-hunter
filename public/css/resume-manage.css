@@ -1,0 +1,258 @@
+/* ── Resume Management Page Styles ── */
+
+/* Resume card hover */
+.resume-card:hover {
+  background: var(--color-bg-hover, #f8f9fa) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+}
+
+.resume-card .resume-card-actions .btn {
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.resume-card:hover .resume-card-actions .btn {
+  opacity: 1;
+}
+
+/* Label chips */
+.label-chip {
+  display: inline-block;
+  padding: 4px 14px;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.0;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 20px;
+  background: var(--color-bg-surface, #ffffff);
+  color: var(--color-text-primary, #1e293b);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  height: 36px;
+  min-width: 72px;
+  text-align: center;
+}
+
+.label-chip:hover,
+.label-chip:focus {
+  background: var(--color-primary-light, #dbeafe);
+  border-color: var(--color-primary, #3b82f6);
+  outline: none;
+}
+
+.label-chip:active {
+  transform: scale(0.97);
+}
+
+/* Upload dropzone active state */
+.upload-dropzone.dropzone-active,
+.upload-dropzone:hover {
+  border-color: var(--color-primary, #3b82f6) !important;
+  background: rgba(59, 130, 246, 0.04) !important;
+}
+
+/* Badge styles */
+.badge-confirmed {
+  background: var(--color-success, #22c55e);
+  color: var(--color-text-primary, #1e293b);
+}
+
+.badge-pending {
+  background: var(--color-warning, #e67e22);
+  color: var(--color-text-primary, #1e293b);
+}
+
+/* Button danger style */
+.btn-danger {
+  background: var(--color-danger, #ef4444);
+  color: #ffffff;
+  border: 1px solid var(--color-danger, #ef4444);
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+/* ── Job Listing — Resume Label Indicator ── */
+.resume-label-indicator {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--color-text-muted, #64748b);
+  margin-top: 4px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Job Detail — Resume Match Indicator ── */
+.resume-match-indicator {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--color-text-primary, #1e293b);
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--color-primary-light, #dbeafe);
+  border-radius: 8px;
+}
+
+.resume-match-indicator .manual-suffix {
+  font-weight: 400;
+  color: var(--color-text-muted, #64748b);
+}
+
+/* ── Job Detail — Resume Selector Dropdown ── */
+.resume-selector {
+  font-size: 0.875rem;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  background: var(--color-bg-surface, #ffffff);
+  color: var(--color-text-primary, #1e293b);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.resume-selector:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.resume-selector-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+/* ── Job Detail — All Scores Summary ── */
+.all-scores-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--color-text-primary, #1e293b);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 0;
+  min-height: 44px;
+  width: 100%;
+  text-align: left;
+}
+
+.all-scores-toggle:hover {
+  color: var(--color-primary, #3b82f6);
+}
+
+.all-scores-toggle .chevron {
+  display: inline-block;
+  transition: transform 0.2s;
+  font-size: 0.75rem;
+}
+
+.all-scores-toggle[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.scores-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+.scores-comparison-table {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.scores-comparison-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-text-muted, #64748b);
+  padding: 8px 10px;
+  border-bottom: 2px solid var(--color-border, #e2e8f0);
+  white-space: nowrap;
+}
+
+.scores-comparison-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  color: var(--color-text-primary, #1e293b);
+}
+
+.scores-comparison-table tr.active-resume {
+  border-left: 3px solid var(--color-primary, #3b82f6);
+  background: rgba(59, 130, 246, 0.04);
+}
+
+/* Fade gradient for scroll indicator */
+.scores-table-scroll::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  background: linear-gradient(to left, var(--color-bg-surface, #ffffff), transparent);
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.scores-table-scroll.scrolled-end::after {
+  opacity: 0;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .resume-label-indicator {
+    max-width: 120px;
+  }
+
+  .resume-selector-wrapper {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .resume-selector {
+    width: 100%;
+  }
+
+  .resume-card-meta {
+    flex-direction: column;
+    gap: 4px !important;
+  }
+
+  .resume-card-meta span[aria-hidden="true"] {
+    display: none;
+  }
+
+  .resume-card-actions {
+    flex-direction: column;
+  }
+
+  .resume-card-actions .btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .label-chip-row {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 375px) {
+  .resume-card {
+    padding: 16px !important;
+  }
+}

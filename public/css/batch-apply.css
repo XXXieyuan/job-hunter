@@ -1,0 +1,1205 @@
+/* ==========================================================================
+   Job Hunter – Batch Apply Feature Styles
+   Profile form, batch selection, floating bar, job status cards,
+   progress page, history table, status badges, confirmation dialogs
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Profile Form (.ba-profile-*)
+   -------------------------------------------------------------------------- */
+
+.ba-profile-form {
+  max-width: 720px;
+  margin: 0 auto;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-1);
+  padding: var(--space-6);
+}
+
+.ba-profile-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: rgba(8, 145, 178, 0.08);
+  border-left: 3px solid var(--accent-secondary, #0891B2);
+  margin-bottom: var(--space-6);
+  font: var(--font-body-sm);
+  color: var(--text-secondary);
+}
+
+.ba-profile-hint__icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--accent-secondary, #0891B2);
+  margin-top: 1px;
+}
+
+.ba-profile-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ba-profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ba-profile-field__label {
+  font: var(--font-body-sm);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.ba-profile-field__label--required::after {
+  content: " *";
+  color: var(--danger);
+}
+
+.ba-profile-field__input,
+.ba-profile-field__select {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  font: var(--font-body);
+  color: var(--text);
+  min-height: var(--touch-target-min);
+  transition: border-color var(--transition-fast),
+              box-shadow var(--transition-fast);
+}
+
+.ba-profile-field__input:focus,
+.ba-profile-field__select:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--focus-ring);
+}
+
+.ba-profile-field__input::placeholder {
+  color: var(--text-muted);
+}
+
+.ba-profile-field__help {
+  font: var(--font-caption);
+  color: var(--text-muted);
+}
+
+.ba-profile-updated {
+  font: var(--font-caption);
+  color: var(--text-muted);
+  margin-top: var(--space-2);
+}
+
+.ba-profile-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ba-profile-actions__save {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3) var(--space-6);
+  background: var(--accent-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  min-height: var(--touch-target-min);
+  transition: background-color var(--transition-fast),
+              transform var(--transition-fast);
+}
+
+.ba-profile-actions__save:hover {
+  background: var(--accent-primary-hover);
+}
+
+.ba-profile-actions__save:active {
+  transform: scale(0.98);
+}
+
+.ba-profile-actions__save:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* --------------------------------------------------------------------------
+   Batch Selection Checkbox (.ba-select-*)
+   -------------------------------------------------------------------------- */
+
+.ba-select-checkbox {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  cursor: pointer;
+  transition: border-color var(--transition-fast),
+              background-color var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  /* 44x44px touch target via padding */
+  padding: 0;
+  box-sizing: content-box;
+}
+
+.ba-select-checkbox::before {
+  content: "";
+  position: absolute;
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
+  /* Expand click area to 44x44px minimum */
+}
+
+.ba-select-checkbox:hover {
+  border-color: var(--accent-primary);
+}
+
+.ba-select-checkbox--checked {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.ba-select-checkbox--checked .ba-select-checkbox__icon {
+  display: block;
+}
+
+.ba-select-checkbox__icon {
+  display: none;
+  width: 12px;
+  height: 12px;
+  color: #fff;
+}
+
+.ba-select-checkbox__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ba-select-checkbox__input:focus-visible + .ba-select-checkbox {
+  box-shadow: var(--focus-ring);
+}
+
+.ba-select-checkbox--disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Card accent when selected */
+.ba-select-card--checked {
+  border-left: 3px solid var(--accent-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Floating Action Bar (.ba-select-bar)
+   -------------------------------------------------------------------------- */
+
+.ba-select-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border-subtle);
+  box-shadow: 0 -10px 15px -3px rgba(0, 0, 0, 0.1),
+              0 -4px 6px -4px rgba(0, 0, 0, 0.1);
+  padding: var(--space-3) var(--space-4);
+  transform: translateY(100%);
+  transition: transform var(--transition-med);
+}
+
+.ba-select-bar--visible {
+  transform: translateY(0);
+}
+
+.ba-select-bar__inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.ba-select-bar__count {
+  font: var(--font-body-sm);
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.ba-select-bar__count--max {
+  color: var(--warning);
+}
+
+.ba-select-bar__apply {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-5);
+  background: var(--accent-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font: var(--font-body-sm);
+  font-weight: 500;
+  cursor: pointer;
+  min-height: var(--touch-target-min);
+  transition: background-color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.ba-select-bar__apply:hover {
+  background: var(--accent-primary-hover);
+}
+
+.ba-select-bar__apply:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ba-select-bar__apply:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.ba-select-bar__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  color: var(--text-secondary);
+  border: none;
+  font: var(--font-body-sm);
+  cursor: pointer;
+  min-height: var(--touch-target-min);
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast),
+              background-color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.ba-select-bar__clear:hover {
+  color: var(--text);
+  background: var(--bg-subtle);
+}
+
+.ba-select-bar__clear:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* --------------------------------------------------------------------------
+   Config / Resume Banners (.ba-banner-*)
+   -------------------------------------------------------------------------- */
+
+.ba-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  font: var(--font-body-sm);
+}
+
+.ba-banner--config {
+  background: rgba(8, 145, 178, 0.08);
+  border-left: 3px solid var(--accent-secondary, #0891B2);
+  color: var(--text-secondary);
+}
+
+.ba-banner--resume {
+  background: rgba(217, 119, 6, 0.08);
+  border-left: 3px solid var(--warning);
+  color: var(--text-secondary);
+}
+
+.ba-banner__link {
+  color: var(--accent-primary);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ba-banner__link:hover {
+  text-decoration: underline;
+}
+
+/* --------------------------------------------------------------------------
+   Job Status Cards (.ba-job-*)
+   -------------------------------------------------------------------------- */
+
+.ba-job-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid transparent;
+  background: var(--bg-elevated);
+  box-shadow: var(--elevation-1);
+  transition: background-color var(--transition-fast),
+              border-color var(--transition-fast);
+}
+
+.ba-job-card + .ba-job-card {
+  margin-top: var(--space-3);
+}
+
+/* Status-specific card backgrounds and left borders */
+.ba-job-card--pending {
+  background: var(--bg-elevated);
+  border-left-color: var(--text-muted);
+}
+
+.ba-job-card--in-progress {
+  background: rgba(37, 99, 235, 0.04);
+  border-left-color: var(--accent-primary);
+}
+
+.ba-job-card--awaiting-submit {
+  background: rgba(217, 119, 6, 0.06);
+  border-left-color: var(--warning);
+}
+
+.ba-job-card--applied {
+  background: rgba(5, 150, 105, 0.04);
+  border-left-color: var(--success);
+}
+
+.ba-job-card--failed {
+  background: rgba(220, 38, 38, 0.04);
+  border-left-color: var(--danger);
+}
+
+.ba-job-card--skipped {
+  background: var(--bg-elevated);
+  border-left-color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.ba-job-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.ba-job-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.ba-job-card__title {
+  font: var(--font-heading-3);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ba-job-card__company {
+  font: var(--font-body-sm);
+  color: var(--text-secondary);
+}
+
+.ba-job-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* Pulsing left border for in-progress */
+.ba-job-card--in-progress {
+  animation: baPulseLeftBorder 2s ease-in-out infinite;
+}
+
+@keyframes baPulseLeftBorder {
+  0%, 100% { border-left-color: var(--accent-primary); }
+  50% { border-left-color: rgba(37, 99, 235, 0.4); }
+}
+
+/* --------------------------------------------------------------------------
+   Status Badges (.ba-job-badge-*)
+   Icon + text + color (WCAG 1.4.1 — not color-only)
+   -------------------------------------------------------------------------- */
+
+.ba-job-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font: var(--font-caption);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ba-job-badge__icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.ba-job-badge--pending {
+  color: #6B7280;
+  background: rgba(107, 114, 128, 0.1);
+}
+
+.ba-job-badge--in-progress {
+  color: #2563EB;
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.ba-job-badge--awaiting-submit {
+  color: #D97706;
+  background: rgba(217, 119, 6, 0.1);
+}
+
+.ba-job-badge--applied {
+  color: #059669;
+  background: rgba(5, 150, 105, 0.1);
+}
+
+.ba-job-badge--failed {
+  color: #DC2626;
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.ba-job-badge--skipped {
+  color: #6B7280;
+  background: rgba(107, 114, 128, 0.1);
+}
+
+/* Spinner animation for in-progress badge icon */
+.ba-job-badge--in-progress .ba-job-badge__icon {
+  animation: baSpin 1s linear infinite;
+}
+
+@keyframes baSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* --------------------------------------------------------------------------
+   Error Accordion (.ba-job-error)
+   -------------------------------------------------------------------------- */
+
+.ba-job-error {
+  margin-top: var(--space-2);
+}
+
+.ba-job-error__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  font: var(--font-caption);
+  color: var(--danger);
+  cursor: pointer;
+  padding: var(--space-1) 0;
+  min-height: var(--touch-target-min);
+}
+
+.ba-job-error__toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+.ba-job-error__detail {
+  display: none;
+  padding: var(--space-2) var(--space-3);
+  margin-top: var(--space-1);
+  border-radius: var(--radius-sm);
+  background: rgba(220, 38, 38, 0.04);
+  font: var(--font-caption);
+  color: var(--text-secondary);
+}
+
+.ba-job-error__detail--open {
+  display: block;
+}
+
+/* --------------------------------------------------------------------------
+   Skip Button (.ba-job-skip)
+   -------------------------------------------------------------------------- */
+
+.ba-job-skip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font: var(--font-caption);
+  color: var(--text-secondary);
+  cursor: pointer;
+  min-height: var(--touch-target-min);
+  transition: border-color var(--transition-fast),
+              color var(--transition-fast);
+}
+
+.ba-job-skip:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.ba-job-skip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ba-job-skip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* --------------------------------------------------------------------------
+   Progress Page Layout (.ba-progress-*)
+   -------------------------------------------------------------------------- */
+
+.ba-progress-container {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.ba-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.ba-progress-header__title {
+  font: var(--font-heading-1);
+  color: var(--text);
+}
+
+/* Progress bar */
+.ba-progress-bar {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--bg-subtle);
+  overflow: hidden;
+  margin-bottom: var(--space-6);
+  display: flex;
+}
+
+.ba-progress-bar__segment {
+  height: 100%;
+  transition: width var(--transition-med);
+}
+
+.ba-progress-bar__segment--applied {
+  background: var(--success);
+}
+
+.ba-progress-bar__segment--failed {
+  background: var(--danger);
+}
+
+.ba-progress-bar__segment--skipped {
+  background: var(--text-muted);
+}
+
+/* Active job overlay */
+.ba-progress-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: rgba(217, 119, 6, 0.1);
+  border-left: 4px solid var(--warning);
+  box-shadow: var(--elevation-2);
+  margin-bottom: var(--space-4);
+  transition: opacity var(--transition-med);
+}
+
+.ba-progress-overlay__text {
+  font: var(--font-body-sm);
+  color: var(--text);
+}
+
+.ba-progress-overlay__text strong {
+  font-weight: 600;
+}
+
+/* Session header with date/status */
+.ba-progress-session {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font: var(--font-body-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-4);
+}
+
+/* Cancel button */
+.ba-progress-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  font: var(--font-body-sm);
+  color: var(--danger);
+  cursor: pointer;
+  min-height: var(--touch-target-min);
+  transition: background-color var(--transition-fast),
+              color var(--transition-fast);
+}
+
+.ba-progress-cancel:hover {
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.ba-progress-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ba-progress-cancel:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Summary card */
+.ba-progress-summary {
+  padding: var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--elevation-1);
+  margin-top: var(--space-6);
+}
+
+.ba-progress-summary__title {
+  font: var(--font-heading-3);
+  color: var(--text);
+  margin-bottom: var(--space-3);
+}
+
+.ba-progress-summary__stats {
+  display: flex;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.ba-progress-summary__stat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--font-body-sm);
+}
+
+.ba-progress-summary__stat--applied {
+  color: var(--success);
+}
+
+.ba-progress-summary__stat--failed {
+  color: var(--danger);
+}
+
+.ba-progress-summary__stat--skipped {
+  color: var(--text-muted);
+}
+
+.ba-progress-summary__stat-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.ba-progress-summary__stat-count {
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.ba-progress-summary__actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ba-progress-summary__link {
+  font: var(--font-body-sm);
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.ba-progress-summary__link:hover {
+  text-decoration: underline;
+}
+
+/* --------------------------------------------------------------------------
+   CAPTCHA / Rate-limit Notices
+   -------------------------------------------------------------------------- */
+
+.ba-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  font: var(--font-body-sm);
+}
+
+.ba-notice--captcha {
+  background: rgba(217, 119, 6, 0.08);
+  border-left: 3px solid var(--warning);
+  color: var(--text);
+}
+
+.ba-notice--rate-limited {
+  background: rgba(220, 38, 38, 0.08);
+  border-left: 3px solid var(--danger);
+  color: var(--text);
+}
+
+.ba-notice--error {
+  background: rgba(220, 38, 38, 0.08);
+  border-left: 3px solid var(--danger);
+  color: var(--text);
+}
+
+.ba-notice__icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* --------------------------------------------------------------------------
+   History Table (.ba-history-*)
+   -------------------------------------------------------------------------- */
+
+.ba-history-container {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.ba-history-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ba-history-table th {
+  text-align: left;
+  font: var(--font-body-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 2px solid var(--border-subtle);
+}
+
+.ba-history-table td {
+  font: var(--font-body-sm);
+  color: var(--text);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.ba-history-row {
+  transition: background-color var(--transition-fast),
+              box-shadow var(--transition-fast);
+}
+
+.ba-history-row:hover {
+  background: var(--bg-subtle);
+  box-shadow: var(--elevation-1);
+}
+
+.ba-history-row__date {
+  white-space: nowrap;
+}
+
+.ba-history-row__counts {
+  display: flex;
+  gap: var(--space-3);
+  font: var(--font-caption);
+}
+
+.ba-history-row__count--applied {
+  color: var(--success);
+}
+
+.ba-history-row__count--failed {
+  color: var(--danger);
+}
+
+.ba-history-row__count--skipped {
+  color: var(--text-muted);
+}
+
+.ba-history-row__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.ba-history-row__link:hover {
+  text-decoration: underline;
+}
+
+.ba-history-row__link:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+/* Empty state */
+.ba-history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-12) var(--space-4);
+}
+
+.ba-history-empty__icon {
+  width: 48px;
+  height: 48px;
+  color: var(--text-muted);
+  margin-bottom: var(--space-4);
+}
+
+.ba-history-empty__heading {
+  font: var(--font-heading-2);
+  color: var(--text);
+  margin-bottom: var(--space-2);
+}
+
+.ba-history-empty__description {
+  font: var(--font-body);
+  color: var(--text-secondary);
+  max-width: 400px;
+  margin-bottom: var(--space-6);
+}
+
+.ba-history-empty__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3) var(--space-6);
+  background: var(--accent-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  min-height: var(--touch-target-min);
+  text-decoration: none;
+  transition: background-color var(--transition-fast);
+}
+
+.ba-history-empty__cta:hover {
+  background: var(--accent-primary-hover);
+  color: #fff;
+}
+
+.ba-history-empty__cta:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* --------------------------------------------------------------------------
+   Confirmation Dialog (.ba-dialog-*)
+   -------------------------------------------------------------------------- */
+
+.ba-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition-fast),
+              visibility var(--transition-fast);
+}
+
+.ba-dialog-backdrop--open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.ba-dialog {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+              0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  padding: var(--space-6);
+  max-width: 480px;
+  width: 100%;
+}
+
+.ba-dialog__title {
+  font: var(--font-heading-3);
+  color: var(--text);
+  margin-bottom: var(--space-3);
+}
+
+.ba-dialog__body {
+  font: var(--font-body-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-6);
+}
+
+.ba-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.ba-dialog__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-sm);
+  font: var(--font-body-sm);
+  font-weight: 500;
+  cursor: pointer;
+  min-height: var(--touch-target-min);
+  transition: background-color var(--transition-fast);
+}
+
+.ba-dialog__btn--cancel {
+  background: none;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.ba-dialog__btn--cancel:hover {
+  background: var(--bg-subtle);
+}
+
+.ba-dialog__btn--confirm {
+  background: var(--accent-primary);
+  border: none;
+  color: #fff;
+}
+
+.ba-dialog__btn--confirm:hover {
+  background: var(--accent-primary-hover);
+}
+
+.ba-dialog__btn--danger {
+  background: var(--danger);
+  border: none;
+  color: #fff;
+}
+
+.ba-dialog__btn--danger:hover {
+  background: #b91c1c;
+}
+
+.ba-dialog__btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* --------------------------------------------------------------------------
+   Responsive: Mobile (max-width: 767px)
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 767px) {
+  .ba-profile-form {
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+  }
+
+  .ba-profile-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ba-select-bar__inner {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .ba-select-bar__count {
+    width: 100%;
+    text-align: center;
+  }
+
+  .ba-job-card {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .ba-job-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ba-progress-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+
+  .ba-progress-overlay {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .ba-progress-summary__stats {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  /* History table becomes card layout on mobile */
+  .ba-history-table,
+  .ba-history-table thead,
+  .ba-history-table tbody,
+  .ba-history-table th,
+  .ba-history-table td,
+  .ba-history-table tr {
+    display: block;
+  }
+
+  .ba-history-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .ba-history-row {
+    padding: var(--space-3);
+    margin-bottom: var(--space-3);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+
+  .ba-history-row td {
+    border-bottom: none;
+    padding: var(--space-1) 0;
+  }
+
+  .ba-history-row td::before {
+    content: attr(data-label);
+    display: block;
+    font: var(--font-caption);
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+  }
+
+  .ba-dialog {
+    margin: var(--space-4);
+    padding: var(--space-4);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Responsive: Tablet (768px+)
+   -------------------------------------------------------------------------- */
+
+@media (min-width: 768px) {
+  .ba-profile-fields--grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+  }
+
+  .ba-profile-fields--grid .ba-profile-field--full {
+    grid-column: 1 / -1;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Responsive: Desktop (1440px+)
+   -------------------------------------------------------------------------- */
+
+@media (min-width: 1440px) {
+  .ba-progress-container,
+  .ba-history-container {
+    max-width: 1080px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Reduced Motion
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .ba-select-bar {
+    transition: none;
+  }
+
+  .ba-job-card--in-progress {
+    animation: none;
+  }
+
+  .ba-job-badge--in-progress .ba-job-badge__icon {
+    animation: none;
+  }
+
+  .ba-progress-overlay {
+    transition: none;
+  }
+
+  .ba-dialog-backdrop {
+    transition: none;
+  }
+}

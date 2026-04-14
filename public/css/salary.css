@@ -1,0 +1,345 @@
+/* Salary Insights page styles */
+
+/* Page container */
+.salary-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px 48px;
+}
+
+.salary-page-header {
+  margin-bottom: 24px;
+}
+
+.salary-page-header h1 {
+  margin: 0 0 8px;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.salary-page-header .salary-subtitle {
+  color: #6B7280;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+/* Filter bar */
+.salary-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.salary-filter-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 160px;
+}
+
+.salary-filter-group label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.salary-filter-group input,
+.salary-filter-group select {
+  padding: 8px 12px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #fff;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+.salary-filter-group input:focus,
+.salary-filter-group select:focus {
+  outline: 2px solid #2563EB;
+  outline-offset: -1px;
+  border-color: #2563EB;
+}
+
+.salary-filter-reset {
+  padding: 8px 16px;
+  min-height: 44px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  background: #F9FAFB;
+  color: #374151;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.salary-filter-reset:hover {
+  background: #F3F4F6;
+}
+
+/* Sticky filter bar on desktop */
+@media (min-width: 1024px) {
+  .salary-filter-bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+}
+
+/* Chart container */
+.salary-chart-container {
+  position: relative;
+  min-height: 400px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.salary-chart-container.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Active filter summary */
+.salary-active-filters {
+  font-size: 0.85rem;
+  color: #6B7280;
+  margin-bottom: 8px;
+}
+
+/* Group-by indicator */
+.salary-group-indicator {
+  font-size: 0.85rem;
+  color: #6B7280;
+  margin-bottom: 12px;
+  font-style: italic;
+}
+
+/* Sample size labels */
+.salary-sample-sizes {
+  font-size: 0.8rem;
+  color: #6B7280;
+  margin-bottom: 16px;
+}
+
+/* Banners (coverage warning, truncation) */
+.salary-banner {
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.salary-banner-warning {
+  background: #FFF8E1;
+  border-left: 4px solid #F59E0B;
+  color: #92400E;
+}
+
+.salary-banner-info {
+  background: #EFF6FF;
+  border-left: 4px solid #2563EB;
+  color: #1E40AF;
+}
+
+/* Error state */
+.salary-error-state {
+  background: #FEF2F2;
+  color: #DC2626;
+  padding: 24px;
+  border-radius: 8px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.salary-error-state .salary-retry-btn {
+  margin-top: 12px;
+  padding: 8px 20px;
+  background: #DC2626;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  min-height: 44px;
+}
+
+.salary-error-state .salary-retry-btn:hover {
+  background: #B91C1C;
+}
+
+/* Empty state */
+.salary-empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: #6B7280;
+}
+
+.salary-empty-state p {
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* Footnote */
+.salary-footnote {
+  font-size: 0.8rem;
+  color: #9CA3AF;
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+
+/* Toast notification */
+.salary-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  z-index: 1000;
+  max-width: 400px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: salary-toast-in 0.3s ease-out;
+}
+
+.salary-toast-error {
+  background: #FEF2F2;
+  color: #DC2626;
+  border: 1px solid #FECACA;
+}
+
+.salary-toast-warning {
+  background: #FFF8E1;
+  color: #92400E;
+  border: 1px solid #FDE68A;
+}
+
+@keyframes salary-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Rate limit countdown */
+.salary-countdown {
+  font-weight: 600;
+}
+
+/* Loading state */
+.salary-loading-indicator {
+  text-align: center;
+  padding: 16px;
+  color: #6B7280;
+  font-size: 0.9rem;
+}
+
+/* Screen-reader only data table */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Fallback table (when Chart.js CDN fails) */
+.salary-fallback-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.salary-fallback-table th,
+.salary-fallback-table td {
+  padding: 8px 12px;
+  border: 1px solid #E5E7EB;
+  text-align: right;
+  font-size: 0.85rem;
+}
+
+.salary-fallback-table th {
+  background: #F3F4F6;
+  font-weight: 600;
+  text-align: left;
+}
+
+.salary-fallback-table td:first-child {
+  text-align: left;
+}
+
+/* Responsive: Tablet */
+@media (max-width: 1023px) and (min-width: 768px) {
+  .salary-filter-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .salary-filter-reset {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .salary-chart-container {
+    min-height: 340px;
+  }
+}
+
+/* Responsive: Mobile */
+@media (max-width: 767px) {
+  .salary-page {
+    padding: 0 16px 32px;
+  }
+
+  .salary-filter-bar {
+    flex-direction: column;
+  }
+
+  .salary-filter-group {
+    min-width: auto;
+    width: 100%;
+  }
+
+  .salary-filter-group input,
+  .salary-filter-group select,
+  .salary-filter-reset {
+    min-height: 44px;
+  }
+
+  .salary-chart-container {
+    min-height: 280px;
+  }
+
+  .salary-page-header h1 {
+    font-size: 1.4rem;
+  }
+
+  .salary-toast {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    max-width: none;
+  }
+}

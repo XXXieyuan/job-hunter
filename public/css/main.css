@@ -594,6 +594,12 @@ label {
   border-color: #99F6E4;
 }
 
+.tag-nswgov {
+  background-color: #1e3a5f;
+  color: #ffffff;
+  border-color: #1e3a5f;
+}
+
 /* --------------------------------------------------------------------------
    Navigation Shell
    -------------------------------------------------------------------------- */
@@ -1738,6 +1744,13 @@ tbody tr:hover {
   border: 1px solid #DDD6FE;
   cursor: help;
   position: relative;
+}
+
+.badge-classification-unmapped {
+  background-color: #F1F3F5;
+  color: #4B5563;
+  border-color: #E5E7EB;
+  cursor: default;
 }
 
 .badge-aps-classification:hover .aps-tooltip,

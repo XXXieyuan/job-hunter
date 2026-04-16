@@ -1,7 +1,9 @@
-"""ACT Government to APS classification mapping.
+"""ACT / NSW Government to APS classification mapping.
 
-Maps ACT Government classification codes (ASO, SOG, EXEC, etc.)
-to their Australian Public Service (APS) equivalents.
+Maps ACT Government classification codes (ASO, SOG, EXEC, etc.) and
+NSW Government classification codes (Clerk Grade, Senior Officer Grade,
+Senior Executive Band, etc.) to their Australian Public Service (APS)
+equivalents.
 """
 
 from __future__ import annotations
@@ -9,11 +11,17 @@ from __future__ import annotations
 import re
 
 # ---------------------------------------------------------------------------
-# ACT-to-APS classification mapping
+# ACT/NSW-to-APS classification mapping
 # ---------------------------------------------------------------------------
 # High-confidence mappings return the APS equivalent string.
-# Low-confidence mappings (specialist streams) return None, which triggers
-# a fallback label of "ACT Gov -- <original>".
+# Low-confidence mappings (specialist streams) return None.
+# For ACT prefixes already registered here with value None, the helper
+# returns "ACT Gov -- <original>" as a fallback label. For NSW agency-
+# specific classifications (Health Manager Level, Transport Service Grade,
+# Legal Officer Grade, School Administrative Manager), entries are
+# intentionally omitted so ``map_classification()`` returns ``None``; the
+# adapter layer applies the "NSW Gov -- <original>" fallback per
+# SYSTEM_DESIGN.md NSW Classification Mapping.
 
 _ACT_TO_APS: dict[str, str | None] = {
     "ASO 1": "APS 1",
@@ -34,11 +42,36 @@ _ACT_TO_APS: dict[str, str | None] = {
     "SPOA": None,
     "SPOB": None,
     "SPOC": None,
+    # NSW Government: Clerk Grade (Crown Employees Award)
+    "CLERK GRADE 1/2": "APS 1-2",
+    "CLERK GRADE 3/4": "APS 3-4",
+    "CLERK GRADE 5/6": "APS 5",
+    "CLERK GRADE 7/8": "APS 6",
+    "CLERK GRADE 9/10": "EL1",
+    "CLERK GRADE 11/12": "EL2",
+    # NSW Government: Senior Officer Grade
+    "SENIOR OFFICER GRADE 1": "EL2",
+    "SENIOR OFFICER GRADE 2": "EL1",
+    # NSW Government: Senior Executive Band
+    "SENIOR EXECUTIVE BAND 1": "SES Band 1",
+    "SENIOR EXECUTIVE BAND 2": "SES Band 2",
+    "SENIOR EXECUTIVE BAND 3": "SES Band 3",
+    # NSW Government agency-specific classifications (Health Manager Level,
+    # Transport Service Grade, Legal Officer Grade, School Administrative
+    # Manager) intentionally omitted — map_classification returns None, and
+    # the adapter produces a "NSW Gov -- <original>" fallback label.
 }
 
-# Regex to extract ACT classification codes from free text
+# Regex to extract ACT and NSW classification codes from free text.
+# NSW patterns ("Clerk Grade N/N", "Senior Officer Grade N",
+# "Senior Executive Band N", "Health Manager Level N") are placed before the
+# ACT patterns so the more specific multi-word matches win.
 _CLASSIFICATION_RE = re.compile(
-    r"\b(?:ASO|SOG|GSO|HSO|SPOA|SPOB|SPOC|EXEC)\s*\d*\s*[A-C]?"
+    r"\bClerk\s+Grade\s+\d+/\d+"
+    r"|\bSenior\s+Executive\s+Band\s+\d+"
+    r"|\bSenior\s+Officer\s+Grade\s+\d+"
+    r"|\bHealth\s+Manager\s+Level\s+\d+"
+    r"|\b(?:ASO|SOG|GSO|HSO|SPOA|SPOB|SPOC|EXEC)\s*\d*\s*[A-C]?"
     r"|\b(?:TO|PO)\s+\d+",
     re.IGNORECASE,
 )

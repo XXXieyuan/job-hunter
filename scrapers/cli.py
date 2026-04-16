@@ -17,7 +17,7 @@ import sys
 import time
 import json
 
-VALID_PLATFORMS = ("linkedin", "seek", "apsjobs", "actgov")
+VALID_PLATFORMS = ("linkedin", "seek", "apsjobs", "actgov", "nswgov")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -70,6 +70,9 @@ def _load_adapter(platform: str):
     elif platform == "actgov":
         from scrapers.adapters.actgov import ActGovScraper
         return ActGovScraper
+    elif platform == "nswgov":
+        from scrapers.adapters.nswgov import NswGovScraper
+        return NswGovScraper
     else:
         raise ValueError(f"Unknown platform: {platform}")
 

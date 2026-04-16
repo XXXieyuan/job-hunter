@@ -21,18 +21,29 @@
     'SES Band 3': { salary: '$340,000+', desc: 'Senior Executive Service. Secretary/Agency Head level.' }
   };
 
-  // Normalise: try matching exactly first, then fuzzy
-  var _info = _apsData[_cls] || null;
-  if (!_info) {
-    var _clsUpper = _cls.toUpperCase();
-    Object.keys(_apsData).forEach(function(key) {
-      if (!_info && _clsUpper.indexOf(key.toUpperCase()) !== -1) {
-        _info = _apsData[key];
-      }
-    });
+  // Unmappable classifications (agency-specific) are preserved as
+  // "NSW Gov -- <level>" or "ACT Gov -- <level>" and render without
+  // APS colour coding. The em dash (\u2014) is the canonical separator
+  // used by classification_map.py and the adapters.
+  var _isUnmapped = /^(?:NSW|ACT)\s+Gov\s+[\u2014\-]\s+/.test(_cls);
+
+  // Normalise: try matching exactly first, then fuzzy. Skip APS lookup
+  // for unmapped strings — they should never display APS tooltip data.
+  var _info = null;
+  if (!_isUnmapped) {
+    _info = _apsData[_cls] || null;
+    if (!_info) {
+      var _clsUpper = _cls.toUpperCase();
+      Object.keys(_apsData).forEach(function(key) {
+        if (!_info && _clsUpper.indexOf(key.toUpperCase()) !== -1) {
+          _info = _apsData[key];
+        }
+      });
+    }
   }
+  var _badgeClass = _isUnmapped ? 'badge-aps-classification badge-classification-unmapped' : 'badge-aps-classification';
 %>
-<span class="badge-aps-classification" tabindex="0" aria-label="APS Classification: <%= _cls %>">
+<span class="<%= _badgeClass %>" tabindex="0" aria-label="Classification: <%= _cls %>">
   <%= _cls %>
   <% if (_info) { %>
   <span class="aps-tooltip" role="tooltip">

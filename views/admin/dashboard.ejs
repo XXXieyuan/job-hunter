@@ -77,6 +77,7 @@
         <span class="tag tag-seek" style="font-size: 10px;">Seek: <%= _sourceCounts.seek || 0 %></span>
         <span class="tag tag-linkedin" style="font-size: 10px;">LinkedIn: <%= _sourceCounts.linkedin || 0 %></span>
         <span class="tag tag-apsjobs" style="font-size: 10px;">APS: <%= _sourceCounts.apsjobs || 0 %></span>
+        <span class="tag tag-actgov" style="font-size: 10px;">ACT Gov: <%= _sourceCounts.actgov || 0 %></span>
       </div>
     </div>
     <div class="admin-stat-card" style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 16px;">
@@ -99,7 +100,7 @@
   <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
     <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Platform Health</h2>
     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
-      <% ['linkedin', 'seek', 'apsjobs'].forEach(function(src) {
+      <% ['linkedin', 'seek', 'apsjobs', 'actgov'].forEach(function(src) {
         var health = _platformHealth[src] || {};
         var status = health.status || 'unknown';
         var statusColor = status === 'healthy' ? '#059669' : (status === 'warning' ? '#D97706' : '#DC2626');
@@ -129,7 +130,7 @@
     <!-- Source Freshness -->
     <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted, #6B7280);">
       <strong>Source freshness:</strong>
-      <% ['linkedin', 'seek', 'apsjobs'].forEach(function(src) { %>
+      <% ['linkedin', 'seek', 'apsjobs', 'actgov'].forEach(function(src) { %>
         <span style="margin-left: 12px;"><%= src %>: <%= _sourceFreshness[src] || 'never' %></span>
       <% }); %>
     </div>
@@ -157,6 +158,7 @@
           <button type="button" class="btn btn-ghost btn-sm platform-btn active" data-platform="apsjobs">APSJobs</button>
           <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="seek">Seek</button>
           <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="linkedin">LinkedIn</button>
+          <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="actgov" style="background-color: #CCFBF1; color: #0D9488; border-color: #99F6E4;">ACT Gov</button>
           <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="all">All</button>
         </div>
       </div>
@@ -397,6 +399,78 @@
       });
   }
   pollQueueStatus();
+
+  // ── Platform Selector & Scraper Trigger ──
+  var selectedPlatform = 'apsjobs';
+  var platformBtns = document.querySelectorAll('.platform-btn');
+  var maxPagesContainer = document.getElementById('scraper-max-pages').parentElement;
+  var maxPagesInput = document.getElementById('scraper-max-pages');
+  var maxPagesNote = document.createElement('div');
+  maxPagesNote.style.cssText = 'font-size: 11px; color: var(--text-muted, #6B7280); margin-top: 2px;';
+  maxPagesNote.textContent = 'ACT Gov fetches all listings automatically';
+  maxPagesNote.style.display = 'none';
+  maxPagesContainer.appendChild(maxPagesNote);
+
+  platformBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      platformBtns.forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      selectedPlatform = btn.getAttribute('data-platform');
+
+      // Suppress maxPages for actgov
+      if (selectedPlatform === 'actgov') {
+        maxPagesInput.disabled = true;
+        maxPagesInput.style.opacity = '0.5';
+        maxPagesNote.style.display = 'block';
+      } else {
+        maxPagesInput.disabled = false;
+        maxPagesInput.style.opacity = '1';
+        maxPagesNote.style.display = 'none';
+      }
+    });
+  });
+
+  var triggerBtn = document.getElementById('trigger-scraper-btn');
+  var scraperStatus = document.getElementById('scraper-status');
+  var scraperSection = document.getElementById('scraper-section');
+  if (triggerBtn) {
+    triggerBtn.addEventListener('click', function() {
+      triggerBtn.disabled = true;
+      scraperStatus.textContent = scraperSection.getAttribute('data-i18n-triggering') || 'Triggering scrape, please wait...';
+
+      var body = {
+        name: selectedPlatform,
+        keywords: document.getElementById('scraper-keywords').value || '',
+        location: document.getElementById('scraper-region').value || '',
+      };
+      if (selectedPlatform !== 'actgov') {
+        body.maxPages = parseInt(maxPagesInput.value, 10) || 3;
+      }
+
+      fetch('/admin/scraper/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+      .then(function(result) {
+        triggerBtn.disabled = false;
+        if (result.ok && result.data.success) {
+          var runId = result.data.run && result.data.run.id;
+          scraperStatus.textContent = runId
+            ? (scraperSection.getAttribute('data-i18n-started-with-id') || 'Scrape started, run ID: {runId}.').replace('{runId}', runId)
+            : scraperSection.getAttribute('data-i18n-started') || 'Scrape started.';
+          if (!queuePolling) { queuePolling = setInterval(pollQueueStatus, 5000); }
+        } else {
+          scraperStatus.textContent = (scraperSection.getAttribute('data-i18n-trigger-failed-prefix') || 'Trigger failed: ') + (result.data.error && result.data.error.message || 'Unknown error');
+        }
+      })
+      .catch(function() {
+        triggerBtn.disabled = false;
+        scraperStatus.textContent = scraperSection.getAttribute('data-i18n-network-error') || 'Trigger failed: Network error or server unavailable.';
+      });
+    });
+  }
 
   // ── Analysis Runs History ──
   var analysisRunsTbody = document.getElementById('analysis-runs-tbody');

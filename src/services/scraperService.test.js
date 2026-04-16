@@ -15,13 +15,14 @@ describe('Scraper Service — module interface (T-K.2)', () => {
     assert.ok(Array.isArray(scraperService.VALID_PLATFORMS));
   });
 
-  it('VALID_PLATFORMS contains linkedin, seek, apsjobs', () => {
+  it('VALID_PLATFORMS contains linkedin, seek, apsjobs, actgov', () => {
     const { VALID_PLATFORMS } = require('./scraperService');
 
     assert.ok(VALID_PLATFORMS.includes('linkedin'));
     assert.ok(VALID_PLATFORMS.includes('seek'));
     assert.ok(VALID_PLATFORMS.includes('apsjobs'));
-    assert.equal(VALID_PLATFORMS.length, 3);
+    assert.ok(VALID_PLATFORMS.includes('actgov'));
+    assert.equal(VALID_PLATFORMS.length, 4);
   });
 
   it('triggerScrape rejects invalid platform', () => {
@@ -353,5 +354,149 @@ describe('Scraper Service — JSON protocol (T-143)', () => {
     assert.equal(mapped.company_name, 'Test Corp');
     assert.equal(mapped.salary_min, 80000);
     assert.equal(mapped.salary_max, 100000);
+  });
+});
+
+// T-4.1: ACT Gov platform registration
+describe('Scraper Service — actgov platform registration (T-4.1)', () => {
+  it('VALID_PLATFORMS includes actgov', () => {
+    const { VALID_PLATFORMS } = require('./scraperService');
+    assert.ok(VALID_PLATFORMS.includes('actgov'));
+  });
+
+  it('ALLOWED_DOMAINS includes jobs.act.gov.au', () => {
+    const { _validateJobUrl } = require('./scraperService');
+
+    const url1 = _validateJobUrl('https://jobs.act.gov.au/opportunities/12345');
+    assert.equal(url1, 'https://jobs.act.gov.au/opportunities/12345');
+
+    const url2 = _validateJobUrl('https://www.jobs.act.gov.au/opportunities/12345');
+    assert.equal(url2, 'https://www.jobs.act.gov.au/opportunities/12345');
+  });
+
+  it('mapCrawlerJob maps actgov job data correctly', () => {
+    const { _mapCrawlerJob } = require('./scraperService');
+
+    const actgovJob = {
+      external_id: 'actgov-12345',
+      platform: 'actgov',
+      title: 'Senior Policy Officer',
+      company: 'Health',
+      location: 'Canberra, ACT',
+      work_type: 'full-time',
+      salary: '$85,000 - $95,000',
+      salary_min: 85000,
+      salary_max: 95000,
+      description: '<p>The ACT Health Directorate is seeking...</p>',
+      url: 'https://jobs.act.gov.au/opportunities/12345',
+      posted_at: '2026-04-14T00:00:00.000Z',
+      closes_at: '2026-04-30T00:00:00.000Z',
+      visa_requirement: 'citizens_only',
+      classification: 'ASO 6',
+      raw_json: '{"test": true}',
+    };
+
+    const mapped = _mapCrawlerJob(actgovJob, 'actgov');
+
+    assert.equal(mapped.external_id, 'actgov-12345');
+    assert.equal(mapped.source, 'actgov');
+    assert.equal(mapped.title, 'Senior Policy Officer');
+    assert.equal(mapped.company_name, 'Health');
+    assert.equal(mapped.location, 'Canberra, ACT');
+    assert.equal(mapped.salary_min, 85000);
+    assert.equal(mapped.salary_max, 95000);
+    assert.equal(mapped.visa_eligibility, 'citizens_only');
+    assert.equal(mapped.aps_classification, 'ASO 6');
+    assert.equal(mapped.url, 'https://jobs.act.gov.au/opportunities/12345');
+  });
+
+  it('triggerScrape does not reject actgov as invalid platform', () => {
+    const { triggerScrape, VALID_PLATFORMS } = require('./scraperService');
+
+    // Verify actgov passes the platform validation check (will throw for other
+    // reasons like missing DB, but NOT for invalid platform)
+    assert.ok(VALID_PLATFORMS.includes('actgov'),
+      'actgov must be in VALID_PLATFORMS so triggerScrape accepts it');
+  });
+});
+
+// T-9.3: ACT Gov integration tests — ALLOWED_DOMAINS and cross-source dedup
+describe('Scraper Service — actgov ALLOWED_DOMAINS (T-9.3)', () => {
+  it('ALLOWED_DOMAINS includes jobs.act.gov.au', () => {
+    const { _validateJobUrl } = require('./scraperService');
+
+    const url = _validateJobUrl('https://jobs.act.gov.au/opportunities/12345');
+    assert.equal(url, 'https://jobs.act.gov.au/opportunities/12345');
+  });
+
+  it('ALLOWED_DOMAINS includes www.jobs.act.gov.au', () => {
+    const { _validateJobUrl } = require('./scraperService');
+
+    const url = _validateJobUrl('https://www.jobs.act.gov.au/opportunities/12345');
+    assert.equal(url, 'https://www.jobs.act.gov.au/opportunities/12345');
+  });
+
+  it('rejects URLs from non-allowed domains', () => {
+    const { _validateJobUrl } = require('./scraperService');
+
+    assert.equal(_validateJobUrl('https://evil.com/jobs'), null);
+  });
+});
+
+// T-9.3: Cross-source duplicate detection (AC #7)
+describe('Scraper Service — cross-source dedup ACT Gov + Seek (T-9.3, AC #7)', () => {
+  it('comparePair detects duplicates across actgov and seek sources', () => {
+    const dedup = require('./deduplicationService');
+
+    const actgovJob = {
+      id: 1,
+      title: 'Senior Policy Officer',
+      company_name: 'Chief Minister, Treasury and Economic Development Directorate',
+      location: 'Canberra',
+      source: 'actgov',
+      description: 'ACT Gov policy role',
+      url: 'https://jobs.act.gov.au/opportunities/12345',
+      salary_min: 95000,
+      created_at: '2026-04-14T00:00:00Z',
+    };
+
+    const seekJob = {
+      id: 2,
+      title: 'Senior Policy Officer',
+      company_name: 'Chief Minister, Treasury and Economic Development Directorate',
+      location: 'Canberra',
+      source: 'seek',
+      description: 'Seek listing for the same role',
+      url: 'https://www.seek.com.au/job/67890',
+      salary_min: 95000,
+      created_at: '2026-04-15T00:00:00Z',
+    };
+
+    const result = dedup.comparePair(actgovJob, seekJob);
+    assert.ok(result.isDuplicate, 'ACT Gov + Seek jobs with same title/company/location should be duplicates');
+    assert.ok(result.confidence >= 0.8, `Confidence should be >= 0.8, got ${result.confidence}`);
+  });
+
+  it('comparePair does not flag different jobs as duplicates', () => {
+    const dedup = require('./deduplicationService');
+
+    const actgovJob = {
+      id: 1,
+      title: 'Senior Policy Officer',
+      company_name: 'Health Directorate',
+      location: 'Canberra',
+      source: 'actgov',
+    };
+
+    const seekJob = {
+      id: 2,
+      title: 'Data Analyst',
+      company_name: 'Commonwealth Bank',
+      location: 'Sydney',
+      source: 'seek',
+    };
+
+    const result = dedup.comparePair(actgovJob, seekJob);
+    assert.ok(!result.isDuplicate, 'Different jobs should not be duplicates');
   });
 });

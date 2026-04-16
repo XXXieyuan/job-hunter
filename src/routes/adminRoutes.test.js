@@ -98,9 +98,9 @@ describe('T-J.1: POST /admin/login — authentication', () => {
 // ──────────────────────────────────────────────────────────────
 
 describe('T-J.2: POST /admin/scraper/run — validation and rate limiting', () => {
-  it('VALID_PLATFORMS contains exactly linkedin, seek, apsjobs', () => {
+  it('VALID_PLATFORMS contains exactly linkedin, seek, apsjobs, actgov', () => {
     const { VALID_PLATFORMS } = require('../services/scraperService');
-    assert.deepEqual([...VALID_PLATFORMS].sort(), ['apsjobs', 'linkedin', 'seek']);
+    assert.deepEqual([...VALID_PLATFORMS].sort(), ['actgov', 'apsjobs', 'linkedin', 'seek']);
   });
 
   it('invalid platform name is rejected', () => {

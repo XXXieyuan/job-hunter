@@ -10,7 +10,7 @@ const { getLogger } = require('../logger');
 const logger = getLogger('scraperService');
 
 // [SECURITY: Issue 8] Platform whitelist
-const VALID_PLATFORMS = ['linkedin', 'seek', 'apsjobs'];
+const VALID_PLATFORMS = ['linkedin', 'seek', 'apsjobs', 'actgov'];
 
 // [SECURITY: Issue 11] HTML sanitization config for job descriptions
 const SANITIZE_OPTIONS = {
@@ -43,6 +43,7 @@ function sanitizeJobDescription(html) {
 const ALLOWED_DOMAINS = [
   'seek.com.au', 'linkedin.com', 'apsjobs.gov.au',
   'www.seek.com.au', 'www.linkedin.com', 'www.apsjobs.gov.au',
+  'jobs.act.gov.au', 'www.jobs.act.gov.au',
 ];
 
 function validateJobUrl(url) {

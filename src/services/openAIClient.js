@@ -105,20 +105,39 @@ async function chatCompletion(messages, opts = {}) {
   if (!OPENAI_API_KEY) {
     return null;
   }
-  // Note: OPENAI_CHAT_MODEL (e.g. gpt-5.4-nano) supports a reasoning_effort
-  // parameter ('minimal' | 'low' | 'medium' | 'high'). Callers doing pure
-  // extraction or deterministic classification should pass
-  // `reasoning_effort: 'minimal'` to avoid burning reasoning tokens on
-  // tasks that don't need them.
+
+  // Reasoning control — /chat/completions does NOT accept a reasoning
+  // parameter; the OpenAI-Responses-style /v1/responses endpoint does,
+  // as nested `reasoning: { effort }`. Values seen in the wild:
+  //   'minimal' — skip the thinking pass (for pure extraction/classification)
+  //   'low' | 'medium' | 'high' | 'xhigh' — progressively deeper reasoning
+  // If the caller passes opts.reasoning_effort we route to /responses and
+  // parse its different response shape; otherwise we stay on
+  // /chat/completions (compatible with every OpenAI-compatible gateway).
+  if (opts.reasoning_effort) {
+    const payload = {
+      model: opts.model || OPENAI_CHAT_MODEL,
+      input: messages,
+      reasoning: { effort: opts.reasoning_effort },
+    };
+    if (opts.max_tokens) payload.max_output_tokens = opts.max_tokens;
+    if (opts.temperature !== undefined) payload.temperature = opts.temperature;
+    const json = await callOpenAI('responses', payload);
+    // Response shape: output: [{type: 'reasoning', ...}, {type: 'message', content: [{type: 'output_text', text}]}]
+    const out = Array.isArray(json.output) ? json.output : [];
+    const msg = out.find((x) => x && x.type === 'message');
+    if (!msg || !Array.isArray(msg.content)) return null;
+    const textPart = msg.content.find((c) => c && (c.type === 'output_text' || c.type === 'text'));
+    if (!textPart || typeof textPart.text !== 'string') return null;
+    return stripThinkTags(textPart.text.trim());
+  }
+
   const payload = {
     model: opts.model || OPENAI_CHAT_MODEL,
     messages,
     temperature: opts.temperature ?? 0.6,
     max_tokens: opts.max_tokens ?? 4096,
   };
-  if (opts.reasoning_effort) {
-    payload.reasoning_effort = opts.reasoning_effort;
-  }
   const json = await callOpenAI('chat/completions', payload);
   const choice = json.choices && json.choices[0];
   if (!choice || !choice.message || !choice.message.content) {

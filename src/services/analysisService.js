@@ -46,7 +46,12 @@ async function scoreAllJobs(resume, runId, lastProcessedJobId) {
     }
 
     try {
-      const fitScore = await scoreJobAgainstResume(job, resume);
+      // Bulk-scoring hundreds of jobs: skip the per-job LLM call that
+      // classifies missing skills into hard/closeable/reframeable. That
+      // classification was quietly the biggest per-job cost (one GPT
+      // chat call per job × resume). The detail view regenerates it
+      // on-demand for a single job when the user clicks into it.
+      const fitScore = await scoreJobAgainstResume(job, resume, { skipGapClassification: true });
       upsertFitScore({
         job_id: job.id,
         resume_id: resume.id,

@@ -615,7 +615,7 @@ async function scoreAllJobsForUser(userId, jobs, opts = {}) {
       }
 
       try {
-        await scoreFn(job, resume);
+        await scoreFn(job, resume, { skipGapClassification: true });
         scored++;
       } catch (err) {
         errors++;

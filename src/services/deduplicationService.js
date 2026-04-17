@@ -92,6 +92,38 @@ function comparePair(jobA, jobB) {
  * @param {object} opts - { dryRun: boolean, onProgress: function }
  * @returns {object} { groupsCreated, jobsMarked, groups: [...] }
  */
+/**
+ * Normalize a URL for dedup comparison:
+ *   - lowercase host
+ *   - strip tracking query params (utm_*, ref, refId, trackingId, etc.)
+ *   - drop fragment
+ *   - drop trailing slash
+ */
+function normalizeUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  try {
+    const u = new URL(url.trim());
+    // Strip common tracking / session params
+    const dropPrefixes = ['utm_', 'mc_', 'gclid', 'fbclid'];
+    const dropExact = new Set([
+      'ref', 'refid', 'trackingid', 'trk', 'trk_trk',
+      'position', 'pagenum', 'source', 'campaign', 'origin',
+    ]);
+    for (const key of Array.from(u.searchParams.keys())) {
+      const lower = key.toLowerCase();
+      if (dropExact.has(lower)) u.searchParams.delete(key);
+      else if (dropPrefixes.some((p) => lower.startsWith(p))) u.searchParams.delete(key);
+    }
+    u.hash = '';
+    u.hostname = u.hostname.toLowerCase();
+    let s = u.toString();
+    if (s.endsWith('/')) s = s.slice(0, -1);
+    return s;
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
 function detectDuplicates(opts = {}) {
   const db = getDb();
 
@@ -105,16 +137,37 @@ function detectDuplicates(opts = {}) {
 
   logger.info(`Scanning ${jobs.length} jobs for duplicates`);
 
-  // Group by normalized title + company key
-  const groups = new Map();
-
+  // Two-pass grouping:
+  //   Pass 1 — canonical URL (strongest signal; same URL = same job).
+  //   Pass 2 — title + company on jobs NOT already bucketed with siblings
+  //            via URL (catches cross-source duplicates with different URLs).
+  const urlGroups = new Map();
   for (const job of jobs) {
-    const key = `${normalizeForComparison(job.title)}|||${normalizeCompany(job.company_name)}`;
-    if (!key || key === '|||') continue;
+    const normUrl = normalizeUrl(job.url);
+    if (!normUrl) continue;
+    const key = `url:${normUrl}`;
+    if (!urlGroups.has(key)) urlGroups.set(key, []);
+    urlGroups.get(key).push(job);
+  }
 
-    if (!groups.has(key)) {
-      groups.set(key, []);
+  const groups = new Map();
+  const claimedByUrl = new Set();
+
+  // First: keep URL groups that have actual duplicates (>= 2 members)
+  for (const [key, members] of urlGroups) {
+    if (members.length > 1) {
+      groups.set(key, members);
+      for (const m of members) claimedByUrl.add(m.id);
     }
+  }
+
+  // Second: group remaining jobs by title + company
+  for (const job of jobs) {
+    if (claimedByUrl.has(job.id)) continue;
+    const tc = `${normalizeForComparison(job.title)}|||${normalizeCompany(job.company_name)}`;
+    if (!tc || tc === '|||') continue;
+    const key = `tc:${tc}`;
+    if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(job);
   }
 
@@ -165,11 +218,14 @@ function detectDuplicates(opts = {}) {
         continue;
       }
 
-      // Create new duplicate group
+      // Create new duplicate group. Key tells us which signal matched:
+      //   url:...        → canonical URL match (strongest, ~1.0 confidence)
+      //   tc:title|||co  → title + company fallback (~0.95)
+      const matchedByUrl = group.key && group.key.startsWith('url:');
       const groupId = duplicateGroupsRepo.createGroup({
         canonical_job_id: canonical.id,
-        match_method: 'title_company_location',
-        confidence: 0.95,
+        match_method: matchedByUrl ? 'canonical_url' : 'title_company_location',
+        confidence: matchedByUrl ? 1.0 : 0.95,
       });
 
       // Add all members (including canonical)
@@ -230,6 +286,7 @@ module.exports = {
   normalizeForComparison,
   normalizeCompany,
   normalizeLocation,
+  normalizeUrl,
   comparePair,
   detectDuplicates,
   pickCanonical,

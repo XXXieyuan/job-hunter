@@ -101,7 +101,7 @@
   <div style="background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
     <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Platform Health</h2>
     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
-      <% ['linkedin', 'seek', 'apsjobs', 'actgov'].forEach(function(src) {
+      <% ['linkedin', 'seek', 'apsjobs', 'actgov', 'nswgov'].forEach(function(src) {
         var health = _platformHealth[src] || {};
         var status = health.status || 'unknown';
         var statusColor = status === 'healthy' ? '#059669' : (status === 'warning' ? '#D97706' : '#DC2626');
@@ -131,7 +131,7 @@
     <!-- Source Freshness -->
     <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted, #6B7280);">
       <strong>Source freshness:</strong>
-      <% ['linkedin', 'seek', 'apsjobs', 'actgov'].forEach(function(src) { %>
+      <% ['linkedin', 'seek', 'apsjobs', 'actgov', 'nswgov'].forEach(function(src) { %>
         <span style="margin-left: 12px;"><%= src %>: <%= _sourceFreshness[src] || 'never' %></span>
       <% }); %>
     </div>
@@ -190,7 +190,7 @@
       <div style="overflow-x: auto; margin-top: 8px;">
         <table class="table" id="scraper-runs-table" style="width: 100%; font-size: 12px;">
           <thead>
-            <tr><th>ID</th><th>Scraper</th><th>Status</th><th>Started</th><th>Finished</th><th>Jobs</th><th>Error</th></tr>
+            <tr><th>ID</th><th>Scraper</th><th>Status</th><th>Progress</th><th>Started</th><th>Finished</th><th>Error</th></tr>
           </thead>
           <tbody>
             <% if (!_scraperRuns || !_scraperRuns.length) { %>
@@ -200,8 +200,8 @@
             <tr data-run-id="<%= run.id %>">
               <td><%= run.id %></td>
               <td><%= run.scraper_name %></td>
-              <td>
-                <% if (run.status === 'running' || run.status === 'queued') { %>
+              <td data-col="status">
+                <% if (run.status === 'running' || run.status === 'queued' || run.status === 'pending') { %>
                 <span style="color: #D97706; font-weight: 500;"><%= run.status %></span>
                 <% } else if (run.status === 'success') { %>
                 <span style="color: #059669; font-weight: 500;">Success</span>
@@ -209,10 +209,20 @@
                 <span style="color: #DC2626; font-weight: 500;">Failed</span>
                 <% } %>
               </td>
-              <td><%= run.started_at || '-' %></td>
-              <td><%= run.finished_at || '-' %></td>
-              <td><%= typeof run.jobs_added === 'number' ? run.jobs_added : '-' %></td>
-              <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;"><%= run.error_message || '-' %></td>
+              <td data-col="progress" style="min-width: 180px;">
+                <% var jf = run.jobs_found || 0; var ps = run.pages_scraped || 0; %>
+                <% if (run.status === 'running' || run.status === 'pending') { %>
+                <span style="color: #2563EB;"><%= jf %> jobs · <%= ps %> pages</span>
+                <% if (run.progress_message) { %>
+                <div style="color: var(--text-muted, #6B7280); font-size: 11px; margin-top: 2px;"><%= String(run.progress_message).substring(0, 80) %></div>
+                <% } %>
+                <% } else { %>
+                <span><%= jf %> found / <%= run.jobs_new || 0 %> new</span>
+                <% } %>
+              </td>
+              <td data-col="started"><%= run.started_at || '-' %></td>
+              <td data-col="finished"><%= run.finished_at || run.completed_at || '-' %></td>
+              <td data-col="error" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;"><%= run.error || run.error_message || '-' %></td>
             </tr>
             <% }) %>
             <% } %>
@@ -404,6 +414,67 @@
   }
   pollQueueStatus();
 
+  // ── Live refresh of Recent Scraper Runs table ──
+  // Repaints only the tbody (no full page reload) every 2s while any run
+  // is in a non-terminal state. Shuts off automatically when all runs
+  // settle, so idle tabs don't keep polling.
+  var scraperRunsTbody = document.querySelector('#scraper-runs-table tbody');
+  var scraperRunsPoll = null;
+  function escHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+  function renderRunsTable(runs) {
+    if (!scraperRunsTbody) return;
+    if (!runs || runs.length === 0) {
+      scraperRunsTbody.innerHTML = '<tr><td colspan="7" style="color: var(--text-muted, #6B7280);">No scraper runs yet.</td></tr>';
+      return;
+    }
+    var rows = runs.map(function(r) {
+      var statusCell;
+      if (r.status === 'running' || r.status === 'queued' || r.status === 'pending') {
+        statusCell = '<span style="color: #D97706; font-weight: 500;">' + escHtml(r.status) + '</span>';
+      } else if (r.status === 'success') {
+        statusCell = '<span style="color: #059669; font-weight: 500;">Success</span>';
+      } else {
+        statusCell = '<span style="color: #DC2626; font-weight: 500;">Failed</span>';
+      }
+      var jf = r.jobs_found || 0, ps = r.pages_scraped || 0;
+      var progCell;
+      if (r.status === 'running' || r.status === 'pending') {
+        progCell = '<span style="color: #2563EB;">' + jf + ' jobs · ' + ps + ' pages</span>';
+        if (r.progress_message) {
+          progCell += '<div style="color: var(--text-muted, #6B7280); font-size: 11px; margin-top: 2px;">' + escHtml(String(r.progress_message).substring(0, 80)) + '</div>';
+        }
+      } else {
+        progCell = jf + ' found / ' + (r.jobs_new || 0) + ' new';
+      }
+      return '<tr data-run-id="' + r.id + '">' +
+        '<td>' + r.id + '</td>' +
+        '<td>' + escHtml(r.scraper_name) + '</td>' +
+        '<td>' + statusCell + '</td>' +
+        '<td style="min-width: 180px;">' + progCell + '</td>' +
+        '<td>' + escHtml(r.started_at || '-') + '</td>' +
+        '<td>' + escHtml(r.finished_at || r.completed_at || '-') + '</td>' +
+        '<td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">' + escHtml(r.error || r.error_message || '-') + '</td>' +
+      '</tr>';
+    }).join('');
+    scraperRunsTbody.innerHTML = rows;
+  }
+  function pollScraperRuns() {
+    fetch('/admin/scraper/runs?page=1')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        var runs = (data && data.runs) || [];
+        renderRunsTable(runs);
+        var anyActive = runs.some(function(r) { return r.status === 'running' || r.status === 'pending' || r.status === 'queued'; });
+        if (!anyActive && scraperRunsPoll) {
+          clearInterval(scraperRunsPoll); scraperRunsPoll = null;
+        } else if (anyActive && !scraperRunsPoll) {
+          scraperRunsPoll = setInterval(pollScraperRuns, 2000);
+        }
+      })
+      .catch(function() {});
+  }
+  pollScraperRuns();
+
   // ── Platform Selector & Scraper Trigger ──
   var selectedPlatform = 'apsjobs';
   var platformBtns = document.querySelectorAll('.platform-btn');
@@ -464,7 +535,7 @@
           scraperStatus.textContent = runId
             ? (scraperSection.getAttribute('data-i18n-started-with-id') || 'Scrape started, run ID: {runId}.').replace('{runId}', runId)
             : scraperSection.getAttribute('data-i18n-started') || 'Scrape started.';
-          if (!queuePolling) { queuePolling = setInterval(pollQueueStatus, 5000); }
+          if (!queuePolling) { queuePolling = setInterval(pollQueueStatus, 5000); } pollScraperRuns();
         } else {
           scraperStatus.textContent = (scraperSection.getAttribute('data-i18n-trigger-failed-prefix') || 'Trigger failed: ') + (result.data.error && result.data.error.message || 'Unknown error');
         }
@@ -521,7 +592,7 @@
         if (results.ok.length) parts.push('Started: ' + results.ok.join(', '));
         if (results.fail.length) parts.push('Failed: ' + results.fail.join(', '));
         scraperStatus.textContent = parts.join(' | ') || 'No scrapers triggered.';
-        if (!queuePolling) { queuePolling = setInterval(pollQueueStatus, 5000); }
+        if (!queuePolling) { queuePolling = setInterval(pollQueueStatus, 5000); } pollScraperRuns();
       });
     });
   }
@@ -644,7 +715,7 @@
         .then(function(data) {
           dedupBtn.disabled = false;
           dedupStatus.textContent = data.status === 'queued' ? 'Queued. Processing ' + (data.job_count || '') + ' jobs.' : 'Dedup triggered.';
-          if (!queuePolling) { queuePolling = setInterval(pollQueueStatus, 5000); }
+          if (!queuePolling) { queuePolling = setInterval(pollQueueStatus, 5000); } pollScraperRuns();
         })
         .catch(function() {
           dedupBtn.disabled = false;

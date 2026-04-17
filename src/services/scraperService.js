@@ -164,6 +164,20 @@ function runCrawler(platform, config, runId) {
     }
   }
 
+  // Throttle DB writes: on `job` events we only persist every N jobs
+  // and on idle intervals via a timer so the UI sees live counts without
+  // hammering SQLite.
+  let lastProgressWrite = Date.now();
+  const PROGRESS_WRITE_INTERVAL_MS = 1000;
+  function maybeFlushProgress(force = false) {
+    const now = Date.now();
+    if (force || now - lastProgressWrite >= PROGRESS_WRITE_INTERVAL_MS) {
+      try { scraperRunsRepo.updateProgress(runId, stats); }
+      catch (err) { logger.warn('updateProgress failed', { runId, error: err.message }); }
+      lastProgressWrite = now;
+    }
+  }
+
   rl.on('line', (line) => {
     try {
       const msg = JSON.parse(line);
@@ -174,6 +188,8 @@ function runCrawler(platform, config, runId) {
         if (jobBatch.length >= BATCH_SIZE) {
           flushBatch();
         }
+        // Persist the incremented count so the UI sees progress live.
+        maybeFlushProgress();
       } else if (msg.type === 'status' && msg.data) {
         if (msg.data.phase === 'complete' && typeof msg.data.jobs_found === 'number') {
           stats.jobs_found = msg.data.jobs_found;
@@ -181,7 +197,12 @@ function runCrawler(platform, config, runId) {
         if (typeof msg.data.pages_scraped === 'number') {
           stats.pages_scraped = msg.data.pages_scraped;
         }
-        scraperRunsRepo.updateProgress(runId, stats);
+        // Capture the latest human-readable status so the UI can show it.
+        if (msg.data.phase || msg.data.message) {
+          stats.progress_message = [msg.data.phase, msg.data.message]
+            .filter(Boolean).join(': ').slice(0, 200);
+        }
+        maybeFlushProgress(true);
       }
     } catch (e) {
       logger.warn('Non-JSON stdout from crawler', { runId, line: line.slice(0, 200) });

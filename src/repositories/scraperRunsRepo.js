@@ -61,14 +61,26 @@ function markRunFailure(id, errorMessage) {
   });
 }
 
+let _progressMessageColumnEnsured = false;
+function ensureProgressMessageColumn(db) {
+  if (_progressMessageColumnEnsured) return;
+  const cols = db.pragma('table_info(scraper_runs)').map((c) => c.name);
+  if (!cols.includes('progress_message')) {
+    db.exec('ALTER TABLE scraper_runs ADD COLUMN progress_message TEXT');
+  }
+  _progressMessageColumnEnsured = true;
+}
+
 function updateProgress(id, stats) {
   const db = getDbInstance();
+  ensureProgressMessageColumn(db);
   db.prepare(
     `UPDATE scraper_runs
      SET jobs_found = @jobs_found,
          jobs_new = @jobs_new,
          jobs_updated = @jobs_updated,
-         pages_scraped = @pages_scraped
+         pages_scraped = @pages_scraped,
+         progress_message = @progress_message
      WHERE id = @id`
   ).run({
     id,
@@ -76,6 +88,7 @@ function updateProgress(id, stats) {
     jobs_new: (stats && stats.jobs_new) || 0,
     jobs_updated: (stats && stats.jobs_updated) || 0,
     pages_scraped: (stats && stats.pages_scraped) || 0,
+    progress_message: (stats && stats.progress_message) || null,
   });
 }
 

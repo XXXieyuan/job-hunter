@@ -120,9 +120,14 @@ class APSJobsScraper(BaseScraper):
             self._fwuid = fwuid_match.group(1)
 
         if not self._aura_token:
-            # Public Salesforce Experience Cloud pages accept "undefined" as
-            # the Aura token for guest/unauthenticated requests.
-            self._aura_token = "undefined"
+            # Current APSJobs LWC setup uses null token for guest requests.
+            self._aura_token = "null"
+
+        # Extract the loaded app hash for the Aura context
+        loaded_match = re.search(
+            r'"APPLICATION@markup://siteforce:communityApp"\s*:\s*"([^"]+)"', html
+        )
+        self._loaded_hash = loaded_match.group(1) if loaded_match else ""
 
         self._emit_status("progress", "Aura context extracted successfully.")
         return True
@@ -136,23 +141,61 @@ class APSJobsScraper(BaseScraper):
 
         Returns the parsed JSON response or None on failure.
         """
-        # Build the Aura action message
+        import datetime
+
+        # Build filter JSON (new LWC format since 2026)
+        filter_obj = {
+            "searchString": self.keywords or None,
+            "salaryFrom": None,
+            "salaryTo": None,
+            "closingDate": None,
+            "positionInitiative": None,
+            "classification": None,
+            "securityClearance": None,
+            "officeArrangement": None,
+            "duration": None,
+            "department": None,
+            "category": None,
+            "opportunityType": None,
+            "employmentStatus": None,
+            "state": None,
+            "sortBy": None,
+            "offset": page_num * page_size,
+            "offsetIsLimit": False,
+            "lastVisitedId": None,
+            "daysInPast": None,
+            "name": None,
+            "type": None,
+            "notificationsEnabled": None,
+            "savedSearchId": None,
+        }
+        now_str = datetime.datetime.now().strftime("%a %b %d %Y %H:%M:%S GMT+1000 (Australian Eastern Standard Time)")
+        filter_str = json.dumps(filter_obj, separators=(",", ":")) + "&requested=" + now_str
+
+        # Build the Aura action message (LWC ApexActionController format)
         message = {
             "actions": [
                 {
-                    "id": f"{page_num + 1};a",
-                    "descriptor": "apex://APSJobSearchController/ACTION$getJobListings",
+                    "id": f"{page_num + 91};a",
+                    "descriptor": "aura://ApexActionController/ACTION$execute",
                     "callingDescriptor": "UNKNOWN",
                     "params": {
-                        "keyword": self.keywords or "",
-                        "location": self.location or "",
-                        "classification": "",
-                        "pageNumber": page_num,
-                        "pageSize": page_size,
+                        "namespace": "",
+                        "classname": "aps_jobSearchController",
+                        "method": "retrieveJobListings",
+                        "params": {
+                            "filter": filter_str,
+                        },
+                        "cacheable": False,
+                        "isContinuation": False,
                     },
                 }
             ]
         }
+
+        loaded = {}
+        if self._loaded_hash:
+            loaded["APPLICATION@markup://siteforce:communityApp"] = self._loaded_hash
 
         payload = {
             "message": json.dumps(message, separators=(",", ":")),
@@ -161,19 +204,21 @@ class APSJobsScraper(BaseScraper):
                     "mode": "PROD",
                     "fwuid": self._fwuid or "",
                     "app": "siteforce:communityApp",
-                    "loaded": {},
+                    "loaded": loaded,
                     "dn": [],
                     "globals": {},
-                    "uad": False,
+                    "uad": True,
                 },
                 separators=(",", ":"),
             ),
-            "aura.token": self._aura_token or "",
+            "aura.token": self._aura_token or "null",
+            "aura.pageURI": "/s/job-search",
         }
 
+        aura_url = _AURA_ENDPOINT + f"?r={page_num + 5}&aura.ApexAction.execute=1"
         try:
             resp_text = self._request(
-                _AURA_ENDPOINT,
+                aura_url,
                 method="POST",
                 data=payload,
                 headers={
@@ -280,10 +325,14 @@ class APSJobsScraper(BaseScraper):
             if rv is None:
                 continue
 
+            # LWC ApexActionController wraps result in returnValue.returnValue
+            if isinstance(rv, dict) and "returnValue" in rv:
+                rv = rv["returnValue"]
+
             # The response structure may vary; handle common patterns
             if isinstance(rv, dict):
                 listings = rv.get("jobListings") or rv.get("records") or rv.get("jobs") or []
-                total = rv.get("totalCount") or rv.get("totalRecords") or len(listings)
+                total = rv.get("jobListingCount") or rv.get("totalCount") or rv.get("totalRecords") or len(listings)
                 return listings, int(total)
             elif isinstance(rv, list):
                 return rv, len(rv)
@@ -301,17 +350,19 @@ class APSJobsScraper(BaseScraper):
             return default
 
         return {
-            "reference": _get("Reference_Number__c", "referenceNumber", "ReferenceNumber", "reference", default=""),
-            "title": _get("Title__c", "title", "Name", "jobTitle", default=""),
-            "agency": _get("Agency__c", "agency", "Department__c", "department", "organisationName", default=""),
-            "location": _get("Location__c", "location", "jobLocation", default=""),
-            "classification": _get("Classification__c", "classification", "apsClassification", default=""),
-            "closes_at": _get("Closing_Date__c", "closingDate", "closesAt", default=None),
-            "posted_at": _get("Opening_Date__c", "openingDate", "postedAt", "datePosted", default=None),
-            "salary_min": _get("Salary_Min__c", "salaryMin", default=None),
-            "salary_max": _get("Salary_Max__c", "salaryMax", default=None),
-            "work_type": _get("Work_Type__c", "workType", "employmentType", default=None),
-            "description_snippet": _get("Description__c", "description", "snippet", default=""),
+            "reference": _get("vacancyNumber", "Reference_Number__c", "referenceNumber", default=""),
+            "title": _get("jobName", "Title__c", "title", default=""),
+            "agency": _get("departmentName", "Agency__c", "agency", default=""),
+            "location": _get("jobLocation", "Location__c", "location", default=""),
+            "classification": _get("jobClassification", "Classification__c", "classification", default=""),
+            "closes_at": _get("jobCloseDate", "Closing_Date__c", "closingDate", default=None),
+            "posted_at": _get("jobPostedDate", "Opening_Date__c", "openingDate", default=None),
+            "salary_min": _get("jobSalaryFrom", "Salary_Min__c", "salaryMin", default=None),
+            "salary_max": _get("jobSalaryTo", "Salary_Max__c", "salaryMax", default=None),
+            "work_type": _get("jobEmploymentType", "Work_Type__c", "workType", default=None),
+            "description_snippet": _get("jobDescription", "jobDuties", "Description__c", "description", default=""),
+            "application_url": _get("applicationURL", default=""),
+            "job_id": _get("jobId", default=""),
         }
 
     # ------------------------------------------------------------------

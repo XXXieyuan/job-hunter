@@ -426,8 +426,11 @@ class ActGovScraper(BaseScraper):
 
         listings: list[dict] = []
         for tile in tiles:
-            # Extract URL from link
-            link = tile.find("a", href=True)
+            # Extract URL from link — tile itself may be an <a> tag
+            if tile.name == "a" and tile.get("href"):
+                link = tile
+            else:
+                link = tile.find("a", href=True)
             href = link["href"] if link else ""
             if href and not href.startswith("http"):
                 href = _ACTGOV_BASE + href
@@ -438,7 +441,14 @@ class ActGovScraper(BaseScraper):
             if heading:
                 title = heading.get_text(strip=True)
             elif link:
-                title = link.get_text(strip=True)
+                # For <a> tiles, get text from first child div or heading
+                first_text_el = tile.find(class_=re.compile(r"title|heading|name", re.I))
+                if first_text_el:
+                    title = first_text_el.get_text(strip=True)
+                else:
+                    # Use the pipe-separated format: "Title | Work Type"
+                    raw = link.get_text(" ", strip=True)
+                    title = raw.split("|")[0].strip() if "|" in raw else raw.split("\n")[0].strip()
 
             if not title and not href:
                 continue

@@ -122,10 +122,8 @@ function runCrawler(platform, config, runId) {
 
   scraperRunsRepo.markRunRunning(runId);
 
-  const scriptPath = path.resolve(__dirname, '..', '..', 'scrapers', 'cli.py');
-
   const args = [
-    scriptPath,
+    '-m', 'scrapers.cli',
     '--platform', platform,
     '--keywords', config.keywords || 'Data,Engineer',
     '--location', config.location || '',
@@ -133,7 +131,9 @@ function runCrawler(platform, config, runId) {
   ];
 
   const config_ = require('../config');
+  const projectRoot = path.resolve(__dirname, '..', '..');
   const child = spawn(config_.PYTHON_PATH || 'python', args, {
+    cwd: projectRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env },
   });

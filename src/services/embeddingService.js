@@ -156,7 +156,7 @@ Output ONLY the JSON array.`;
   try {
     const raw = await chatCompletion(
       [{ role: 'user', content: prompt }],
-      { temperature: 0.1, max_tokens: 512 }
+      { temperature: 0.1, max_tokens: 512, reasoning_effort: 'minimal' }
     );
     if (!raw) return null;
     const m = raw.match(/\[[\s\S]*\]/);

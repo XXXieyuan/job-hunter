@@ -105,12 +105,21 @@ async function chatCompletion(messages, opts = {}) {
   if (!OPENAI_API_KEY) {
     return null;
   }
-  const json = await callOpenAI('chat/completions', {
+  // Note: OPENAI_CHAT_MODEL (e.g. gpt-5.4-nano) supports a reasoning_effort
+  // parameter ('minimal' | 'low' | 'medium' | 'high'). Callers doing pure
+  // extraction or deterministic classification should pass
+  // `reasoning_effort: 'minimal'` to avoid burning reasoning tokens on
+  // tasks that don't need them.
+  const payload = {
     model: opts.model || OPENAI_CHAT_MODEL,
     messages,
     temperature: opts.temperature ?? 0.6,
     max_tokens: opts.max_tokens ?? 4096,
-  });
+  };
+  if (opts.reasoning_effort) {
+    payload.reasoning_effort = opts.reasoning_effort;
+  }
+  const json = await callOpenAI('chat/completions', payload);
   const choice = json.choices && json.choices[0];
   if (!choice || !choice.message || !choice.message.content) {
     return null;

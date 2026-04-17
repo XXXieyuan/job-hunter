@@ -348,6 +348,22 @@ code, pre, .score-value, .mono-body {
   border-color: var(--text-muted);
 }
 
+/* Platform selector pills — active state */
+.platform-btn {
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+.platform-btn.active {
+  background-color: var(--primary, #2563EB);
+  color: #ffffff;
+  border-color: var(--primary, #2563EB);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
+}
+.platform-btn.active:hover:not(:disabled) {
+  background-color: var(--primary, #2563EB);
+  color: #ffffff;
+  border-color: var(--primary, #2563EB);
+}
+
 .btn-danger {
   background-color: var(--danger);
   color: #FFFFFF;

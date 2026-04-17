@@ -159,9 +159,8 @@
           <button type="button" class="btn btn-ghost btn-sm platform-btn active" data-platform="apsjobs">APSJobs</button>
           <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="seek">Seek</button>
           <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="linkedin">LinkedIn</button>
-          <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="actgov" style="background-color: #CCFBF1; color: #0D9488; border-color: #99F6E4;">ACT Gov</button>
-          <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="nswgov" style="background-color: #1e3a5f; color: #ffffff; border-color: #1e3a5f;">NSW Gov</button>
-          <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="all">All</button>
+          <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="actgov">ACT Gov</button>
+          <button type="button" class="btn btn-ghost btn-sm platform-btn" data-platform="nswgov">NSW Gov</button>
         </div>
       </div>
 
@@ -180,7 +179,10 @@
         </div>
       </div>
 
-      <button id="trigger-scraper-btn" class="btn btn-primary btn-sm">Trigger Scrape</button>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button id="trigger-scraper-btn" class="btn btn-primary btn-sm">Trigger Scrape (selected)</button>
+        <button id="trigger-all-scrapers-btn" class="btn btn-secondary btn-sm">Scrape All Sources</button>
+      </div>
       <p id="scraper-status" class="text-muted" style="font-size: 12px; margin-top: 8px;"></p>
 
       <!-- Recent Runs Table -->
@@ -470,6 +472,56 @@
       .catch(function() {
         triggerBtn.disabled = false;
         scraperStatus.textContent = scraperSection.getAttribute('data-i18n-network-error') || 'Trigger failed: Network error or server unavailable.';
+      });
+    });
+  }
+
+  // "Scrape All Sources" button — fires one trigger per platform sequentially.
+  var triggerAllBtn = document.getElementById('trigger-all-scrapers-btn');
+  if (triggerAllBtn) {
+    var ALL_PLATFORMS = ['apsjobs', 'actgov', 'nswgov', 'seek', 'linkedin'];
+    triggerAllBtn.addEventListener('click', function() {
+      triggerAllBtn.disabled = true;
+      if (triggerBtn) triggerBtn.disabled = true;
+      var keywords = document.getElementById('scraper-keywords').value || '';
+      var location = document.getElementById('scraper-region').value || '';
+      var maxPages = parseInt(maxPagesInput.value, 10) || 3;
+
+      var results = { ok: [], fail: [] };
+      scraperStatus.textContent = 'Triggering all sources...';
+
+      var chain = Promise.resolve();
+      ALL_PLATFORMS.forEach(function(platform) {
+        chain = chain.then(function() {
+          var body = { name: platform, keywords: keywords, location: location };
+          if (platform !== 'actgov') body.maxPages = maxPages;
+          return fetch('/admin/scraper/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data, platform: platform }; }); })
+          .then(function(r) {
+            if (r.ok && r.data.success) {
+              results.ok.push(platform);
+            } else {
+              results.fail.push(platform + ' (' + (r.data.error && r.data.error.message || 'unknown') + ')');
+            }
+          })
+          .catch(function() {
+            results.fail.push(platform + ' (network error)');
+          });
+        });
+      });
+
+      chain.then(function() {
+        triggerAllBtn.disabled = false;
+        if (triggerBtn) triggerBtn.disabled = false;
+        var parts = [];
+        if (results.ok.length) parts.push('Started: ' + results.ok.join(', '));
+        if (results.fail.length) parts.push('Failed: ' + results.fail.join(', '));
+        scraperStatus.textContent = parts.join(' | ') || 'No scrapers triggered.';
+        if (!queuePolling) { queuePolling = setInterval(pollQueueStatus, 5000); }
       });
     });
   }

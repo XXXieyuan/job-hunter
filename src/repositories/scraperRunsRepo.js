@@ -128,7 +128,7 @@ function getSourceFreshness() {
      GROUP BY scraper_name`
   ).all();
 
-  const freshness = { linkedin: null, seek: null, apsjobs: null };
+  const freshness = { linkedin: null, seek: null, apsjobs: null, actgov: null, nswgov: null };
   for (const row of rows) {
     const name = row.scraper_name;
     if (name in freshness) {
@@ -178,7 +178,7 @@ function getPaginatedRuns(page = 1, perPage = 25) {
 function getPlatformHealth() {
   const db = getDbInstance();
 
-  const platforms = ['linkedin', 'seek', 'apsjobs'];
+  const platforms = ['linkedin', 'seek', 'apsjobs', 'actgov', 'nswgov'];
   const health = {};
 
   for (const platform of platforms) {

@@ -114,6 +114,27 @@ router.get('/admin', (req, res) => {
   const fitStats = fitScoresRepo.getStats();
   const scraperRuns = scraperRunsRepo.getRecentRuns(20);
 
+  // Source counts — map the bySource array into an object keyed by source name.
+  // Covers linkedin/seek/apsjobs/actgov/nswgov; anything else bucketed as "other".
+  const sourceCounts = { linkedin: 0, seek: 0, apsjobs: 0, actgov: 0, nswgov: 0, other: 0 };
+  if (Array.isArray(jobCounts.bySource)) {
+    for (const row of jobCounts.bySource) {
+      const src = String(row.source || '').toLowerCase();
+      if (src in sourceCounts) sourceCounts[src] = row.count;
+      else sourceCounts.other += row.count;
+    }
+  }
+
+  // Other dashboard stats that were previously only exposed via /admin/stats.
+  const userCounts = {
+    total: usersRepo.getCount(),
+    with_resume: resumesRepo.countUsersWithResume(),
+  };
+  const coverLetterCount = coverLettersRepo.getCount();
+  const dbSizeMb = getDbSizeMb();
+  const sourceFreshness = scraperRunsRepo.getSourceFreshness();
+  const platformHealth = scraperRunsRepo.getPlatformHealth();
+
   // Company research stats for admin dashboard (T-G.1)
   const allCompanies = companiesRepo.getAll();
   const totalCompanies = allCompanies.length;
@@ -125,6 +146,12 @@ router.get('/admin', (req, res) => {
     jobCounts,
     fitStats,
     scraperRuns,
+    sourceCounts,
+    userCounts,
+    coverLetterCount,
+    dbSizeMb,
+    sourceFreshness,
+    platformHealth,
     totalCompanies,
     unresearchedCount,
   });
@@ -143,7 +170,9 @@ router.use('/admin', requireAdminRole);
 router.get('/admin/stats', (req, res) => {
   // Job counts with by_source breakdown
   const rawCounts = jobsRepo.getJobCounts();
-  const bySourceMap = { linkedin: 0, seek: 0, apsjobs: 0, manual: 0 };
+  const bySourceMap = {
+    linkedin: 0, seek: 0, apsjobs: 0, actgov: 0, nswgov: 0, manual: 0,
+  };
   if (Array.isArray(rawCounts.bySource)) {
     for (const row of rawCounts.bySource) {
       const src = String(row.source).toLowerCase();

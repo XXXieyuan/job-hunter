@@ -608,14 +608,16 @@ router.post('/admin/embeddings/run', (req, res) => {
 
 // ──────────────────────────────────────────────────────────────
 // POST /admin/extract-skills/run — LLM-extract required skills per job
+// Body: { effort?: 'minimal'|'low'|'medium'|'high'|'xhigh' } (default medium)
 // ──────────────────────────────────────────────────────────────
-router.post('/admin/extract-skills/run', (req, res) => {
+router.post('/admin/extract-skills/run', express.json({ limit: '1mb' }), (req, res) => {
+  const effort = req.body && req.body.effort;
   const missing = jobsRepo.getJobsMissingRequiredSkills(100000).length;
-  backgroundQueue.enqueue('extract-job-skills', {}, {
-    description: `Extract required skills for ${missing} jobs`,
+  backgroundQueue.enqueue('extract-job-skills', { effort }, {
+    description: `Extract required skills for ${missing} jobs (effort=${effort || 'medium'})`,
   });
-  logger.info('Admin triggered skill extraction', { missing });
-  res.json({ status: 'queued', missing });
+  logger.info('Admin triggered skill extraction', { missing, effort });
+  res.json({ status: 'queued', missing, effort: effort || 'medium' });
 });
 
 // ──────────────────────────────────────────────────────────────

@@ -140,8 +140,12 @@ async function embedMissingJobs({ limit = 1000 } = {}) {
  * Extract the ~5-15 required hard skills from a job description via LLM.
  * Returns a lowercased, deduped array. `null` on failure (caller decides
  * whether to fall back to resume-skill-in-description heuristic).
+ *
+ * @param {object} job - job record
+ * @param {object} [opts]
+ * @param {string} [opts.effort='medium'] - reasoning effort to pass through
  */
-async function extractJobRequiredSkills(job) {
+async function extractJobRequiredSkills(job, opts = {}) {
   if (!hasOpenAIKey()) return null;
   const text = [job.title || '', job.description || ''].filter(Boolean).join('\n');
   if (!text.trim()) return null;
@@ -154,11 +158,9 @@ ${text.slice(0, 6000)}
 
 Output ONLY the JSON array.`;
   try {
-    // 'medium' balances accuracy vs. token spend — xhigh was using ~500
-    // reasoning tokens per job for what is essentially a parse task.
     const raw = await chatCompletion(
       [{ role: 'user', content: prompt }],
-      { temperature: 0.1, max_tokens: 2048, reasoning_effort: 'medium' }
+      { temperature: 0.1, max_tokens: 2048, reasoning_effort: opts.effort || 'medium' }
     );
     if (!raw) return null;
     const m = raw.match(/\[[\s\S]*\]/);
@@ -183,14 +185,14 @@ Output ONLY the JSON array.`;
   }
 }
 
-async function extractSkillsForMissingJobs({ limit = 200 } = {}) {
+async function extractSkillsForMissingJobs({ limit = 200, effort } = {}) {
   const jobs = jobsRepo.getJobsMissingRequiredSkills(limit);
-  logger.info('Extracting required skills for jobs', { candidateCount: jobs.length });
+  logger.info('Extracting required skills for jobs', { candidateCount: jobs.length, effort: effort || 'medium' });
   let extracted = 0;
   let errors = 0;
   for (const job of jobs) {
     try {
-      const skills = await extractJobRequiredSkills(job);
+      const skills = await extractJobRequiredSkills(job, { effort });
       if (!skills) continue;
       jobsRepo.updateJobRequiredSkills(job.id, JSON.stringify(skills));
       extracted++;

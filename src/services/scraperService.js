@@ -247,6 +247,29 @@ function runCrawler(platform, config, runId) {
       if (code === 0) {
         scraperRunsRepo.markRunSuccess(runId, stats);
         logger.info('Crawler completed successfully', { runId, platform, stats });
+
+        // Auto-enqueue dedup after a successful scrape that actually
+        // ingested something. Skip if:
+        //   - no new jobs (no new data, nothing to dedup), or
+        //   - a dedup task is already pending/running (debounce
+        //     "Scrape All Sources" from queuing 5 back-to-back dedups).
+        if ((stats.jobs_new || 0) > 0) {
+          const qs = backgroundQueue.getStatus();
+          const dedupAlreadyQueued =
+            (qs.currentTask && qs.currentTask.type === 'dedup') ||
+            qs.pending.some((t) => t.type === 'dedup');
+          if (dedupAlreadyQueued) {
+            logger.info('Skip auto-dedup; one already queued/running', { runId });
+          } else {
+            try {
+              backgroundQueue.enqueue('dedup', {}, {
+                description: `Auto-dedup after ${platform} scrape (run ${runId}, +${stats.jobs_new} new)`,
+              });
+            } catch (err) {
+              logger.warn('Failed to enqueue auto-dedup', { runId, error: err.message });
+            }
+          }
+        }
         resolve(stats);
       } else {
         const stderrText = stderrChunks.join('\n').slice(-500);

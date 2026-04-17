@@ -24,12 +24,13 @@ async function start() {
       logger.info(`Cleaned up ${expiredCount} expired sessions on startup`);
     }
 
-    // Reap orphaned scraper runs left behind by a prior crash / restart.
-    // The background queue is in-memory, so any `running`/`pending` row at
-    // startup is by definition abandoned — mark it as failure so new
-    // triggerScrape() calls aren't blocked by the "already running" guard.
+    // Reap orphaned scraper and analysis runs left behind by a prior crash
+    // or restart. The background queue is in-memory, so any running/pending
+    // row at startup is by definition abandoned — mark it as failure so
+    // new trigger*() calls aren't blocked by the "already running" guard.
     const { getDb } = require('./db/connection');
-    const reaped = getDb().prepare(
+    const _db = getDb();
+    const reapedScrapers = _db.prepare(
       `UPDATE scraper_runs
          SET status = 'failure',
              error = 'Reaped on server startup (prior run orphaned by restart)',
@@ -37,8 +38,18 @@ async function start() {
              completed_at = datetime('now')
        WHERE status IN ('running','pending')`
     ).run();
-    if (reaped.changes > 0) {
-      logger.warn(`Reaped ${reaped.changes} orphaned scraper runs on startup`);
+    if (reapedScrapers.changes > 0) {
+      logger.warn(`Reaped ${reapedScrapers.changes} orphaned scraper runs on startup`);
+    }
+    const reapedAnalyses = _db.prepare(
+      `UPDATE analysis_runs
+         SET status = 'failure',
+             error = 'Reaped on server startup (prior run orphaned by restart)',
+             completed_at = datetime('now')
+       WHERE status IN ('running','pending','queued')`
+    ).run();
+    if (reapedAnalyses.changes > 0) {
+      logger.warn(`Reaped ${reapedAnalyses.changes} orphaned analysis runs on startup`);
     }
 
     // Seed sample resume if needed

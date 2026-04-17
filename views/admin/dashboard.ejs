@@ -275,7 +275,7 @@
       <div style="overflow-x: auto; margin-top: 8px;">
         <table class="table" id="analysis-runs-table" style="width: 100%; font-size: 12px;">
           <thead>
-            <tr><th>ID</th><th>Type</th><th>Status</th><th>Started</th><th>Finished</th><th>Processed</th><th>Error</th></tr>
+            <tr><th>ID</th><th>Type</th><th>Status</th><th>Progress</th><th>Started</th><th>Finished</th><th>Error</th></tr>
           </thead>
           <tbody id="analysis-runs-tbody">
             <tr><td colspan="7" style="color: var(--text-muted, #6B7280);">Loading...</td></tr>
@@ -599,29 +599,73 @@
 
   // ── Analysis Runs History ──
   var analysisRunsTbody = document.getElementById('analysis-runs-tbody');
+  var analysisRunsPoll = null;
+  function renderAnalysisProgress(run) {
+    // stats_json progress shape from analysisService:
+    //   intermediate: {phase: 'scoring', scored, errors, total}
+    //   final:        {scoredPairs, scoringErrors, coverLettersGenerated, ...}
+    var stats = run.stats_json || {};
+    if (typeof stats === 'string') { try { stats = JSON.parse(stats); } catch { stats = {}; } }
+
+    var isActive = run.status === 'running' || run.status === 'pending' || run.status === 'queued';
+    if (isActive) {
+      if (typeof stats.scored === 'number' && typeof stats.total === 'number' && stats.total > 0) {
+        var pct = Math.round((stats.scored / stats.total) * 100);
+        var bar = '<div style="background: #E5E7EB; height: 6px; border-radius: 3px; margin-top: 3px; overflow: hidden;"><div style="width:' + pct + '%; background: #2563EB; height: 100%;"></div></div>';
+        return '<span style="color: #2563EB;">' + stats.scored + '/' + stats.total + ' scored (' + pct + '%)</span>' +
+          (stats.errors ? ' <span style="color: #DC2626;">· ' + stats.errors + ' err</span>' : '') +
+          bar;
+      }
+      return '<span style="color: var(--text-muted, #6B7280);">' + escapeHtml(stats.phase || 'waiting...') + '</span>';
+    }
+    // Terminal states
+    if (typeof stats.scoredPairs === 'number') {
+      return stats.scoredPairs + ' scored' + (stats.scoringErrors ? ' · ' + stats.scoringErrors + ' err' : '') +
+        (typeof stats.coverLettersGenerated === 'number' ? ' · ' + stats.coverLettersGenerated + ' letters' : '');
+    }
+    if (typeof stats.scored === 'number') return stats.scored + ' scored';
+    return '-';
+  }
+  function renderAnalysisTable(runs) {
+    if (!runs || runs.length === 0) {
+      analysisRunsTbody.innerHTML = '<tr><td colspan="7" style="color: var(--text-muted, #6B7280);">No analysis runs yet.</td></tr>';
+      return;
+    }
+    var html = '';
+    runs.forEach(function(run) {
+      var s = run.status || '-';
+      var statusColor, statusLabel;
+      if (s === 'running' || s === 'pending' || s === 'queued') {
+        statusColor = '#D97706'; statusLabel = s;
+      } else if (s === 'completed' || s === 'success') {
+        statusColor = '#059669'; statusLabel = s === 'success' ? 'Success' : 'Completed';
+      } else {
+        statusColor = '#DC2626'; statusLabel = s;
+      }
+      html += '<tr>';
+      html += '<td>' + run.id + '</td>';
+      html += '<td>' + escapeHtml(run.type || run.analysis_type || '-') + '</td>';
+      html += '<td><span style="color: ' + statusColor + '; font-weight: 500;">' + escapeHtml(statusLabel) + '</span></td>';
+      html += '<td style="min-width: 180px;">' + renderAnalysisProgress(run) + '</td>';
+      html += '<td>' + escapeHtml(run.started_at || run.created_at || '-') + '</td>';
+      html += '<td>' + escapeHtml(run.completed_at || run.finished_at || '-') + '</td>';
+      html += '<td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">' + escapeHtml(run.error_message || run.error || '-') + '</td>';
+      html += '</tr>';
+    });
+    analysisRunsTbody.innerHTML = html;
+  }
   function loadAnalysisRuns() {
     fetch('/admin/analysis/runs')
       .then(function(res) { return res.json(); })
       .then(function(data) {
-        var runs = data.runs || [];
-        if (runs.length === 0) {
-          analysisRunsTbody.innerHTML = '<tr><td colspan="7" style="color: var(--text-muted, #6B7280);">No analysis runs yet.</td></tr>';
-          return;
+        var runs = (data && data.runs) || [];
+        renderAnalysisTable(runs);
+        var anyActive = runs.some(function(r) { return r.status === 'running' || r.status === 'pending' || r.status === 'queued'; });
+        if (!anyActive && analysisRunsPoll) {
+          clearInterval(analysisRunsPoll); analysisRunsPoll = null;
+        } else if (anyActive && !analysisRunsPoll) {
+          analysisRunsPoll = setInterval(loadAnalysisRuns, 2000);
         }
-        var html = '';
-        runs.forEach(function(run) {
-          var statusColor = run.status === 'running' ? '#D97706' : (run.status === 'completed' ? '#059669' : '#DC2626');
-          html += '<tr>';
-          html += '<td>' + run.id + '</td>';
-          html += '<td>' + escapeHtml(run.type || run.analysis_type || '-') + '</td>';
-          html += '<td><span style="color: ' + statusColor + '; font-weight: 500;">' + escapeHtml(run.status || '-') + '</span></td>';
-          html += '<td>' + escapeHtml(run.started_at || run.created_at || '-') + '</td>';
-          html += '<td>' + escapeHtml(run.finished_at || '-') + '</td>';
-          html += '<td>' + (typeof run.jobs_processed === 'number' ? run.jobs_processed : '-') + '</td>';
-          html += '<td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">' + escapeHtml(run.error_message || run.error || '-') + '</td>';
-          html += '</tr>';
-        });
-        analysisRunsTbody.innerHTML = html;
       })
       .catch(function() {
         analysisRunsTbody.innerHTML = '<tr><td colspan="7" style="color: #DC2626;">Failed to load analysis runs.</td></tr>';
@@ -630,6 +674,38 @@
   loadAnalysisRuns();
   var refreshAnalysisBtn = document.getElementById('refresh-analysis-runs-btn');
   if (refreshAnalysisBtn) refreshAnalysisBtn.addEventListener('click', loadAnalysisRuns);
+
+  // Run Analysis button — previously had no click handler at all.
+  var runAnalysisBtn = document.getElementById('run-analysis-btn');
+  var runAnalysisStatus = document.getElementById('run-analysis-status');
+  var analysisTypeSelect = document.getElementById('analysis-type');
+  if (runAnalysisBtn) {
+    runAnalysisBtn.addEventListener('click', function() {
+      var type = (analysisTypeSelect && analysisTypeSelect.value) || 'full';
+      runAnalysisBtn.disabled = true;
+      if (runAnalysisStatus) runAnalysisStatus.textContent = 'Triggering analysis...';
+      fetch('/admin/analysis/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: type }),
+      })
+      .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+      .then(function(r) {
+        runAnalysisBtn.disabled = false;
+        if (r.ok && r.data.runId) {
+          if (runAnalysisStatus) runAnalysisStatus.textContent = 'Analysis started. Run ID: ' + r.data.runId;
+          loadAnalysisRuns();
+        } else {
+          var msg = (r.data.error && r.data.error.message) || 'Unknown error';
+          if (runAnalysisStatus) runAnalysisStatus.textContent = 'Trigger failed: ' + msg;
+        }
+      })
+      .catch(function() {
+        runAnalysisBtn.disabled = false;
+        if (runAnalysisStatus) runAnalysisStatus.textContent = 'Trigger failed: Network error.';
+      });
+    });
+  }
 
   // ── Error Log Viewer ──
   var errorLogContainer = document.getElementById('error-log-container');

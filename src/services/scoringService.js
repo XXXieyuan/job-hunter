@@ -1,6 +1,12 @@
 const { hasOpenAIKey, generateEmbedding, chatCompletion } = require('./openAIClient');
 const fitScoresRepo = require('../repositories/fitScoresRepo');
 const resumesRepo = require('../repositories/resumesRepo');
+const jobsRepo = require('../repositories/jobsRepo');
+const { OPENAI_EMBEDDING_MODEL } = require('../config');
+const {
+  decodeEmbedding,
+  bufferFromFloats,
+} = require('./embeddingService');
 const { getLogger } = require('../logger');
 
 const logger = getLogger('scoringService');
@@ -136,20 +142,36 @@ function buildResumeEmbeddingText(resume) {
 // ──────────────────────────────────────────────
 
 async function computeSemanticScore(job, resume) {
-  if (!hasOpenAIKey()) return null;
-
   try {
-    const jobText = buildJobEmbeddingText(job);
-    const resumeText = buildResumeEmbeddingText(resume);
+    // Prefer stored embeddings; fall back to API + persist on miss so the
+    // next run is free. Note the persist path uses the same BLOB shape as
+    // resume confirmation (`Float64Array.buffer` wrapped in a Buffer).
+    const EMB_MODEL = OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
 
-    const [jobEmbedding, resumeEmbedding] = await Promise.all([
-      generateEmbedding(jobText),
-      generateEmbedding(resumeText),
-    ]);
+    let jobVec = decodeEmbedding(job.embedding);
+    if (!jobVec) {
+      if (!hasOpenAIKey()) return null;
+      const v = await generateEmbedding(buildJobEmbeddingText(job));
+      if (v) {
+        jobVec = new Float64Array(v);
+        try { jobsRepo.updateJobEmbedding(job.id, bufferFromFloats(v), EMB_MODEL); }
+        catch (err) { logger.warn('Failed to persist job embedding', { jobId: job.id, error: err.message }); }
+      }
+    }
 
-    if (!jobEmbedding || !resumeEmbedding) return null;
+    let resumeVec = decodeEmbedding(resume.embedding);
+    if (!resumeVec) {
+      if (!hasOpenAIKey()) return null;
+      const v = await generateEmbedding(buildResumeEmbeddingText(resume));
+      if (v) {
+        resumeVec = new Float64Array(v);
+        try { resumesRepo.updateEmbedding(resume.id, bufferFromFloats(v), EMB_MODEL); }
+        catch (err) { logger.warn('Failed to persist resume embedding', { resumeId: resume.id, error: err.message }); }
+      }
+    }
 
-    const sim = cosineSimilarity(jobEmbedding, resumeEmbedding);
+    if (!jobVec || !resumeVec) return null;
+    const sim = cosineSimilarity(jobVec, resumeVec);
     return clamp(sim * 100, 0, 100);
   } catch (err) {
     logger.error('Semantic score failed:', err.message);
@@ -235,25 +257,12 @@ async function computeRoleAlignmentScore(job, resume) {
   // Boost for exact/near-exact match
   if (hasExactMatch) score = Math.max(score, 90);
 
-  // If we have an API key, also compute embedding similarity of titles
-  if (hasOpenAIKey() && expTitles.length > 0) {
-    try {
-      const allExpTitles = expTitles.filter(Boolean).join(', ');
-      const [jobTitleEmb, expTitleEmb] = await Promise.all([
-        generateEmbedding(job.title),
-        generateEmbedding(allExpTitles),
-      ]);
-      if (jobTitleEmb && expTitleEmb) {
-        const sim = cosineSimilarity(jobTitleEmb, expTitleEmb);
-        const embScore = clamp(sim * 100, 0, 100);
-        // Blend: 60% word overlap, 40% embedding similarity
-        score = 0.6 * score + 0.4 * embScore;
-      }
-    } catch (err) {
-      logger.warn('Role alignment embedding failed:', err.message);
-    }
-  }
-
+  // Previously this path also called the embedding API on job.title and the
+  // joined experience titles. That was the #2 source of API calls per score
+  // (after computeSemanticScore). Now we rely on word overlap alone — the
+  // semantic embedding (of the full job vs full resume) already captures
+  // title-level similarity, so the dedicated title-embedding pass was
+  // double-counting and expensive.
   return clamp(score, 0, 100);
 }
 

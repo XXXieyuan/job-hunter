@@ -33,7 +33,9 @@ const logger = getLogger('analysisService');
  * @returns {Promise<{scored: number, errors: number}>}
  */
 async function scoreAllJobs(resume, runId, lastProcessedJobId) {
-  const jobs = getJobsWithScore();
+  // Override the repo's default 50-job UI pagination — scoring should cover
+  // every active non-duplicate job, not just the first page.
+  const jobs = getJobsWithScore({ limit: 100000 });
   let scored = 0;
   let errors = 0;
 

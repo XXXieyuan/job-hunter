@@ -594,6 +594,19 @@ router.post('/admin/dedup/run', (req, res) => {
 });
 
 // ──────────────────────────────────────────────────────────────
+// POST /admin/embeddings/run — Batch-embed all jobs missing vectors
+// ──────────────────────────────────────────────────────────────
+// Handler is self-registered by embeddingService on server boot.
+router.post('/admin/embeddings/run', (req, res) => {
+  const missing = jobsRepo.getJobsMissingEmbedding(100000).length;
+  backgroundQueue.enqueue('embed-jobs', {}, {
+    description: `Backfill embeddings for ${missing} jobs`,
+  });
+  logger.info('Admin triggered embedding backfill', { missing });
+  res.json({ status: 'queued', missing });
+});
+
+// ──────────────────────────────────────────────────────────────
 // T-J.4: GET /admin/dedup/groups — List duplicate groups (paginated)
 // ──────────────────────────────────────────────────────────────
 

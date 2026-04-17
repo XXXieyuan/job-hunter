@@ -56,9 +56,11 @@ async function start() {
     await ensureSampleResumeSeeded();
 
     // Register background queue handlers
-    // These are self-registering on require (scraperService, analysisService)
+    // These are self-registering on require (scraperService, analysisService,
+    // embeddingService for the 'embed-jobs' handler).
     require('./services/scraperService');
     require('./services/analysisService');
+    require('./services/embeddingService');
     logger.info('Background queue handlers registered');
 
     // Verify SMTP connection (gracefully degrades if unavailable)

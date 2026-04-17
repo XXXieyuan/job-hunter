@@ -311,6 +311,39 @@ function getActiveJobIds() {
     .map((r) => r.id);
 }
 
+/**
+ * Fetch active non-duplicate jobs that still lack a stored embedding. Used
+ * by the embed-jobs background task to backfill and keep the precompute
+ * cache warm. Returns enough columns for buildJobEmbeddingText.
+ */
+function getJobsMissingEmbedding(limit = 1000) {
+  const db = getDbInstance();
+  return db
+    .prepare(
+      `SELECT id, title, role, company_name, location, description
+         FROM jobs
+        WHERE is_active = 1
+          AND canonical_job_id IS NULL
+          AND embedding IS NULL
+        ORDER BY id DESC
+        LIMIT ?`
+    )
+    .all(limit);
+}
+
+/**
+ * Persist an embedding BLOB for a job. Mirrors resumesRepo.updateEmbedding
+ * so encode/decode shape is identical between the two tables.
+ */
+function updateJobEmbedding(id, embeddingBuffer, embeddingModel) {
+  const db = getDbInstance();
+  return db
+    .prepare(
+      'UPDATE jobs SET embedding = ?, embedding_model = ? WHERE id = ?'
+    )
+    .run(embeddingBuffer, embeddingModel, id);
+}
+
 function markInactive(id) {
   const db = getDbInstance();
   return db
@@ -687,6 +720,8 @@ module.exports = {
   findDuplicateCandidates,
   getJobCounts,
   getActiveJobIds,
+  getJobsMissingEmbedding,
+  updateJobEmbedding,
   getDuplicateSourcesForJob,
   getJobApplicationForUser,
   markInactive,

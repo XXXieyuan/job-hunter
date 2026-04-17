@@ -8,10 +8,12 @@ const {
   getMainResume,
   deleteResume,
   setMainResume,
+  updateEmbedding,
 } = require('../repositories/resumesRepo');
 const mammoth = require('mammoth');
-const { chatCompletion, hasOpenAIKey } = require('./openAIClient');
+const { chatCompletion, hasOpenAIKey, generateEmbedding } = require('./openAIClient');
 const { getLogger } = require('../logger');
+const { OPENAI_EMBEDDING_MODEL } = require('../config');
 
 const logger = getLogger('resumeService');
 
@@ -195,6 +197,25 @@ async function createResumeFromUpload(file, userId) {
     fileType,
   });
 
+  // Embed at upload time. Previously this was deferred until the
+  // is_confirmed 0→1 transition, but that left freshly-uploaded resumes
+  // with no vector available to scoring. Any API error here is swallowed
+  // so upload still succeeds — a later dedicated backfill can fill gaps.
+  try {
+    const persisted = getResumeById(id);
+    const text = buildResumeEmbeddingTextLocal(persisted);
+    if (text && hasOpenAIKey()) {
+      const v = await generateEmbedding(text);
+      if (v) {
+        const buf = Buffer.from(new Float64Array(v).buffer);
+        updateEmbedding(id, buf, OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small');
+        logger.info('Persisted resume embedding at upload', { resumeId: id });
+      }
+    }
+  } catch (err) {
+    logger.warn('Resume upload embedding failed (non-fatal)', { resumeId: id, error: err.message });
+  }
+
   // If this is the first real user resume (not sample), set it as main
   const resumes = getAllResumes();
   const userResumes = resumes.filter(r => r.file_name !== null);
@@ -203,6 +224,37 @@ async function createResumeFromUpload(file, userId) {
   }
 
   return getResumeById(id);
+}
+
+/**
+ * Build the resume text we embed. Duplicates the shape used in
+ * scoringService.buildResumeEmbeddingText intentionally — we don't want to
+ * `require('./scoringService')` here because that module has much heavier
+ * transitive deps (OpenAI retry logic, FT5 scoring). Kept in sync by
+ * convention; any change here should be mirrored there.
+ */
+function buildResumeEmbeddingTextLocal(resume) {
+  if (!resume) return '';
+  let skills = [];
+  try { skills = resume.skills_json ? JSON.parse(resume.skills_json) : []; } catch { skills = []; }
+  let experience = [];
+  try { experience = resume.experience_json ? JSON.parse(resume.experience_json) : []; } catch { experience = []; }
+  let education = [];
+  try { education = resume.education_json ? JSON.parse(resume.education_json) : []; } catch { education = []; }
+
+  const expText = experience
+    .map((e) => `${e.title || ''} ${e.company || ''} ${e.description || ''}`)
+    .join('\n');
+  const eduText = education
+    .map((e) => `${e.degree || ''} ${e.institution || ''}`)
+    .join('\n');
+
+  return [
+    resume.summary || '',
+    `Skills: ${(Array.isArray(skills) ? skills : []).join(', ')}`,
+    `Experience: ${expText}`,
+    `Education: ${eduText}`,
+  ].join('\n');
 }
 
 function deleteResumeWithFile(id) {

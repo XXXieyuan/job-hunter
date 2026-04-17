@@ -248,27 +248,29 @@ function runCrawler(platform, config, runId) {
         scraperRunsRepo.markRunSuccess(runId, stats);
         logger.info('Crawler completed successfully', { runId, platform, stats });
 
-        // Auto-enqueue dedup after a successful scrape that actually
-        // ingested something. Skip if:
-        //   - no new jobs (no new data, nothing to dedup), or
-        //   - a dedup task is already pending/running (debounce
-        //     "Scrape All Sources" from queuing 5 back-to-back dedups).
+        // Auto-enqueue follow-up work after a successful scrape that
+        // actually ingested something. Skip per-task if:
+        //   - no new jobs (no new data, nothing to do), or
+        //   - a task of that type is already pending/running
+        //     (debounces "Scrape All Sources" from queuing 5 back-to-back).
         if ((stats.jobs_new || 0) > 0) {
-          const qs = backgroundQueue.getStatus();
-          const dedupAlreadyQueued =
-            (qs.currentTask && qs.currentTask.type === 'dedup') ||
-            qs.pending.some((t) => t.type === 'dedup');
-          if (dedupAlreadyQueued) {
-            logger.info('Skip auto-dedup; one already queued/running', { runId });
-          } else {
-            try {
-              backgroundQueue.enqueue('dedup', {}, {
-                description: `Auto-dedup after ${platform} scrape (run ${runId}, +${stats.jobs_new} new)`,
-              });
-            } catch (err) {
-              logger.warn('Failed to enqueue auto-dedup', { runId, error: err.message });
+          const maybeEnqueue = (type, description) => {
+            const qs = backgroundQueue.getStatus();
+            const already =
+              (qs.currentTask && qs.currentTask.type === type) ||
+              qs.pending.some((t) => t.type === type);
+            if (already) {
+              logger.info(`Skip auto-${type}; one already queued/running`, { runId });
+              return;
             }
-          }
+            try {
+              backgroundQueue.enqueue(type, {}, { description });
+            } catch (err) {
+              logger.warn(`Failed to enqueue auto-${type}`, { runId, error: err.message });
+            }
+          };
+          maybeEnqueue('dedup', `Auto-dedup after ${platform} scrape (run ${runId}, +${stats.jobs_new} new)`);
+          maybeEnqueue('embed-jobs', `Auto-embed after ${platform} scrape (run ${runId}, +${stats.jobs_new} new)`);
         }
         resolve(stats);
       } else {

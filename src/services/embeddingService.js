@@ -154,9 +154,11 @@ ${text.slice(0, 6000)}
 
 Output ONLY the JSON array.`;
   try {
+    // Default reasoning_effort applies (xhigh). Can be tuned down to
+    // 'minimal' later once we've measured actual output quality vs cost.
     const raw = await chatCompletion(
       [{ role: 'user', content: prompt }],
-      { temperature: 0.1, max_tokens: 512, reasoning_effort: 'minimal' }
+      { temperature: 0.1, max_tokens: 2048 }
     );
     if (!raw) return null;
     const m = raw.match(/\[[\s\S]*\]/);

@@ -106,29 +106,44 @@ async function chatCompletion(messages, opts = {}) {
     return null;
   }
 
-  // Reasoning control — /chat/completions does NOT accept a reasoning
-  // parameter; the OpenAI-Responses-style /v1/responses endpoint does,
-  // as nested `reasoning: { effort }`. Values seen in the wild:
-  //   'minimal' — skip the thinking pass (for pure extraction/classification)
-  //   'low' | 'medium' | 'high' | 'xhigh' — progressively deeper reasoning
-  // If the caller passes opts.reasoning_effort we route to /responses and
-  // parse its different response shape; otherwise we stay on
-  // /chat/completions (compatible with every OpenAI-compatible gateway).
-  if (opts.reasoning_effort) {
+  // Reasoning control — routes to /v1/responses (the only endpoint on the
+  // n1n.ai gateway that accepts a reasoning parameter). Default to xhigh
+  // for every caller unless they explicitly pass a different effort; we'll
+  // tune individual callers down after observing token usage in practice.
+  // Values: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'. Pass
+  // `reasoning_effort: null` to force the legacy /chat/completions path.
+  const effort = opts.reasoning_effort === null
+    ? null
+    : (opts.reasoning_effort || 'xhigh');
+
+  if (effort) {
     const payload = {
       model: opts.model || OPENAI_CHAT_MODEL,
       input: messages,
-      reasoning: { effort: opts.reasoning_effort },
+      reasoning: { effort },
     };
     if (opts.max_tokens) payload.max_output_tokens = opts.max_tokens;
     if (opts.temperature !== undefined) payload.temperature = opts.temperature;
     const json = await callOpenAI('responses', payload);
-    // Response shape: output: [{type: 'reasoning', ...}, {type: 'message', content: [{type: 'output_text', text}]}]
+    // /responses shape:
+    //   output: [{type: 'reasoning', ...}, {type: 'message', content: [{type: 'output_text', text}]}]
     const out = Array.isArray(json.output) ? json.output : [];
     const msg = out.find((x) => x && x.type === 'message');
     if (!msg || !Array.isArray(msg.content)) return null;
     const textPart = msg.content.find((c) => c && (c.type === 'output_text' || c.type === 'text'));
     if (!textPart || typeof textPart.text !== 'string') return null;
+    // Log reasoning_tokens so the user can tune effort per-caller.
+    try {
+      const u = json.usage || {};
+      const rt = (u.output_tokens_details || {}).reasoning_tokens;
+      logger.info('chatCompletion /responses', {
+        effort,
+        input_tokens: u.input_tokens,
+        output_tokens: u.output_tokens,
+        reasoning_tokens: rt,
+        total_tokens: u.total_tokens,
+      });
+    } catch { /* best-effort logging */ }
     return stripThinkTags(textPart.text.trim());
   }
 

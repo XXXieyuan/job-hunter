@@ -344,6 +344,45 @@ function updateJobEmbedding(id, embeddingBuffer, embeddingModel) {
     .run(embeddingBuffer, embeddingModel, id);
 }
 
+/**
+ * Auto-add the required_skills_json column on first use (mirrors the
+ * progress_message pattern elsewhere — avoids a full migration file for a
+ * single nullable TEXT column).
+ */
+let _requiredSkillsColumnEnsured = false;
+function ensureRequiredSkillsColumn(db) {
+  if (_requiredSkillsColumnEnsured) return;
+  const cols = db.pragma('table_info(jobs)').map((c) => c.name);
+  if (!cols.includes('required_skills_json')) {
+    db.exec('ALTER TABLE jobs ADD COLUMN required_skills_json TEXT');
+  }
+  _requiredSkillsColumnEnsured = true;
+}
+
+function getJobsMissingRequiredSkills(limit = 200) {
+  const db = getDbInstance();
+  ensureRequiredSkillsColumn(db);
+  return db
+    .prepare(
+      `SELECT id, title, description
+         FROM jobs
+        WHERE is_active = 1
+          AND canonical_job_id IS NULL
+          AND (required_skills_json IS NULL OR required_skills_json = '')
+        ORDER BY id DESC
+        LIMIT ?`
+    )
+    .all(limit);
+}
+
+function updateJobRequiredSkills(id, requiredSkillsJson) {
+  const db = getDbInstance();
+  ensureRequiredSkillsColumn(db);
+  return db
+    .prepare('UPDATE jobs SET required_skills_json = ? WHERE id = ?')
+    .run(requiredSkillsJson, id);
+}
+
 function markInactive(id) {
   const db = getDbInstance();
   return db
@@ -722,6 +761,8 @@ module.exports = {
   getActiveJobIds,
   getJobsMissingEmbedding,
   updateJobEmbedding,
+  getJobsMissingRequiredSkills,
+  updateJobRequiredSkills,
   getDuplicateSourcesForJob,
   getJobApplicationForUser,
   markInactive,

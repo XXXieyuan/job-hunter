@@ -184,24 +184,53 @@ async function computeSemanticScore(job, resume) {
 // ──────────────────────────────────────────────
 
 function computeKeywordScore(job, resume) {
-  const skills = extractSkills(resume);
-  if (skills.length === 0) return { score: 0, matched: [], missing: [] };
+  const resumeSkills = extractSkills(resume);
+  if (resumeSkills.length === 0) return { score: 0, matched: [], missing: [] };
 
-  const jobTextLower = normalize(`${job.title || ''}\n${job.description || ''}`);
-
-  const matched = [];
-  const missing = [];
-
-  for (const skill of skills) {
-    const skillLower = normalize(skill);
-    if (skillLower && jobTextLower.includes(skillLower)) {
-      matched.push(skill);
-    } else {
-      missing.push(skill);
-    }
+  // Preferred path: the job has a curated required_skills list (extracted
+  // by LLM at ingest time). We use set intersection against resume skills
+  // so a 50-skill resume that covers 4/5 required skills scores 80%, not
+  // 8%. "missing" becomes "required skills the candidate doesn't have".
+  let jobRequired = null;
+  if (job.required_skills_json) {
+    try {
+      const parsed = JSON.parse(job.required_skills_json);
+      if (Array.isArray(parsed)) jobRequired = parsed;
+    } catch { /* ignore */ }
   }
 
-  const score = clamp((matched.length / skills.length) * 100, 0, 100);
+  if (jobRequired && jobRequired.length > 0) {
+    const resumeSet = new Set(resumeSkills.map((s) => normalize(s)).filter(Boolean));
+    const matched = [];
+    const missing = [];
+    for (const reqRaw of jobRequired) {
+      const req = normalize(reqRaw);
+      if (!req) continue;
+      // Match on normalized equality OR substring containment either way
+      // (e.g. "react" matches "react.js" and vice versa).
+      const hit = resumeSet.has(req) ||
+        Array.from(resumeSet).some((r) => r.includes(req) || req.includes(r));
+      if (hit) matched.push(reqRaw);
+      else missing.push(reqRaw);
+    }
+    const score = clamp((matched.length / jobRequired.length) * 100, 0, 100);
+    return { score, matched, missing };
+  }
+
+  // Fallback: no curated list yet (e.g. job still pending skill extraction,
+  // or LLM unavailable). Use the old "resume skill mentioned in job text"
+  // heuristic, but cap the denominator so long resumes aren't penalised.
+  // 5+ hits → full credit; under 5 scales proportionally.
+  const jobTextLower = normalize(`${job.title || ''}\n${job.description || ''}`);
+  const matched = [];
+  const missing = [];
+  for (const skill of resumeSkills) {
+    const s = normalize(skill);
+    if (s && jobTextLower.includes(s)) matched.push(skill);
+    else missing.push(skill);
+  }
+  const FULL_CREDIT_AT = 5;
+  const score = clamp((matched.length / FULL_CREDIT_AT) * 100, 0, 100);
   return { score, matched, missing };
 }
 

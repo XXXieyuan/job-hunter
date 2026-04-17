@@ -270,9 +270,11 @@
       <div style="display: flex; gap: 8px; flex-wrap: wrap;">
         <button id="run-analysis-btn" class="btn btn-primary btn-sm">Run Analysis</button>
         <button id="embed-jobs-btn" class="btn btn-ghost btn-sm" title="Precompute embeddings for jobs that don't have them yet. Makes scoring fast.">Embed missing jobs</button>
+        <button id="extract-skills-btn" class="btn btn-ghost btn-sm" title="Use LLM to extract required skills from job descriptions. Keyword scoring uses this list.">Extract job skills</button>
       </div>
       <p id="run-analysis-status" class="text-muted" style="font-size: 12px; margin-top: 8px;"></p>
       <p id="embed-jobs-status" class="text-muted" style="font-size: 12px; margin-top: 4px;"></p>
+      <p id="extract-skills-status" class="text-muted" style="font-size: 12px; margin-top: 4px;"></p>
 
       <!-- Analysis Runs History Table -->
       <h3 style="margin-top: 16px; font-size: 14px; font-weight: 500;">Recent Analysis Runs</h3>
@@ -711,32 +713,32 @@
     });
   }
 
-  // Embed missing jobs button — triggers backfill of job embeddings.
-  var embedJobsBtn = document.getElementById('embed-jobs-btn');
-  var embedJobsStatus = document.getElementById('embed-jobs-status');
-  if (embedJobsBtn) {
-    embedJobsBtn.addEventListener('click', function() {
-      embedJobsBtn.disabled = true;
-      if (embedJobsStatus) embedJobsStatus.textContent = 'Queuing embedding backfill...';
-      fetch('/admin/embeddings/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
-      .then(function(r) {
-        embedJobsBtn.disabled = false;
-        if (r.ok && r.data.status === 'queued') {
-          if (embedJobsStatus) embedJobsStatus.textContent = 'Queued: ' + (r.data.missing || 0) + ' jobs to embed.';
-        } else {
-          if (embedJobsStatus) embedJobsStatus.textContent = 'Trigger failed: ' + ((r.data.error && r.data.error.message) || 'unknown');
-        }
-      })
-      .catch(function() {
-        embedJobsBtn.disabled = false;
-        if (embedJobsStatus) embedJobsStatus.textContent = 'Trigger failed: Network error.';
-      });
+  // Small helper: generic "queue a backfill" button handler.
+  function wireBackfillBtn(btnId, statusId, endpoint, label) {
+    var btn = document.getElementById(btnId);
+    var st = document.getElementById(statusId);
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+      btn.disabled = true;
+      if (st) st.textContent = 'Queuing ' + label + '...';
+      fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+        .then(function(r) {
+          btn.disabled = false;
+          if (r.ok && r.data.status === 'queued') {
+            if (st) st.textContent = 'Queued: ' + (r.data.missing || 0) + ' jobs.';
+          } else {
+            if (st) st.textContent = 'Trigger failed: ' + ((r.data.error && r.data.error.message) || 'unknown');
+          }
+        })
+        .catch(function() {
+          btn.disabled = false;
+          if (st) st.textContent = 'Trigger failed: Network error.';
+        });
     });
   }
+  wireBackfillBtn('embed-jobs-btn', 'embed-jobs-status', '/admin/embeddings/run', 'embedding backfill');
+  wireBackfillBtn('extract-skills-btn', 'extract-skills-status', '/admin/extract-skills/run', 'skill extraction');
 
   // ── Error Log Viewer ──
   var errorLogContainer = document.getElementById('error-log-container');

@@ -12,7 +12,7 @@
  *   - the `embed-jobs` background-queue handler
  */
 
-const { generateEmbedding } = require('./openAIClient');
+const { generateEmbedding, chatCompletion, hasOpenAIKey } = require('./openAIClient');
 const { OPENAI_EMBEDDING_MODEL } = require('../config');
 const backgroundQueue = require('./backgroundQueue');
 const jobsRepo = require('../repositories/jobsRepo');
@@ -133,11 +133,84 @@ async function embedMissingJobs({ limit = 1000 } = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Required-skills extraction (LLM)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the ~5-15 required hard skills from a job description via LLM.
+ * Returns a lowercased, deduped array. `null` on failure (caller decides
+ * whether to fall back to resume-skill-in-description heuristic).
+ */
+async function extractJobRequiredSkills(job) {
+  if (!hasOpenAIKey()) return null;
+  const text = [job.title || '', job.description || ''].filter(Boolean).join('\n');
+  if (!text.trim()) return null;
+  const prompt = `Extract the HARD technical skills, tools, and certifications that this job REQUIRES. Ignore "nice to haves", soft skills, and generic words like "communication" or "leadership".
+
+Output format: a JSON array of short skill names, lowercase, no duplicates, no version numbers. Example: ["python", "tensorflow", "sql", "aws", "docker", "kubernetes"]. Target 5-15 items.
+
+Job:
+${text.slice(0, 6000)}
+
+Output ONLY the JSON array.`;
+  try {
+    const raw = await chatCompletion(
+      [{ role: 'user', content: prompt }],
+      { temperature: 0.1, max_tokens: 512 }
+    );
+    if (!raw) return null;
+    const m = raw.match(/\[[\s\S]*\]/);
+    if (!m) return null;
+    const arr = JSON.parse(m[0]);
+    if (!Array.isArray(arr)) return null;
+    // Normalize: lowercase, trim, drop empties, dedupe, cap length.
+    const seen = new Set();
+    const out = [];
+    for (const s of arr) {
+      if (typeof s !== 'string') continue;
+      const v = s.toLowerCase().trim();
+      if (!v || seen.has(v)) continue;
+      seen.add(v);
+      out.push(v);
+      if (out.length >= 20) break;
+    }
+    return out;
+  } catch (err) {
+    logger.warn('extractJobRequiredSkills failed', { jobId: job.id, error: err.message });
+    return null;
+  }
+}
+
+async function extractSkillsForMissingJobs({ limit = 200 } = {}) {
+  const jobs = jobsRepo.getJobsMissingRequiredSkills(limit);
+  logger.info('Extracting required skills for jobs', { candidateCount: jobs.length });
+  let extracted = 0;
+  let errors = 0;
+  for (const job of jobs) {
+    try {
+      const skills = await extractJobRequiredSkills(job);
+      if (!skills) continue;
+      jobsRepo.updateJobRequiredSkills(job.id, JSON.stringify(skills));
+      extracted++;
+    } catch (err) {
+      errors++;
+      logger.warn('Skill extract failed', { jobId: job.id, error: err.message });
+    }
+  }
+  logger.info('Skill extraction batch complete', { extracted, errors, candidateCount: jobs.length });
+  return { candidateCount: jobs.length, extracted, errors };
+}
+
+// ---------------------------------------------------------------------------
 // Background queue wiring
 // ---------------------------------------------------------------------------
 
 backgroundQueue.registerHandler('embed-jobs', async (params) => {
   return embedMissingJobs(params || {});
+});
+
+backgroundQueue.registerHandler('extract-job-skills', async (params) => {
+  return extractSkillsForMissingJobs(params || {});
 });
 
 module.exports = {
@@ -146,4 +219,6 @@ module.exports = {
   decodeEmbedding,
   cosineSimilarity,
   embedMissingJobs,
+  extractJobRequiredSkills,
+  extractSkillsForMissingJobs,
 };

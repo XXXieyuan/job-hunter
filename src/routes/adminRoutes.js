@@ -607,6 +607,18 @@ router.post('/admin/embeddings/run', (req, res) => {
 });
 
 // ──────────────────────────────────────────────────────────────
+// POST /admin/extract-skills/run — LLM-extract required skills per job
+// ──────────────────────────────────────────────────────────────
+router.post('/admin/extract-skills/run', (req, res) => {
+  const missing = jobsRepo.getJobsMissingRequiredSkills(100000).length;
+  backgroundQueue.enqueue('extract-job-skills', {}, {
+    description: `Extract required skills for ${missing} jobs`,
+  });
+  logger.info('Admin triggered skill extraction', { missing });
+  res.json({ status: 'queued', missing });
+});
+
+// ──────────────────────────────────────────────────────────────
 // T-J.4: GET /admin/dedup/groups — List duplicate groups (paginated)
 // ──────────────────────────────────────────────────────────────
 

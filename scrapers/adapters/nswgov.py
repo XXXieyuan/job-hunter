@@ -33,6 +33,17 @@ _NSWGOV_BASE = "https://iworkfor.nsw.gov.au"
 _NSWGOV_HOMEPAGE = _NSWGOV_BASE + "/"
 _NSWGOV_SEARCH_URL = _NSWGOV_BASE + "/jobs"
 
+# iworkfor.nsw.gov.au Next.js frontend calls this public backend via a
+# hard-coded OAuth client JWT (public, baked into the JS bundle). The JWT is
+# valid until 2036 and used unauthenticated for guest job search.
+_ADCORE_API_BASE = "https://api.ad-core04.com/api"
+_ADCORE_SEARCH_URL = _ADCORE_API_BASE + "/search/jobs"
+_ADCORE_PUBLIC_TOKEN = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+    "eyJzdWIiOiIzRTJDNjUzOS1ENDQwLTQ2QkMtODgzQS0yNUYxOUMyMkU2NDYiLCJlbWFpbCI6Im5zd0BhcHBseWRpcmVjdC5jb20iLCJqdGkiOiJmNmQ5MTUzNC04ZTA2LTQwMjEtYWNjYi00MDZiZjNjNDg5MjQiLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiSVdGTlNXIEFwcGxpY2F0aW9uIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvdXJpIjoiaHR0cHM6Ly9hZG1pbnpvbmUuaXdvcmtmb3IubnN3Lmdvdi5hdS9jYWxsYmFjayIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6Ik9BdXRoQ2xpZW50IiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvaGFzaCI6ImFvclhrN1ZHM0ZNUDBLMXRRTzA0M2dVdklRPSIsIm9hdXRoY2xpZW50IjoiM0UyQzY1MzktRDQ0MC00NkJDLTg4M0EtMjVGMTlDMjJFNjQ2IiwiZmVhdHVyZXMiOiJbXCJCbG9nXCJdIiwiZXhwIjoyMDg1NDg5NTY0LCJpc3MiOiJkMjIzYjA2OS1mODc0LTQzZmItODZkMi1jNzk2MDYwMGIxMDYiLCJhdWQiOiJJV0ZOU1cgQXBwbGljYXRpb24ifQ."
+    "Hr2UnSwFb9br6tBDxIuGKiL6iLMPkfIZwqcJFOC0YUg"
+)
+
 # Fingerprint rotation order per SYSTEM_DESIGN.md §Request Flow 3 and
 # TEST_PLAN_BACKEND T-13. Chrome first (market share), then Firefox, then Edge.
 _CF_FINGERPRINTS: list[str] = [
@@ -273,6 +284,26 @@ class NswGovScraper(BaseScraper):
         if params is not None:
             kwargs["params"] = params
         resp = self._session.get(url, **kwargs)
+        return resp.status_code, resp.headers, (resp.text or "")
+
+    def _nsw_http_post(
+        self,
+        url: str,
+        *,
+        json_body: dict[str, Any] | None = None,
+        extra_headers: dict[str, str] | None = None,
+    ) -> tuple[int, Any, str]:
+        """Rate-limited POST via the active session.
+
+        Returns ``(status_code, headers, body)``. Raises on connection error.
+        """
+        self._enforce_min_interval()
+        kwargs: dict[str, Any] = {"timeout": self.timeout}
+        if json_body is not None:
+            kwargs["json"] = json_body
+        if extra_headers:
+            kwargs["headers"] = extra_headers
+        resp = self._session.post(url, **kwargs)
         return resp.status_code, resp.headers, (resp.text or "")
 
     # ------------------------------------------------------------------
@@ -560,21 +591,46 @@ class NswGovScraper(BaseScraper):
     # ------------------------------------------------------------------
 
     def _flatten_location(self, loc: Any) -> str:
-        """Flatten a location value (dict / str / None) to a readable string.
+        """Flatten a location value to a readable string.
 
+        Handles:
         - ``None`` → ``"NSW"`` (fallback per SYSTEM_DESIGN.md §7).
         - ``str`` → passthrough (stripped).
-        - ``dict`` with ``displayText`` → ``displayText`` (preferred).
-        - ``dict`` with ``region`` and ``suburb`` → ``"region / suburb"``.
-        - ``dict`` with only ``region`` → ``"region"``.
-        - ``dict`` with only ``suburb`` → ``"suburb"``.
+        - ad-core04 ``list`` of ``{"Name": ..., "Path": ...}`` dicts → joined names.
+        - Legacy ``dict`` with ``displayText``/``region``/``suburb`` fields.
         """
         if loc is None:
             return "NSW"
         if isinstance(loc, str):
             s = loc.strip()
             return s if s else "NSW"
+
+        # ad-core04 shape: list of dicts, each with Name + optional Path
+        if isinstance(loc, list):
+            names: list[str] = []
+            for item in loc:
+                if not isinstance(item, dict):
+                    continue
+                # Prefer Path (e.g. "Sydney / Sydney City") over just Name.
+                path = item.get("Path") or item.get("path")
+                name = item.get("Name") or item.get("name")
+                if isinstance(path, str) and path.strip():
+                    names.append(path.strip())
+                elif isinstance(name, str) and name.strip():
+                    names.append(name.strip())
+            if names:
+                return " / ".join(names[:3])  # cap at 3 to avoid runaway strings
+            return "NSW"
+
         if isinstance(loc, dict):
+            # ad-core04 single-location shape
+            path = loc.get("Path")
+            if isinstance(path, str) and path.strip():
+                return path.strip()
+            name = loc.get("Name")
+            if isinstance(name, str) and name.strip():
+                return name.strip()
+            # Legacy Next.js shapes
             display = loc.get("displayText")
             if isinstance(display, str) and display.strip():
                 return display.strip()
@@ -597,12 +653,53 @@ class NswGovScraper(BaseScraper):
     # ------------------------------------------------------------------
 
     def _fetch_search_page(self, page: int) -> dict[str, Any] | None:
-        """Fetch a single search-result page. Returns a dict with one of:
+        """Fetch a single search-result page via ad-core04 backend API.
 
-        - ``{"api": <json>, "html": None}`` — Next.js data API response.
-        - ``{"api": None, "html": <str>}`` — HTML listing page.
-        - ``None`` — fetch failed irrecoverably for this page.
+        Returns ``{"api": <parsed response dict>, "html": None}`` on success,
+        ``None`` on irrecoverable failure. Falls back to HTML/Next.js paths
+        only if the ad-core04 path errors out.
         """
+        # Primary path: ad-core04 backend (post-2026 site migration).
+        body = {
+            "Locations": [],
+            "Agencies": [],
+            "Branches": [],
+            "WorkTypes": [],
+            "RoleTypes": [],
+            "SalaryRanges": [],
+            "PostedDates": [],
+            "SearchTerm": self.keywords or "",
+            "PageNumber": page,
+            "PageSize": 20,
+            "SortBy": "RelevanceDesc",
+            "ForManageJobs": False,
+            "IsInternalJob": False,
+        }
+        try:
+            status, _headers, resp_body = self._nsw_http_post(
+                _ADCORE_SEARCH_URL,
+                json_body=body,
+                extra_headers={
+                    "Authorization": f"Bearer {_ADCORE_PUBLIC_TOKEN}",
+                    "Content-Type": "application/json",
+                    "Origin": _NSWGOV_BASE,
+                    "Referer": _NSWGOV_BASE + "/",
+                },
+            )
+            if status < 400:
+                data = json.loads(resp_body)
+                return {"api": data, "html": None}
+            self._emit_status(
+                "warn",
+                f"ad-core04 search HTTP {status} page {page} — falling back",
+            )
+        except Exception as exc:
+            self._emit_status(
+                "warn",
+                f"ad-core04 search error page {page}: {exc!r} — falling back",
+            )
+
+        # Legacy fallback (pre-2026 Next.js /_next/data/) — usually gone now.
         if self._build_id:
             api_url = f"{_NSWGOV_BASE}/_next/data/{self._build_id}/jobs.json"
             try:
@@ -698,19 +795,39 @@ class NswGovScraper(BaseScraper):
     # ------------------------------------------------------------------
 
     def _extract_jobs_from_api(self, api_data: Any) -> list[dict[str, Any]]:
-        """Extract the list of raw job payloads from a Next.js API response.
+        """Extract the list of raw job payloads from the API response.
 
-        Defensive — handles variations in field naming and nesting.
+        Handles:
+        - ad-core04 format: ``{"Jobs": {"$values": [{"Job": {...}}, ...]}}``
+          (items are wrapped in a container with a ``Job`` key).
+        - Legacy Next.js pageProps format with ``jobResults`` / ``jobs``.
         """
         if not isinstance(api_data, dict):
             return []
+
+        # ad-core04 format: Jobs is a .NET-serialized object with $values
+        jobs_container = api_data.get("Jobs")
+        if isinstance(jobs_container, dict) and "$values" in jobs_container:
+            values = jobs_container["$values"]
+            if isinstance(values, list):
+                # Each item wraps the actual job under "Job" key
+                extracted = []
+                for item in values:
+                    if isinstance(item, dict):
+                        job = item.get("Job")
+                        if isinstance(job, dict):
+                            extracted.append(job)
+                        else:
+                            extracted.append(item)
+                return extracted
+
+        # Legacy Next.js pageProps format
         page_props = api_data.get("pageProps")
         if isinstance(page_props, dict):
             for key in ("jobResults", "jobs", "results", "items"):
                 val = page_props.get(key)
                 if isinstance(val, list):
                     return val
-        # Also accept top-level lists as a degradation path.
         for key in ("jobResults", "jobs", "results"):
             val = api_data.get(key)
             if isinstance(val, list):
@@ -718,72 +835,127 @@ class NswGovScraper(BaseScraper):
         return []
 
     def _parse_job_from_api(self, payload: dict[str, Any]) -> JobRecord | None:
-        """Convert a single Next.js API job payload to a JobRecord."""
+        """Convert an ad-core04 job payload (PascalCase keys) to a JobRecord."""
         if not isinstance(payload, dict):
             return None
-        title = _coerce_str(payload.get("title"))
+
+        # ad-core04 uses PascalCase; fall back to legacy camelCase.
+        title = _coerce_str(payload.get("Title") or payload.get("title"))
         if not title:
             return None
 
+        # external_id priority: ReferenceNumber → ID → legacy
         external_id = _coerce_str(
-            payload.get("id")
+            payload.get("ReferenceNumber")
+            or payload.get("ID")
+            or payload.get("id")
             or payload.get("referenceNumber")
             or payload.get("jobId")
         )
+
+        # Company — BusinessName is the display name (e.g. "Department of
+        # Customer Service"), AgencyName is shorter (e.g. "Customer Service").
         company = _coerce_str(
-            payload.get("organisation")
+            payload.get("BusinessName")
+            or payload.get("AgencyName")
+            or payload.get("organisation")
             or payload.get("organization")
             or payload.get("agency")
-            or payload.get("department")
         ) or "NSW Government"
-        location = self._flatten_location(payload.get("location"))
+
+        # Location: ad-core04 returns a list of {Name, Path} dicts under "Location"
+        location_field = payload.get("Location") or payload.get("location")
+        location = self._flatten_location(location_field)
+
+        # Description: prefer plain text over HTMLDescription (will be
+        # sanitized by Node-side sanitize-html anyway).
         description = _coerce_str(
-            payload.get("description")
+            payload.get("Description")
+            or payload.get("ShortDescription")
+            or payload.get("HTMLDescription")
+            or payload.get("description")
             or payload.get("summary")
-            or payload.get("jobSummary")
         )
+
+        # URL — build from SharingKey pattern: /job/<id>/<sharing-key>
+        sharing_key = _coerce_str(payload.get("SharingKey"))
+        job_id = _coerce_str(payload.get("ID") or payload.get("id"))
         url = _coerce_str(payload.get("url") or payload.get("jobUrl") or payload.get("link"))
+        if not url and job_id and sharing_key:
+            url = f"{_NSWGOV_BASE}/job/{job_id}/{sharing_key}"
+        elif not url and job_id:
+            url = f"{_NSWGOV_BASE}/job/{job_id}"
         if url and not url.startswith("http"):
             url = _NSWGOV_BASE + (url if url.startswith("/") else "/" + url)
 
-        # Salary — prefer structured fields; fall back to display-text regex.
-        salary_payload = payload.get("salary")
-        salary_str: str | None = None
+        # Salary — ad-core04 has structured SalaryFrom / SalaryTo ints.
         salary_min: int | None = None
         salary_max: int | None = None
-        if isinstance(salary_payload, dict):
-            sp_min = salary_payload.get("min")
-            sp_max = salary_payload.get("max")
-            if isinstance(sp_min, (int, float)) and isinstance(sp_max, (int, float)):
-                salary_min = int(sp_min)
-                salary_max = int(sp_max)
-            salary_str = _coerce_str(salary_payload.get("displayText"))
-            if salary_min is None and salary_str:
-                salary_min, salary_max = self._parse_salary(salary_str)
-        elif isinstance(salary_payload, str):
-            salary_str = salary_payload
-            salary_min, salary_max = self._parse_salary(salary_payload)
+        salary_str: str | None = None
+        sf = payload.get("SalaryFrom")
+        st = payload.get("SalaryTo")
+        if isinstance(sf, (int, float)) and sf > 0:
+            salary_min = int(sf)
+        if isinstance(st, (int, float)) and st > 0:
+            salary_max = int(st)
+        if salary_min and salary_max:
+            salary_str = f"${salary_min:,} - ${salary_max:,}"
+        elif salary_min:
+            salary_str = f"${salary_min:,}"
 
-        # Classification
+        # Legacy fallback for older shape
+        if salary_min is None:
+            salary_payload = payload.get("salary")
+            if isinstance(salary_payload, dict):
+                sp_min = salary_payload.get("min")
+                sp_max = salary_payload.get("max")
+                if isinstance(sp_min, (int, float)) and isinstance(sp_max, (int, float)):
+                    salary_min = int(sp_min)
+                    salary_max = int(sp_max)
+                salary_str = _coerce_str(salary_payload.get("displayText"))
+                if salary_min is None and salary_str:
+                    salary_min, salary_max = self._parse_salary(salary_str)
+            elif isinstance(salary_payload, str):
+                salary_str = salary_payload
+                salary_min, salary_max = self._parse_salary(salary_payload)
+
+        # Classification — not directly in ad-core04 payload; derive from title/description.
         raw_classification = _coerce_str(
-            payload.get("classification") or payload.get("grade")
+            payload.get("Classification")
+            or payload.get("classification")
+            or payload.get("grade")
         )
         if not raw_classification:
             raw_classification = extract_classification(title) or extract_classification(description) or ""
         classification = _classification_label(raw_classification) if raw_classification else None
 
-        # Dates
+        # Dates: DateTo is closing, PublishDate/DateFrom is posted.
         closes_at = _parse_iso_date(
-            payload.get("closingDate") or payload.get("closesAt") or payload.get("closing_date")
+            payload.get("DateTo")
+            or payload.get("closingDate")
+            or payload.get("closesAt")
+            or payload.get("closing_date")
         )
         posted_at = _parse_iso_date(
-            payload.get("postedDate") or payload.get("postedAt") or payload.get("posted_at")
+            payload.get("PublishDate")
+            or payload.get("DateFrom")
+            or payload.get("CreatedOn")
+            or payload.get("postedDate")
+            or payload.get("postedAt")
         )
 
-        # Work type
-        work_type = _extract_work_type(
-            payload.get("employmentType") or payload.get("workType") or payload.get("jobType")
-        )
+        # Work type — WorkTypes is a list of {Name: "Full-Time"} dicts.
+        work_type_raw: str | None = None
+        wt_field = payload.get("WorkTypes") or payload.get("workType") or payload.get("jobType")
+        if isinstance(wt_field, list) and wt_field:
+            first = wt_field[0]
+            if isinstance(first, dict):
+                work_type_raw = _coerce_str(first.get("Name") or first.get("name"))
+            else:
+                work_type_raw = _coerce_str(first)
+        else:
+            work_type_raw = _coerce_str(wt_field)
+        work_type = _extract_work_type(work_type_raw)
 
         # Visa + security clearance (scan title+description)
         combined = f"{title} {description}".strip()
@@ -948,10 +1120,17 @@ class NswGovScraper(BaseScraper):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _has_more_pages(api_data: Any, current_page: int) -> bool:
+    def _has_more_pages(api_data: Any, current_page: int, page_size: int = 20) -> bool:
         """Return True if the API pagination metadata indicates more pages exist."""
         if not isinstance(api_data, dict):
             return False
+
+        # ad-core04 exposes JobCount (total matching jobs across all pages).
+        job_count = api_data.get("JobCount")
+        if isinstance(job_count, int) and job_count > 0:
+            total_pages = (job_count + page_size - 1) // page_size
+            return current_page < total_pages
+
         page_props = api_data.get("pageProps")
         pagination = None
         if isinstance(page_props, dict):

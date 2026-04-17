@@ -154,11 +154,11 @@ ${text.slice(0, 6000)}
 
 Output ONLY the JSON array.`;
   try {
-    // Default reasoning_effort applies (xhigh). Can be tuned down to
-    // 'minimal' later once we've measured actual output quality vs cost.
+    // 'medium' balances accuracy vs. token spend — xhigh was using ~500
+    // reasoning tokens per job for what is essentially a parse task.
     const raw = await chatCompletion(
       [{ role: 'user', content: prompt }],
-      { temperature: 0.1, max_tokens: 2048 }
+      { temperature: 0.1, max_tokens: 2048, reasoning_effort: 'medium' }
     );
     if (!raw) return null;
     const m = raw.match(/\[[\s\S]*\]/);

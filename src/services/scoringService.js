@@ -390,7 +390,7 @@ Respond as a JSON array of objects with "skill", "category", and "suggestion" fi
 
     const result = await chatCompletion([
       { role: 'system', content: prompt },
-    ], { temperature: 0.3, max_tokens: 4096 });
+    ], { temperature: 0.3, max_tokens: 4096, reasoning_effort: 'medium' });
 
     if (result) {
       // Try to parse JSON from response

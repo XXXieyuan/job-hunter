@@ -150,9 +150,24 @@ class LinkedInScraper(BaseScraper):
                 external_id: str | None = None
                 if link_tag and link_tag.get("href"):
                     job_url = link_tag["href"].split("?")[0]
+                    # Old format: /jobs/view/<digits>
+                    # New format: /jobs/view/<slug>-<digits> (digits appended
+                    # at the end of the URL after the SEO-friendly slug).
                     id_match = re.search(r"/jobs/view/(\d+)", job_url)
+                    if not id_match:
+                        id_match = re.search(r"-(\d+)(?:/|\?|$)", job_url)
+                    # Fall back to data-entity-urn on the card itself.
                     if id_match:
                         external_id = id_match.group(1)
+                    else:
+                        base_card = card.find(
+                            attrs={"data-entity-urn": True}
+                        )
+                        if base_card:
+                            urn = base_card.get("data-entity-urn", "")
+                            urn_match = re.search(r"jobPosting:(\d+)", urn)
+                            if urn_match:
+                                external_id = urn_match.group(1)
 
                 # Posted date (relative text like "2 days ago")
                 time_tag = card.find("time")

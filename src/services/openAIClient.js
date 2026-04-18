@@ -51,16 +51,20 @@ async function callOpenAI(path, body) {
       body: JSON.stringify(body),
     });
 
-    if (res.status === 429 && attempt < MAX_RETRIES) {
+    // Retry on transient errors: 429 (rate limited) and 5xx (upstream /
+    // Cloudflare issues — seen frequently on n1n.ai with reasoning=xhigh
+    // under load). Non-retriable 4xx (400, 401, 403) fall through to throw.
+    if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
       const delayMs = BASE_DELAY_MS * Math.pow(2, attempt); // 2s, 4s, 8s
-      logger.warn(`Rate limited (429). Retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+      const reason = res.status === 429 ? 'rate limited' : `upstream ${res.status}`;
+      logger.warn(`${reason}. Retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
       await sleep(delayMs);
       continue;
     }
 
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`OpenAI error ${res.status}: ${text}`);
+      throw new Error(`OpenAI error ${res.status}: ${text.slice(0, 500)}`);
     }
 
     return res.json();

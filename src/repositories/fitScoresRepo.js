@@ -23,6 +23,9 @@ function upsertFitScore({
     )
     .get(job_id, resume_id);
 
+  // Use `?? null` not `|| null` — `0` is a legitimate score that `||`
+  // would convert to NULL (JavaScript falsy coercion), which made the
+  // UI show null sub-scores as missing instead of "scored zero".
   if (existing) {
     db.prepare(
       `UPDATE job_fit_scores
@@ -32,12 +35,12 @@ function upsertFitScore({
        WHERE id = ?`
     ).run(
       overall_score,
-      semantic_score || null,
-      keyword_score || null,
-      role_alignment_score || null,
-      location_score || null,
-      breakdown_json || null,
-      skill_gaps_json || null,
+      semantic_score ?? null,
+      keyword_score ?? null,
+      role_alignment_score ?? null,
+      location_score ?? null,
+      breakdown_json ?? null,
+      skill_gaps_json ?? null,
       visa_match !== undefined ? visa_match : null,
       existing.id
     );
@@ -55,12 +58,12 @@ function upsertFitScore({
       job_id,
       resume_id,
       overall_score,
-      semantic_score || null,
-      keyword_score || null,
-      role_alignment_score || null,
-      location_score || null,
-      breakdown_json || null,
-      skill_gaps_json || null,
+      semantic_score ?? null,
+      keyword_score ?? null,
+      role_alignment_score ?? null,
+      location_score ?? null,
+      breakdown_json ?? null,
+      skill_gaps_json ?? null,
       visa_match !== undefined ? visa_match : null
     );
   return info.lastInsertRowid;

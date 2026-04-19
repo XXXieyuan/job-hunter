@@ -236,9 +236,11 @@ router.get('/jobs/:id', (req, res, next) => {
         const rawScores = getScoresForJobByUser(job.id, user.id);
         allScores = rawScores.map(s => {
           let matched_skills = [];
+          let match_details = [];
           try {
             const bd = JSON.parse(s.breakdown_json || '{}');
             matched_skills = bd.matched_skills || [];
+            match_details = bd.match_details || [];
           } catch { /* ignore */ }
           let missing_skills = [];
           try {
@@ -254,6 +256,7 @@ router.get('/jobs/:id', (req, res, next) => {
             location_score: s.location_score,
             matched_skills,
             missing_skills,
+            match_details,
           };
         });
 
@@ -282,7 +285,9 @@ router.get('/jobs/:id', (req, res, next) => {
     score = primaryScore;
     breakdown = {
       matched_keywords: primaryScore.matched_skills || [],
+      matched_skills: primaryScore.matched_skills || [],
       missing_skills: primaryScore.missing_skills || [],
+      match_details: primaryScore.match_details || [],
       total_keywords: (primaryScore.matched_skills || []).length + (primaryScore.missing_skills || []).length,
     };
   } else if (resume) {

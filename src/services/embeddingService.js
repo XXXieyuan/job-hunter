@@ -16,6 +16,8 @@ const { generateEmbedding, chatCompletion, hasOpenAIKey } = require('./openAICli
 const { OPENAI_EMBEDDING_MODEL } = require('../config');
 const backgroundQueue = require('./backgroundQueue');
 const jobsRepo = require('../repositories/jobsRepo');
+const resumesRepo = require('../repositories/resumesRepo');
+const skillEmbeddingsRepo = require('../repositories/skillEmbeddingsRepo');
 const { getLogger } = require('../logger');
 
 const logger = getLogger('embeddingService');
@@ -206,6 +208,75 @@ async function extractSkillsForMissingJobs({ limit = 200, effort } = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Per-skill embedding cache
+// ---------------------------------------------------------------------------
+
+/**
+ * Embed a batch of skill names into the global skill_embeddings cache.
+ * Dedupes and skips anything already cached.
+ */
+async function embedSkills(skillNames) {
+  const missing = skillEmbeddingsRepo.getMissing(skillNames);
+  if (missing.length === 0) {
+    return { candidateCount: 0, embedded: 0, errors: 0, alreadyCached: (skillNames || []).length };
+  }
+  logger.info('Embedding missing skills', { candidateCount: missing.length });
+  let embedded = 0;
+  let errors = 0;
+  for (const s of missing) {
+    try {
+      const v = await generateEmbedding(s);
+      if (!v) continue;
+      skillEmbeddingsRepo.setEmbedding(s, bufferFromFloats(v), DEFAULT_MODEL);
+      embedded++;
+    } catch (err) {
+      errors++;
+      logger.warn('Skill embedding failed', { skill: s, error: err.message });
+    }
+  }
+  logger.info('Skill embedding batch complete', { embedded, errors, candidateCount: missing.length });
+  return { candidateCount: missing.length, embedded, errors };
+}
+
+/**
+ * Sweep every unique skill appearing in jobs.required_skills_json and
+ * resumes.skills_json, and embed any that aren't cached yet. Called by
+ * the embed-skills background task.
+ */
+async function embedAllReferencedSkills() {
+  const unique = new Set();
+
+  // Collect from all active jobs with extracted skills.
+  const jobRows = jobsRepo.getAllJobsWithRequiredSkills();
+  for (const row of jobRows) {
+    try {
+      const arr = JSON.parse(row.required_skills_json || '[]');
+      if (Array.isArray(arr)) {
+        for (const s of arr) {
+          const name = typeof s === 'string' ? s : (s && s.skill);
+          if (name) unique.add(String(name).toLowerCase().trim());
+        }
+      }
+    } catch { /* ignore malformed rows */ }
+  }
+
+  // Collect from all resumes' skills arrays.
+  for (const resume of resumesRepo.getAllResumes()) {
+    try {
+      const arr = resume.skills_json ? JSON.parse(resume.skills_json) : [];
+      if (Array.isArray(arr)) {
+        for (const s of arr) {
+          const name = typeof s === 'string' ? s : (s && (s.name || s.skill));
+          if (name) unique.add(String(name).toLowerCase().trim());
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  return embedSkills([...unique]);
+}
+
+// ---------------------------------------------------------------------------
 // Background queue wiring
 // ---------------------------------------------------------------------------
 
@@ -217,6 +288,10 @@ backgroundQueue.registerHandler('extract-job-skills', async (params) => {
   return extractSkillsForMissingJobs(params || {});
 });
 
+backgroundQueue.registerHandler('embed-skills', async () => {
+  return embedAllReferencedSkills();
+});
+
 module.exports = {
   buildJobEmbeddingText,
   bufferFromFloats,
@@ -225,4 +300,6 @@ module.exports = {
   embedMissingJobs,
   extractJobRequiredSkills,
   extractSkillsForMissingJobs,
+  embedSkills,
+  embedAllReferencedSkills,
 };

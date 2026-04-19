@@ -359,6 +359,26 @@ function ensureRequiredSkillsColumn(db) {
   _requiredSkillsColumnEnsured = true;
 }
 
+/**
+ * All active non-duplicate jobs that already have a non-empty
+ * required_skills_json. Used by the embed-skills sweep to collect the
+ * universe of skill names for global embedding.
+ */
+function getAllJobsWithRequiredSkills() {
+  const db = getDbInstance();
+  ensureRequiredSkillsColumn(db);
+  return db
+    .prepare(
+      `SELECT id, required_skills_json
+         FROM jobs
+        WHERE is_active = 1
+          AND canonical_job_id IS NULL
+          AND required_skills_json IS NOT NULL
+          AND required_skills_json != ''`
+    )
+    .all();
+}
+
 function getJobsMissingRequiredSkills(limit = 200) {
   const db = getDbInstance();
   ensureRequiredSkillsColumn(db);
@@ -762,6 +782,7 @@ module.exports = {
   getJobsMissingEmbedding,
   updateJobEmbedding,
   getJobsMissingRequiredSkills,
+  getAllJobsWithRequiredSkills,
   updateJobRequiredSkills,
   getDuplicateSourcesForJob,
   getJobApplicationForUser,

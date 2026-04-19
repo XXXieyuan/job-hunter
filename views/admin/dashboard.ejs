@@ -271,10 +271,12 @@
         <button id="run-analysis-btn" class="btn btn-primary btn-sm">Run Analysis</button>
         <button id="embed-jobs-btn" class="btn btn-ghost btn-sm" title="Precompute embeddings for jobs that don't have them yet. Makes scoring fast.">Embed missing jobs</button>
         <button id="extract-skills-btn" class="btn btn-ghost btn-sm" title="Use LLM to extract required skills from job descriptions. Keyword scoring uses this list.">Extract job skills</button>
+        <button id="embed-skills-vocab-btn" class="btn btn-ghost btn-sm" title="Embed every unique skill word into a global cache. Enables semantic matching so 'aws' in a JD can match 'Azure' on a resume.">Embed skill vocabulary</button>
       </div>
       <p id="run-analysis-status" class="text-muted" style="font-size: 12px; margin-top: 8px;"></p>
       <p id="embed-jobs-status" class="text-muted" style="font-size: 12px; margin-top: 4px;"></p>
       <p id="extract-skills-status" class="text-muted" style="font-size: 12px; margin-top: 4px;"></p>
+      <p id="embed-skills-vocab-status" class="text-muted" style="font-size: 12px; margin-top: 4px;"></p>
 
       <!-- Analysis Runs History Table -->
       <h3 style="margin-top: 16px; font-size: 14px; font-weight: 500;">Recent Analysis Runs</h3>
@@ -739,6 +741,7 @@
   }
   wireBackfillBtn('embed-jobs-btn', 'embed-jobs-status', '/admin/embeddings/run', 'embedding backfill');
   wireBackfillBtn('extract-skills-btn', 'extract-skills-status', '/admin/extract-skills/run', 'skill extraction');
+  wireBackfillBtn('embed-skills-vocab-btn', 'embed-skills-vocab-status', '/admin/embed-skills/run', 'skill-vocab embed');
 
   // ── Error Log Viewer ──
   var errorLogContainer = document.getElementById('error-log-container');

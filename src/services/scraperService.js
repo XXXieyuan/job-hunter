@@ -272,6 +272,7 @@ function runCrawler(platform, config, runId) {
           maybeEnqueue('dedup', `Auto-dedup after ${platform} scrape (run ${runId}, +${stats.jobs_new} new)`);
           maybeEnqueue('embed-jobs', `Auto-embed after ${platform} scrape (run ${runId}, +${stats.jobs_new} new)`);
           maybeEnqueue('extract-job-skills', `Auto-extract job skills after ${platform} scrape (run ${runId}, +${stats.jobs_new} new)`);
+          maybeEnqueue('embed-skills', `Auto-embed skill vocab after ${platform} scrape (run ${runId})`);
         }
         resolve(stats);
       } else {

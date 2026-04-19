@@ -34,6 +34,18 @@
     } catch(e) {}
   }
   var _matchedSkills = _breakdown.matched_skills || _breakdown.matched_keywords || _skillGaps.matched || [];
+  // match_type chip lookup: keyed by lowercased skill name.
+  // computeKeywordScore writes _breakdown.match_details: array of
+  // { skill, match_type, matched_against?, similarity? } for ALL
+  // required skills (matched + missing). Only matched entries matter here.
+  var _matchTypeBySkill = {};
+  if (Array.isArray(_breakdown.match_details)) {
+    _breakdown.match_details.forEach(function(d) {
+      if (d && d.skill && d.match_type && d.match_type !== 'missing') {
+        _matchTypeBySkill[String(d.skill).toLowerCase().trim()] = d;
+      }
+    });
+  }
   // jobsRoutes pre-parses skill_gaps_json into score.missing_skills /
   // breakdown.missing_skills as an array of {skill, category, suggestion}
   // objects. Use that directly — the template previously only looked at
@@ -346,8 +358,19 @@
                   <%= _t('jobs.detail.match.matchedSkills', 'Matched Skills') %>
                 </h4>
                 <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                  <% _matchedSkills.forEach(function(skill) { %>
-                    <span style="display: inline-block; padding: 4px 10px; font-size: 12px; border-radius: 20px; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;"><%= typeof skill === 'object' ? skill.name || skill.skill : skill %></span>
+                  <% _matchedSkills.forEach(function(skill) {
+                    var _skillName = typeof skill === 'object' ? (skill.name || skill.skill || '') : String(skill);
+                    var _mt = _matchTypeBySkill[_skillName.toLowerCase().trim()];
+                    var _chipLabel = '';
+                    if (_mt && _mt.match_type === 'experience') _chipLabel = 'via experience';
+                    else if (_mt && _mt.match_type === 'semantic') _chipLabel = 'semantic';
+                  %>
+                    <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: 12px; border-radius: 20px; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;">
+                      <%= _skillName %>
+                      <% if (_chipLabel) { %>
+                        <span style="font-size: 10px; padding: 1px 6px; border-radius: 10px; background: rgba(5, 150, 105, 0.15); color: #065f46;"><%= _chipLabel %></span>
+                      <% } %>
+                    </span>
                   <% }); %>
                 </div>
               </div>

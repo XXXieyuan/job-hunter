@@ -621,6 +621,18 @@ router.post('/admin/extract-skills/run', express.json({ limit: '1mb' }), (req, r
 });
 
 // ──────────────────────────────────────────────────────────────
+// POST /admin/embed-skills/run — Embed every unique skill name in use
+// (job required_skills + resume skills) into the global cache table.
+// ──────────────────────────────────────────────────────────────
+router.post('/admin/embed-skills/run', (req, res) => {
+  backgroundQueue.enqueue('embed-skills', {}, {
+    description: 'Backfill skill-vocabulary embeddings for semantic keyword match',
+  });
+  logger.info('Admin triggered skill-embed backfill');
+  res.json({ status: 'queued' });
+});
+
+// ──────────────────────────────────────────────────────────────
 // T-J.4: GET /admin/dedup/groups — List duplicate groups (paginated)
 // ──────────────────────────────────────────────────────────────
 

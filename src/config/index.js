@@ -32,6 +32,13 @@ const SCRAPER_MAX_PAGES = parseInt(process.env.SCRAPER_MAX_PAGES, 10) || 5;
 // Python path for curl_cffi scrapers
 const PYTHON_PATH = process.env.PYTHON_PATH || 'python3';
 
+// Cosine-similarity cutoff at which the semantic keyword matcher marks a
+// required skill as "covered" by a resume skill. text-embedding-3-large
+// clusters related tech terms around 0.3–0.5; unrelated pairs stay < 0.2.
+const SEMANTIC_KEYWORD_MATCH_THRESHOLD = parseFloat(
+  process.env.SEMANTIC_KEYWORD_MATCH_THRESHOLD || '0.35'
+);
+
 // Resume upload
 const RESUME_MAX_SIZE_BYTES = parseInt(process.env.RESUME_MAX_SIZE_BYTES, 10) || 5 * 1024 * 1024; // 5MB
 const RESUME_UPLOAD_DIR = process.env.RESUME_UPLOAD_DIR ||
@@ -66,6 +73,7 @@ module.exports = {
   SCRAPER_RATE_LIMIT_MS,
   SCRAPER_MAX_PAGES,
   PYTHON_PATH,
+  SEMANTIC_KEYWORD_MATCH_THRESHOLD,
   RESUME_MAX_SIZE_BYTES,
   RESUME_UPLOAD_DIR,
   SMTP_HOST,

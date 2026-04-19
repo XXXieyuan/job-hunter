@@ -2,7 +2,8 @@ const { hasOpenAIKey, generateEmbedding, chatCompletion } = require('./openAICli
 const fitScoresRepo = require('../repositories/fitScoresRepo');
 const resumesRepo = require('../repositories/resumesRepo');
 const jobsRepo = require('../repositories/jobsRepo');
-const { OPENAI_EMBEDDING_MODEL } = require('../config');
+const skillEmbeddingsRepo = require('../repositories/skillEmbeddingsRepo');
+const { OPENAI_EMBEDDING_MODEL, SEMANTIC_KEYWORD_MATCH_THRESHOLD } = require('../config');
 const {
   decodeEmbedding,
   bufferFromFloats,
@@ -183,44 +184,133 @@ async function computeSemanticScore(job, resume) {
 // Keyword Score (0-100)
 // ──────────────────────────────────────────────
 
+/**
+ * Build one big normalized text blob covering skills + experience +
+ * education + summary. Used for Tier-B keyword matching so a skill
+ * mentioned in an experience description (e.g. "built chatbot with
+ * OpenAI API") counts, not just a literal match in skills[].
+ */
+function buildResumeSearchText(resume) {
+  const skills = extractSkills(resume);
+  const experience = extractExperience(resume);
+  let education = [];
+  try {
+    education = resume.education_json ? JSON.parse(resume.education_json) : [];
+    if (!Array.isArray(education)) education = [];
+  } catch { education = []; }
+
+  const expText = experience
+    .map((e) => `${e.title || ''} ${e.company || e.employer || ''} ${e.description || ''}`)
+    .join(' ');
+  const eduText = education
+    .map((e) => `${e.degree || ''} ${e.institution || ''}`)
+    .join(' ');
+
+  return normalize([
+    resume.summary || '',
+    skills.join(' '),
+    expText,
+    eduText,
+  ].join(' '));
+}
+
 function computeKeywordScore(job, resume) {
   const resumeSkills = extractSkills(resume);
-  if (resumeSkills.length === 0) return { score: 0, matched: [], missing: [] };
+  if (resumeSkills.length === 0) return { score: 0, matched: [], missing: [], details: [] };
 
-  // Preferred path: the job has a curated required_skills list (extracted
-  // by LLM at ingest time). We use set intersection against resume skills
-  // so a 50-skill resume that covers 4/5 required skills scores 80%, not
-  // 8%. "missing" becomes "required skills the candidate doesn't have".
+  // Preferred path: the job has a curated required_skills list (LLM-extracted
+  // at ingest). Score = covered / required. Match is a three-tier lookup:
+  //   A. literal in resume.skills array
+  //   B. literal anywhere in resume text (summary + experience + education)
+  //   C. semantic — cosine(skill, each resume skill vector) >= threshold,
+  //      using the global skill_embeddings cache
   let jobRequired = null;
   if (job.required_skills_json) {
     try {
       const parsed = JSON.parse(job.required_skills_json);
       if (Array.isArray(parsed)) jobRequired = parsed;
-    } catch { /* ignore */ }
+    } catch { /* ignore malformed */ }
   }
 
   if (jobRequired && jobRequired.length > 0) {
-    const resumeSet = new Set(resumeSkills.map((s) => normalize(s)).filter(Boolean));
+    const resumeSkillsNorm = resumeSkills.map((s) => normalize(s)).filter(Boolean);
+    const resumeSet = new Set(resumeSkillsNorm);
+    const searchText = buildResumeSearchText(resume);
+
+    // Pre-decode every resume-skill embedding we have cached (one DB hit).
+    const resumeSkillVectors = [];
+    try {
+      const cache = skillEmbeddingsRepo.getEmbeddingsBulk(resumeSkillsNorm);
+      for (const name of resumeSkillsNorm) {
+        const buf = cache.get(name);
+        if (buf) {
+          const v = decodeEmbedding(buf);
+          if (v) resumeSkillVectors.push({ name, vec: v });
+        }
+      }
+    } catch (err) {
+      logger.warn('Failed to load resume skill embeddings', { error: err.message });
+    }
+
     const matched = [];
     const missing = [];
+    const details = [];
+
     for (const reqRaw of jobRequired) {
       const req = normalize(reqRaw);
       if (!req) continue;
-      // Match on normalized equality OR substring containment either way
-      // (e.g. "react" matches "react.js" and vice versa).
-      const hit = resumeSet.has(req) ||
-        Array.from(resumeSet).some((r) => r.includes(req) || req.includes(r));
-      if (hit) matched.push(reqRaw);
-      else missing.push(reqRaw);
+
+      // Tier A — literal match in resume.skills
+      if (resumeSet.has(req) ||
+          resumeSkillsNorm.some((r) => r.includes(req) || req.includes(r))) {
+        matched.push(reqRaw);
+        details.push({ skill: reqRaw, match_type: 'skills' });
+        continue;
+      }
+
+      // Tier B — literal mention in full resume text (includes experience
+      // descriptions). Use word-boundary-ish check to avoid super-short
+      // query false matches like "ml" appearing inside "html".
+      if (req.length >= 3 && searchText.includes(req)) {
+        matched.push(reqRaw);
+        details.push({ skill: reqRaw, match_type: 'experience' });
+        continue;
+      }
+
+      // Tier C — semantic cosine match against cached skill vectors
+      const reqEmbBuf = skillEmbeddingsRepo.getEmbedding(req);
+      if (reqEmbBuf) {
+        const reqVec = decodeEmbedding(reqEmbBuf);
+        if (reqVec && resumeSkillVectors.length > 0) {
+          let bestSim = 0;
+          let bestSkill = null;
+          for (const { name, vec } of resumeSkillVectors) {
+            const sim = cosineSimilarity(reqVec, vec);
+            if (sim > bestSim) { bestSim = sim; bestSkill = name; }
+          }
+          if (bestSim >= SEMANTIC_KEYWORD_MATCH_THRESHOLD) {
+            matched.push(reqRaw);
+            details.push({
+              skill: reqRaw,
+              match_type: 'semantic',
+              matched_against: bestSkill,
+              similarity: Math.round(bestSim * 1000) / 1000,
+            });
+            continue;
+          }
+        }
+      }
+
+      missing.push(reqRaw);
+      details.push({ skill: reqRaw, match_type: 'missing' });
     }
+
     const score = clamp((matched.length / jobRequired.length) * 100, 0, 100);
-    return { score, matched, missing };
+    return { score, matched, missing, details };
   }
 
-  // Fallback: no curated list yet (e.g. job still pending skill extraction,
-  // or LLM unavailable). Use the old "resume skill mentioned in job text"
-  // heuristic, but cap the denominator so long resumes aren't penalised.
-  // 5+ hits → full credit; under 5 scales proportionally.
+  // Fallback: no curated list yet. Resume-skill-in-job-text heuristic with a
+  // capped denominator so long resumes aren't punished.
   const jobTextLower = normalize(`${job.title || ''}\n${job.description || ''}`);
   const matched = [];
   const missing = [];
@@ -231,7 +321,7 @@ function computeKeywordScore(job, resume) {
   }
   const FULL_CREDIT_AT = 5;
   const score = clamp((matched.length / FULL_CREDIT_AT) * 100, 0, 100);
-  return { score, matched, missing };
+  return { score, matched, missing, details: [] };
 }
 
 // ──────────────────────────────────────────────
@@ -509,7 +599,7 @@ async function scoreJobAgainstResume(job, resume, opts = {}) {
     computeRoleAlignmentScore(job, resume),
   ]);
 
-  const { score: keywordScore, matched, missing } = computeKeywordScore(job, resume);
+  const { score: keywordScore, matched, missing, details: matchDetails } = computeKeywordScore(job, resume);
   const locationScore = computeLocationScore(job, resume);
 
   // Composite score calculation
@@ -553,9 +643,14 @@ async function scoreJobAgainstResume(job, resume, opts = {}) {
   const valuesInternationalExperience = detectInternationalExperience(resume);
 
   // Build breakdown JSON per INTERFACE_CONTRACT.md Section 2 (lines 208-230)
+  // match_details is keyed by skill name and carries the tier ('skills' |
+  // 'experience' | 'semantic') plus, for semantic hits, which resume skill
+  // it matched against and the similarity score. Used by the UI to show a
+  // subtle chip ("via experience", "semantic") next to matched skills.
   const breakdown = {
     matched_skills: matched,
     missing_skills: skillGaps,
+    match_details: matchDetails || [],
     role_alignment_detail: roleAlignmentDetail,
     location_detail: locationDetail,
     visa_note: visaNote,

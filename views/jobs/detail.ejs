@@ -34,7 +34,15 @@
     } catch(e) {}
   }
   var _matchedSkills = _breakdown.matched_skills || _breakdown.matched_keywords || _skillGaps.matched || [];
-  var _missingSkillsDetail = (_skillGaps.missing_skills_detail || []);
+  // jobsRoutes pre-parses skill_gaps_json into score.missing_skills /
+  // breakdown.missing_skills as an array of {skill, category, suggestion}
+  // objects. Use that directly — the template previously only looked at
+  // _skillGaps.missing_skills_detail, which jobsRoutes never sets, so
+  // every item fell through to a fallback that wrapped the object as
+  // { skill: <object> } and rendered it as "[object Object]".
+  var _missingSkillsDetail = _skillGaps.missing_skills_detail
+    || _breakdown.missing_skills
+    || [];
 
   // Categorize missing skills
   var _hardReq = [];
@@ -56,7 +64,11 @@
     if (_skillGaps.hard_requirement) _hardReq = _skillGaps.hard_requirement.map(function(s) { return { skill: s, category: 'hard_requirement' }; });
     if (_skillGaps.closeable) _closeable = _skillGaps.closeable.map(function(s) { return { skill: s, category: 'closeable' }; });
     if (_skillGaps.reframeable) _reframeable = _skillGaps.reframeable.map(function(s) { return { skill: s, category: 'reframeable' }; });
-    if (_breakdown.missing_skills) _uncategorized = _breakdown.missing_skills.map(function(s) { return { skill: s, category: 'unknown' }; });
+    if (_breakdown.missing_skills) _uncategorized = _breakdown.missing_skills.map(function(s) {
+      // s may be a plain string or already an object {skill, category, suggestion}
+      if (typeof s === 'object' && s !== null && s.skill) return s;
+      return { skill: String(s), category: 'unknown' };
+    });
   }
 
   // Score components

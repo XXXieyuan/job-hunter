@@ -59,10 +59,14 @@
         style="stroke-dashoffset: 100;"
       />
       <% } %>
-      <text class="score-ring__label" x="18" y="18" text-anchor="middle" dominant-baseline="central">
-        <%= _score !== null ? _score + '%' : '-- %' %>
-      </text>
     </svg>
+    <%# Label is a DIV overlaid on top of the SVG — NOT inside the SVG.
+       The SVG has transform: rotate(-90deg) so the stroke starts at 12
+       o'clock; any <text> inside the SVG would inherit that rotation
+       and render vertically. Keeping the label as a sibling div lets it
+       stay upright and respect the existing .score-ring__label CSS
+       (position: absolute; inset: 0; flex-centered). %>
+    <div class="score-ring__label"><%= _score !== null ? _score + '%' : '-- %' %></div>
   </div>
   <span class="score-label">
     <% if (_score !== null) { %>

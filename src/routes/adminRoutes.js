@@ -247,12 +247,15 @@ router.post('/admin/scraper/run', express.json({ limit: '1mb' }), (req, res) => 
     });
   }
 
-  // Rate limit: 6 per hour global
+  // Rate limit: 60 per hour global. Bumped from 6 to support orchestrated
+  // multi-keyword sweeps (8 keywords × 5 sources = 40 triggers in <2 min).
+  // The downstream queue is serial so we don't risk overwhelming scrapers
+  // — each one still runs its full crawl one at a time.
   const recentCount = scraperRunsRepo.countRecentRuns(3600000);
-  if (recentCount >= 6) {
+  if (recentCount >= 60) {
     res.set('Retry-After', '3600');
     return res.status(429).json({
-      error: { code: 'RATE_LIMITED', message: 'Scraper rate limit exceeded. Maximum 6 runs per hour.' },
+      error: { code: 'RATE_LIMITED', message: 'Scraper rate limit exceeded. Maximum 60 runs per hour.' },
     });
   }
 

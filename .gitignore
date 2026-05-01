@@ -1,9 +1,12 @@
 node_modules/
+.coverage
 data/*.sqlite
 data/*.sqlite-wal
 data/*.sqlite-shm
 data/*.sqlite.backup-*
 data/resumes/
+data/uploads/
+data/sample-resume.json
 logs/
 .env
 
@@ -17,6 +20,11 @@ scrapers/__pycache__/
 
 # Scraper stderr logs
 *_stderr*.log
+tmp-*.log
+
+# Local experiment outputs
+scripts/effort-comparison/*.log
+scripts/effort-comparison/top10-*.json
 
 # Scraper run data
 runs/

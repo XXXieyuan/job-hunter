@@ -48,6 +48,27 @@ _VISA_PATTERNS = [
 ]
 
 
+def _slugify_job_title(value: str | None) -> str | None:
+    """Convert an APS job title into the slug used by the public detail URLs."""
+    if not value:
+        return None
+
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", value.replace("&", " ").strip())
+    slug = re.sub(r"-{2,}", "-", slug).strip("-").lower()
+    return slug or None
+
+
+def _build_job_detail_url(title: str | None, job_id: str | None, reference: str | None) -> str:
+    """Build the canonical public APS job detail URL when jobId is available."""
+    if job_id:
+        slug = _slugify_job_title(title)
+        if slug:
+            return f"{_APSJOBS_BASE}/s/job-details?title={slug}&Id={job_id}"
+        return f"{_APSJOBS_BASE}/s/job-details?Id={job_id}"
+
+    return f"{_APSJOBS_BASE}/s/job-details/{reference}"
+
+
 def _extract_visa_requirement(text: str) -> str | None:
     """Detect visa/citizenship requirements from job description text."""
     if not text:
@@ -448,7 +469,7 @@ class APSJobsScraper(BaseScraper):
                         pass
 
                 # Build job URL
-                job_url = f"{_APSJOBS_BASE}/s/job-details/{reference}"
+                job_url = _build_job_detail_url(parsed["title"], parsed.get("job_id"), reference)
 
                 # Normalise work type
                 work_type = parsed.get("work_type")

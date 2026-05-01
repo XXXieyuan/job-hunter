@@ -343,3 +343,117 @@
     max-width: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Full App Redesign v1 - Salary Insights
+   -------------------------------------------------------------------------- */
+
+.salary-page {
+  max-width: var(--content-max-width, 1180px);
+  padding: var(--space-6, 24px) clamp(16px, 3vw, 28px) var(--space-10, 48px);
+}
+
+.salary-page-header {
+  margin-bottom: var(--space-6, 24px);
+  padding: clamp(24px, 4vw, 44px);
+  border: 1px solid var(--border-subtle, #D8E0EA);
+  border-radius: var(--radius-2xl, 32px);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(235, 245, 255, 0.88)),
+    radial-gradient(circle at 92% 8%, rgba(20, 184, 166, 0.14), transparent 34%);
+  box-shadow: var(--shadow-soft, 0 24px 80px rgba(23, 32, 51, 0.08));
+}
+
+.salary-page-header h1 {
+  max-width: 760px;
+  color: var(--text, #172033);
+  font-size: clamp(34px, 5vw, 64px);
+  line-height: 0.94;
+  letter-spacing: -0.07em;
+}
+
+.salary-page-header .salary-subtitle {
+  max-width: 720px;
+  color: var(--text-secondary, #526071);
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.salary-filter-bar {
+  top: 96px;
+  padding: var(--space-4, 16px) !important;
+  border-color: var(--border-subtle, #D8E0EA);
+  border-radius: var(--radius-xl, 24px);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-card, 0 14px 40px rgba(23, 32, 51, 0.08));
+  backdrop-filter: blur(18px);
+}
+
+.salary-filter-group label,
+.salary-active-filters,
+.salary-group-indicator,
+.salary-sample-sizes,
+.salary-footnote {
+  color: var(--text-secondary, #526071);
+}
+
+.salary-filter-group input,
+.salary-filter-group select {
+  border-color: var(--border-subtle, #D8E0EA);
+  border-radius: var(--radius-md, 14px);
+  background: #fff;
+  color: var(--text, #172033);
+}
+
+.salary-filter-group input:focus,
+.salary-filter-group select:focus {
+  outline: none;
+  border-color: var(--accent-primary, #2563EB);
+  box-shadow: var(--focus-ring, 0 0 0 4px rgba(37, 99, 235, 0.14));
+}
+
+.salary-filter-reset,
+.salary-error-state .salary-retry-btn {
+  border-radius: var(--radius-md, 14px);
+  font-weight: 700;
+}
+
+.salary-chart-container,
+.salary-error-state,
+.salary-empty-state {
+  border: 1px solid var(--border-subtle, #D8E0EA);
+  border-radius: var(--radius-xl, 24px);
+  background:
+    linear-gradient(rgba(216, 224, 234, 0.48) 1px, transparent 1px),
+    linear-gradient(135deg, #FFFFFF, #F7FBFF);
+  background-size: 100% 56px, auto;
+  box-shadow: var(--shadow-card, 0 14px 40px rgba(23, 32, 51, 0.08));
+}
+
+.salary-chart-container {
+  overflow-x: auto;
+}
+
+.salary-banner {
+  border-radius: var(--radius-lg, 18px);
+  border-left-width: 0;
+  box-shadow: 0 10px 30px rgba(23, 32, 51, 0.05);
+}
+
+.salary-banner-warning {
+  border: 1px solid rgba(217, 119, 6, 0.25);
+}
+
+.salary-banner-info {
+  border: 1px solid rgba(37, 99, 235, 0.22);
+}
+
+.salary-page .sr-only {
+  position: fixed !important;
+  left: -10000px !important;
+  top: auto !important;
+  width: 1px !important;
+  max-width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+}

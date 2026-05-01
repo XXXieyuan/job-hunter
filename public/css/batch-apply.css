@@ -1203,3 +1203,111 @@
     transition: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Full App Redesign v1 - Batch Apply
+   -------------------------------------------------------------------------- */
+
+.ba-profile-form,
+.ba-job-card,
+.ba-progress-container,
+.ba-history-container,
+.ba-dialog {
+  border: 1px solid var(--border-subtle, #D8E0EA);
+  border-radius: var(--radius-xl, 24px);
+  background: linear-gradient(135deg, #FFFFFF, #F7FBFF);
+  box-shadow: var(--shadow-card, 0 14px 40px rgba(23, 32, 51, 0.08));
+}
+
+.ba-profile-form {
+  max-width: 860px;
+  padding: var(--space-7, 32px);
+}
+
+.ba-profile-hint,
+.ba-select-bar,
+.ba-progress-overlay,
+.ba-progress-summary,
+.ba-history-row {
+  border-radius: var(--radius-lg, 18px);
+}
+
+.ba-profile-hint {
+  border: 1px solid rgba(20, 184, 166, 0.22);
+  border-left: 5px solid var(--accent-secondary, #0E9AA7);
+  background: rgba(20, 184, 166, 0.09);
+}
+
+.ba-profile-field__input,
+.ba-profile-field__select,
+.ba-dialog__btn,
+.ba-profile-actions__save {
+  border-radius: var(--radius-md, 14px);
+}
+
+.ba-profile-field__input,
+.ba-profile-field__select {
+  border-color: var(--border-subtle, #D8E0EA);
+  background: #fff;
+}
+
+.ba-profile-field__input:focus,
+.ba-profile-field__select:focus {
+  border-color: var(--accent-primary, #2563EB);
+  box-shadow: var(--focus-ring, 0 0 0 4px rgba(37, 99, 235, 0.14));
+}
+
+.ba-profile-actions__save,
+.ba-dialog__btn--confirm {
+  background: linear-gradient(135deg, var(--accent-primary, #2563EB), #1747B8);
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.22);
+}
+
+.ba-job-card {
+  transition: transform var(--transition-fast, 0.16s ease),
+              box-shadow var(--transition-fast, 0.16s ease),
+              border-color var(--transition-fast, 0.16s ease);
+}
+
+.ba-job-card:hover {
+  border-color: rgba(37, 99, 235, 0.28);
+  box-shadow: var(--shadow-lift, 0 22px 64px rgba(23, 32, 51, 0.14));
+  transform: translateY(-1px);
+}
+
+.ba-select-checkbox {
+  border-radius: 8px;
+}
+
+.ba-select-checkbox--checked,
+.ba-select-card--checked {
+  border-color: var(--accent-primary, #2563EB);
+}
+
+.ba-select-card--checked {
+  border-left-width: 5px;
+  background: linear-gradient(135deg, #FFFFFF, #EEF7FF);
+}
+
+.ba-select-bar {
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-soft, 0 24px 80px rgba(23, 32, 51, 0.08));
+  backdrop-filter: blur(18px);
+}
+
+.ba-job-badge,
+.ba-history-status,
+.ba-progress-status {
+  border-radius: var(--radius-full, 999px);
+}
+
+.ba-history-table th {
+  color: var(--text-secondary, #526071);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ba-job-card:hover {
+    transform: none;
+  }
+}

@@ -36,6 +36,11 @@
 
       <% if (_user) { %>
       <a
+        href="/job-board"
+        class="nav-link <%= _currentPath.startsWith('/job-board') ? 'active' : '' %>"
+      ><%= _t('nav.jobBoard', 'Job Board') %></a>
+
+      <a
         href="/resumes"
         class="nav-link <%= _currentPath.startsWith('/resumes') ? 'active' : '' %>"
       ><%= _t('nav.resumes', 'Resumes') %></a>
@@ -59,18 +64,6 @@
     </nav>
 
     <div class="nav-right">
-      <div class="lang-toggle" aria-label="<%= _t('nav.language', 'Language') %>">
-        <a
-          href="/lang/zh"
-          class="lang-pill <%= _locale === 'zh' ? 'active' : '' %>"
-        ><%= _t('lang.zh', '中') %></a>
-        <span class="lang-separator">·</span>
-        <a
-          href="/lang/en"
-          class="lang-pill <%= _locale === 'en' ? 'active' : '' %>"
-        ><%= _t('lang.en', 'EN') %></a>
-      </div>
-
       <% if (_user) { %>
         <span class="nav-user-email"><%= _user.display_name || _user.email %></span>
         <a href="/auth/logout" class="btn btn-ghost btn-sm"><%= _t('nav.signOut', 'Sign Out') %></a>

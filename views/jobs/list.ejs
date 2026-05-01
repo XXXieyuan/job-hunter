@@ -13,32 +13,72 @@
   var _hasResume = typeof hasResume !== 'undefined' ? hasResume : false;
   var _sourceFreshness = typeof sourceFreshness !== 'undefined' ? sourceFreshness : {};
   var _scoringInProgress = typeof scoringInProgress !== 'undefined' ? scoringInProgress : false;
+  var _activeRoles = typeof activeRoles !== 'undefined' && Array.isArray(activeRoles) ? activeRoles : [];
+  var _categoryCounts = typeof categoryCounts !== 'undefined' ? categoryCounts : {};
+  var _allCategories = typeof allCategories !== 'undefined' && Array.isArray(allCategories) ? allCategories : [];
 
   // Determine stale sources (>24h)
   var _staleSources = [];
   var _now = Date.now();
   var _24h = 24 * 60 * 60 * 1000;
-  ['linkedin', 'seek', 'apsjobs'].forEach(function(src) {
+  ['linkedin', 'seek', 'apsjobs', 'actgov', 'nswgov'].forEach(function(src) {
     if (_sourceFreshness[src]) {
       var ts = new Date(_sourceFreshness[src]).getTime();
       if (_now - ts > _24h) _staleSources.push(src);
     }
   });
+  var _bestScore = null;
+  var _bestTitle = null;
+  _jobs.forEach(function(job) {
+    var jobScore = null;
+    if (job.fit_score && typeof job.fit_score === 'object') jobScore = job.fit_score.overall_score;
+    else if (typeof job.overall_score === 'number') jobScore = job.overall_score;
+    if (typeof jobScore === 'number' && (_bestScore === null || jobScore > _bestScore)) {
+      _bestScore = Math.round(jobScore);
+      _bestTitle = job.title;
+    }
+  });
+  var _sourceCount = _filters.source
+    ? (Array.isArray(_filters.source) ? _filters.source.length : String(_filters.source).split(',').filter(Boolean).length)
+    : 5;
+  var _resumeStatus = _hasResume ? 'Ready' : 'Missing';
 %>
 
 <!-- Page Header -->
-<section style="padding: 24px 16px 0; max-width: 1200px; margin: 0 auto;">
-  <h1 style="font-size: 28px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; color: var(--text, #1A1D23); margin-bottom: 4px;">
-    <%= _t('jobs.list.title', 'Job Listings') %>
-  </h1>
-  <p style="font-size: 14px; color: var(--text-secondary, #4B5563); margin-bottom: 20px;">
-    <%= _totalCount %> <%= _t('jobs.list.subtitle', 'jobs from Seek, LinkedIn, and APSJobs') %>
+<section class="jh-page-head jobs-page-head">
+  <div class="jh-page-kicker">/jobs</div>
+  <h1 class="jh-page-title"><%= _t('jobs.list.title', 'Job List') %></h1>
+  <p class="jh-page-description">
+    <%= _totalCount %> jobs across Seek, LinkedIn, APSJobs, ACT Gov, and NSW Gov. We score listings against your resume and surface decision signals before you open a role.
   </p>
+
+  <div class="jh-command-grid" aria-label="Job list summary">
+    <div class="jh-command-card">
+      <small>Total Jobs</small>
+      <strong><%= _totalCount %></strong>
+      <span><%= _sourceCount %> source<%= _sourceCount === 1 ? '' : 's' %> in view</span>
+    </div>
+    <div class="jh-command-card">
+      <small>Best Match</small>
+      <strong><%= _bestScore !== null ? _bestScore + '%' : '--' %></strong>
+      <span><%= _bestTitle || 'Upload a resume to unlock ranking' %></span>
+    </div>
+    <div class="jh-command-card">
+      <small>Resume</small>
+      <strong><%= _resumeStatus %></strong>
+      <span><%= _hasResume ? 'Match scoring enabled' : 'Upload DOCX for fit scores' %></span>
+    </div>
+    <div class="jh-command-card">
+      <small>Freshness</small>
+      <strong><%= _staleSources.length ? 'Check' : 'OK' %></strong>
+      <span><%= _staleSources.length ? _staleSources.join(', ') + ' stale' : 'Tracked sources are current' %></span>
+    </div>
+  </div>
 </section>
 
 <!-- Source Freshness Banner -->
 <% if (_staleSources.length > 0) { %>
-<section style="max-width: 1200px; margin: 0 auto; padding: 0 16px;">
+<section class="jh-page-shell" style="padding-bottom: 0 !important;">
   <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 16px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #92400e;">
     <span aria-hidden="true" style="font-size: 16px;">&#9888;</span>
     <span>
@@ -51,7 +91,7 @@
 
 <!-- Scoring In Progress Banner -->
 <% if (_scoringInProgress) { %>
-<section style="max-width: 1200px; margin: 8px auto 0; padding: 0 16px;">
+<section class="jh-page-shell" style="padding-bottom: 0 !important;">
   <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 16px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e40af;">
     <span aria-hidden="true" style="font-size: 16px;">&#8987;</span>
     <span><%= _t('jobs.list.scoringBanner', 'Scoring in progress... scores will update automatically.') %></span>
@@ -60,11 +100,47 @@
 <% } %>
 
 <!-- Layout: Sidebar + Main -->
-<section style="max-width: 1200px; margin: 16px auto 0; padding: 0 16px 32px; display: flex; gap: 24px; align-items: flex-start;">
+<section class="jh-page-shell jobs-command-layout" style="margin-top: 16px !important;">
 
   <!-- Filter Sidebar (desktop) -->
   <aside class="filter-sidebar" style="width: 280px; flex-shrink: 0; position: sticky; top: 80px;">
     <%- include('../partials/filter-bar', { filters: _filters }) %>
+    <% if (_user) { %>
+    <%
+      function hiddenFilterValue(value) {
+        return Array.isArray(value) ? value.join(',') : (value || '');
+      }
+      var _saveRoles = Array.isArray(_activeRoles) ? _activeRoles.join(',') : '';
+    %>
+    <div class="save-search-card">
+      <div class="save-search-card__eyebrow">Custom board</div>
+      <h2>Save this view</h2>
+      <p>Turn the current keyword and filters into a reusable dashboard section.</p>
+      <form method="POST" action="/job-board/sections">
+        <input type="hidden" name="keyword" value="<%= hiddenFilterValue(_filters.keyword) %>" />
+        <input type="hidden" name="location" value="<%= hiddenFilterValue(_filters.location) %>" />
+        <input type="hidden" name="source" value="<%= hiddenFilterValue(_filters.source) %>" />
+        <input type="hidden" name="workType" value="<%= hiddenFilterValue(_filters.workType) %>" />
+        <input type="hidden" name="visa" value="<%= hiddenFilterValue(_filters.visa) %>" />
+        <input type="hidden" name="minScore" value="<%= hiddenFilterValue(_filters.minScore) %>" />
+        <input type="hidden" name="salaryMin" value="<%= hiddenFilterValue(_filters.salaryMin) %>" />
+        <input type="hidden" name="salaryMax" value="<%= hiddenFilterValue(_filters.salaryMax) %>" />
+        <input type="hidden" name="roles" value="<%= _saveRoles %>" />
+        <input type="hidden" name="sort" value="<%= _sort %>" />
+        <input type="hidden" name="redirectTo" value="/job-board" />
+        <label for="save-search-name">Section name</label>
+        <input
+          id="save-search-name"
+          type="text"
+          name="name"
+          maxlength="80"
+          placeholder="e.g. Canberra AI roles"
+          required
+        />
+        <button type="submit" class="btn btn-primary btn-sm">Add to board</button>
+      </form>
+    </div>
+    <% } %>
   </aside>
 
   <!-- Main Content -->
@@ -95,24 +171,63 @@
     </div>
     <% } %>
 
+    <%
+      // Shared URL builder: preserves every filter and lets the caller
+      // override a specific one. Used by sort, pagination, and role chips.
+      function buildJobsUrl(overrides) {
+        overrides = overrides || {};
+        var params = new URLSearchParams();
+        if (_filters.keyword) params.set('keyword', _filters.keyword);
+        if (_filters.location) params.set('location', _filters.location);
+        if (_filters.source) params.set('source', _filters.source);
+        if (_filters.workType) params.set('workType', _filters.workType);
+        if (_filters.visa) params.set('visa', _filters.visa);
+        if (_filters.minScore) params.set('minScore', _filters.minScore);
+        if (_filters.salaryMin) params.set('salaryMin', _filters.salaryMin);
+        if (_filters.salaryMax) params.set('salaryMax', _filters.salaryMax);
+        var sortVal = Object.prototype.hasOwnProperty.call(overrides, 'sort') ? overrides.sort : _sort;
+        if (sortVal) params.set('sort', sortVal);
+        var rolesVal = Object.prototype.hasOwnProperty.call(overrides, 'roles') ? overrides.roles : _activeRoles;
+        if (Array.isArray(rolesVal) && rolesVal.length > 0) params.set('roles', rolesVal.join(','));
+        if (Object.prototype.hasOwnProperty.call(overrides, 'page') && overrides.page) params.set('page', overrides.page);
+        return '/jobs?' + params.toString();
+      }
+      function sortUrl(sortVal) { return buildJobsUrl({ sort: sortVal }); }
+    %>
+
+    <!-- Role category chips -->
+    <% if (_allCategories.length > 0 && Object.keys(_categoryCounts).length > 0) { %>
+    <div class="role-filter-bar" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; padding: 10px 12px; background: var(--bg-elevated, #fff); border: 1px solid var(--border-subtle, #E2E6EA); border-radius: 8px;">
+      <span style="font-size: 13px; color: var(--text-muted, #6B7280); margin-right: 4px;"><%= _t('jobs.list.roleFilter', 'Role:') %></span>
+      <%
+        _allCategories.forEach(function(cat) {
+          var count = _categoryCounts[cat.key] || 0;
+          if (count === 0) return;
+          var isActive = _activeRoles.indexOf(cat.key) !== -1;
+          var newRoles = isActive
+            ? _activeRoles.filter(function(r) { return r !== cat.key; })
+            : _activeRoles.concat([cat.key]);
+          var href = buildJobsUrl({ roles: newRoles });
+      %>
+        <a href="<%= href %>"
+           class="role-chip <%= isActive ? 'role-chip--active' : '' %>"
+           style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 16px; font-size: 12px; font-weight: <%= isActive ? '600' : '500' %>; text-decoration: none; border: 1px solid <%= isActive ? 'var(--accent-primary, #2563EB)' : 'var(--border-subtle, #E2E6EA)' %>; background: <%= isActive ? 'var(--accent-primary, #2563EB)' : 'transparent' %>; color: <%= isActive ? '#fff' : 'var(--text-secondary, #4B5563)' %>;">
+          <%= cat.label %> <span style="opacity: 0.8;">(<%= count %>)</span>
+        </a>
+      <% }); %>
+      <% if (_activeRoles.length > 0) { %>
+        <a href="<%= buildJobsUrl({ roles: [] }) %>"
+           class="role-chip role-chip--clear"
+           style="display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 16px; font-size: 12px; font-weight: 500; text-decoration: underline; color: var(--text-muted, #6B7280); border: 1px dashed var(--border-subtle, #E2E6EA); background: transparent;">
+          <%= _t('jobs.list.clearRoles', 'Clear') %>
+        </a>
+      <% } %>
+    </div>
+    <% } %>
+
     <!-- Sort Controls -->
     <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 12px;">
       <span style="font-size: 13px; color: var(--text-muted, #6B7280);"><%= _t('jobs.list.sortBy', 'Sort by:') %></span>
-      <%
-        function sortUrl(sortVal) {
-          var params = new URLSearchParams();
-          if (_filters.keyword) params.set('keyword', _filters.keyword);
-          if (_filters.location) params.set('location', _filters.location);
-          if (_filters.source) params.set('source', _filters.source);
-          if (_filters.workType) params.set('workType', _filters.workType);
-          if (_filters.visa) params.set('visa', _filters.visa);
-          if (_filters.minScore) params.set('minScore', _filters.minScore);
-          if (_filters.minSalary) params.set('minSalary', _filters.minSalary);
-          if (_filters.maxSalary) params.set('maxSalary', _filters.maxSalary);
-          params.set('sort', sortVal);
-          return '/jobs?' + params.toString();
-        }
-      %>
       <a href="<%= sortUrl('newest') %>"
          class="btn btn-ghost btn-sm <%= _sort === 'newest' ? 'active' : '' %>"
          style="<%= _sort === 'newest' ? 'font-weight: 600; text-decoration: underline;' : '' %>">
@@ -184,20 +299,7 @@
       <nav class="pagination" aria-label="<%= _t('jobs.list.pagination', 'Page navigation') %>"
            style="display: flex; justify-content: center; align-items: center; gap: 4px; margin-top: 24px;">
         <%
-          function pageUrl(p) {
-            var params = new URLSearchParams();
-            if (_filters.keyword) params.set('keyword', _filters.keyword);
-            if (_filters.location) params.set('location', _filters.location);
-            if (_filters.source) params.set('source', _filters.source);
-            if (_filters.workType) params.set('workType', _filters.workType);
-            if (_filters.visa) params.set('visa', _filters.visa);
-            if (_filters.minScore) params.set('minScore', _filters.minScore);
-            if (_filters.minSalary) params.set('minSalary', _filters.minSalary);
-            if (_filters.maxSalary) params.set('maxSalary', _filters.maxSalary);
-            if (_sort) params.set('sort', _sort);
-            params.set('page', p);
-            return '/jobs?' + params.toString();
-          }
+          function pageUrl(p) { return buildJobsUrl({ page: p }); }
         %>
 
         <% if (_page > 1) { %>

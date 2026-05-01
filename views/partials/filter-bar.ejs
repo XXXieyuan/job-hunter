@@ -10,7 +10,9 @@
   var _keyword = _filters.keyword || '';
   var _location = _filters.location || '';
   var _source = _filters.source || '';
-  var _sources = Array.isArray(_source) ? _source : (_source ? [_source] : []);
+  var _sources = Array.isArray(_source)
+    ? _source
+    : (_source ? String(_source).split(',').map(function(s) { return s.trim(); }).filter(Boolean) : []);
   var _workType = _filters.workType || '';
   var _visa = _filters.visa || '';
   var _minScore = _filters.minScore || 0;

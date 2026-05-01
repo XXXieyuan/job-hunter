@@ -256,3 +256,97 @@
     padding: 16px !important;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Full App Redesign v1 - Resume Management
+   -------------------------------------------------------------------------- */
+
+.resume-card,
+.upload-dropzone,
+.resume-match-indicator,
+.scores-table-scroll {
+  border-color: var(--border-subtle, #D8E0EA) !important;
+  border-radius: var(--radius-xl, 24px) !important;
+  background: linear-gradient(135deg, #FFFFFF, #F7FBFF) !important;
+  box-shadow: var(--shadow-card, 0 14px 40px rgba(23, 32, 51, 0.08)) !important;
+}
+
+.resume-card {
+  transition: transform var(--transition-fast, 0.16s ease),
+              box-shadow var(--transition-fast, 0.16s ease),
+              border-color var(--transition-fast, 0.16s ease);
+}
+
+.resume-card:hover {
+  border-color: rgba(37, 99, 235, 0.28) !important;
+  background: linear-gradient(135deg, #FFFFFF, #EEF7FF) !important;
+  box-shadow: var(--shadow-lift, 0 22px 64px rgba(23, 32, 51, 0.14)) !important;
+  transform: translateY(-1px);
+}
+
+.upload-dropzone {
+  border-style: dashed !important;
+  border-width: 1.5px !important;
+}
+
+.upload-dropzone.dropzone-active,
+.upload-dropzone:hover {
+  border-color: var(--accent-primary, #2563EB) !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.1), transparent 42%),
+    #fff !important;
+}
+
+.label-chip {
+  border-color: var(--border-subtle, #D8E0EA);
+  border-radius: var(--radius-full, 999px);
+  background: #fff;
+  color: var(--text, #172033);
+  font-weight: 700;
+}
+
+.label-chip:hover,
+.label-chip:focus {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.08);
+  box-shadow: var(--focus-ring, 0 0 0 4px rgba(37, 99, 235, 0.14));
+}
+
+.resume-selector,
+.scores-comparison-table th,
+.scores-comparison-table td {
+  border-color: var(--border-subtle, #D8E0EA);
+}
+
+.resume-selector {
+  border-radius: var(--radius-md, 14px);
+  background: #fff;
+  color: var(--text, #172033);
+}
+
+.resume-selector:focus {
+  outline: none;
+  border-color: var(--accent-primary, #2563EB);
+  box-shadow: var(--focus-ring, 0 0 0 4px rgba(37, 99, 235, 0.14));
+}
+
+.resume-match-indicator {
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  color: var(--text, #172033);
+}
+
+.all-scores-toggle {
+  color: var(--text, #172033);
+  font-weight: 700;
+}
+
+.scores-comparison-table tr.active-resume {
+  border-left-color: var(--accent-secondary, #0E9AA7);
+  background: rgba(20, 184, 166, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resume-card:hover {
+    transform: none;
+  }
+}

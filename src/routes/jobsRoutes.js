@@ -1,5 +1,5 @@
 const express = require('express');
-const { getJobsWithScore, getJobById, searchJobs, getJobCounts, getJobsApi, searchJobsApi, countJobs, countSearchJobs, getDuplicateSourcesForJob, getJobApplicationForUser } = require('../repositories/jobsRepo');
+const { getJobsWithScore, getJobById, searchJobs, searchJobsByIdentifier, getJobCounts, getJobsApi, searchJobsApi, countJobs, countSearchJobs, countJobsByIdentifier, getDuplicateSourcesForJob, getJobApplicationForUser } = require('../repositories/jobsRepo');
 const { getBestFitScoreForJob, getScoreForJobAndResume, getScoresForJobByUser, getBestScorePerJobForUser, getBestScorePerJobForUserWithOverrides, getFitScore } = require('../repositories/fitScoresRepo');
 const { getSourceFreshness } = require('../repositories/scraperRunsRepo');
 const { getConfirmedResumeForUser, countConfirmedResumesForUser, getResumeByIdAndUser } = require('../repositories/resumesRepo');
@@ -18,6 +18,8 @@ const { optimizationLimiter, companyResearchLimiter, resumeOverrideLimiter } = r
 const optimizationSuggestionsRepo = require('../repositories/optimizationSuggestionsRepo');
 const optimizationService = require('../services/optimizationService');
 const { sanitizeFtsQuery } = require('../utils/ftsQuerySanitizer');
+const { getJobApplyUrl, getJobSourceUrl } = require('../utils/jobLinks');
+const { classifyJobTitle, getAllCategories } = require('../utils/roleCategory');
 const { getLogger } = require('../logger');
 
 const logger = getLogger('jobsRoutes');
@@ -25,6 +27,55 @@ const router = express.Router();
 
 const JOBS_PER_PAGE = 20;
 const HOME_JOB_LIMIT = 8;
+
+function looksLikeDirectIdentifier(value) {
+  if (!value || typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+
+  return /^https?:\/\//i.test(trimmed) || /\b[A-Za-z]{2,}-\d{4,}\b/.test(trimmed);
+}
+
+function parsePositiveNumber(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function getSalaryMin(job) {
+  if (!job || job.salary_min === undefined || job.salary_min === null || job.salary_min === '') {
+    return null;
+  }
+  const parsed = Number(job.salary_min);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function applySalaryFiltersAndSort(jobs, { salaryMin, salaryMax, sort }) {
+  let result = jobs;
+  if (Number.isFinite(salaryMin)) {
+    result = result.filter((job) => {
+      const value = getSalaryMin(job);
+      return value !== null && value >= salaryMin;
+    });
+  }
+  if (Number.isFinite(salaryMax)) {
+    result = result.filter((job) => {
+      const value = getSalaryMin(job);
+      return value !== null && value <= salaryMax;
+    });
+  }
+  if (sort === 'salary') {
+    result = result.slice().sort((a, b) => {
+      const aSalary = getSalaryMin(a);
+      const bSalary = getSalaryMin(b);
+      if (aSalary === null && bSalary === null) return 0;
+      if (aSalary === null) return 1;
+      if (bSalary === null) return -1;
+      return bSalary - aSalary;
+    });
+  }
+  return result;
+}
 
 /**
  * GET / — Landing home page
@@ -69,8 +120,18 @@ router.get('/jobs', (req, res) => {
   const workType = req.query.workType || '';
   const visa = req.query.visa || '';
   const minScore = req.query.minScore ? Number(req.query.minScore) : undefined;
+  const salaryMin = parsePositiveNumber(req.query.salaryMin);
+  const salaryMax = parsePositiveNumber(req.query.salaryMax);
   const sort = req.query.sort || 'newest';
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  // Multi-select role categories (comma-separated keys). When any are set,
+  // fetch a wider window from the repo because the category filter is
+  // applied in JS post-query and would otherwise shrink each page below
+  // JOBS_PER_PAGE.
+  const activeRoles = (req.query.roles || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   const filters = {
     keyword,
@@ -79,6 +140,9 @@ router.get('/jobs', (req, res) => {
     workType,
     visa,
     minScore: Number.isFinite(minScore) && minScore > 0 ? minScore : '',
+    salaryMin: Number.isFinite(salaryMin) ? salaryMin : '',
+    salaryMax: Number.isFinite(salaryMax) ? salaryMax : '',
+    roles: activeRoles.join(','),
   };
 
   try {
@@ -89,22 +153,56 @@ router.get('/jobs', (req, res) => {
     if (visa) repoFilters.visa_eligibility = visa;
     if (Number.isFinite(minScore) && minScore > 0) repoFilters.minScore = minScore;
     repoFilters.sort = sort === 'score' ? undefined : 'posted_at';
-    repoFilters.limit = JOBS_PER_PAGE;
-    repoFilters.offset = (page - 1) * JOBS_PER_PAGE;
+    // Fetch the full (filtered) result so category counts on the chip bar
+    // reflect the ENTIRE dataset under the current keyword/location/source
+    // filters, not just one page. Current DB has ~1.7k active jobs, so
+    // fetching all of them with the LEFT JOIN is still <50ms. The 10k
+    // ceiling is a safety cap.
+    repoFilters.limit = 10000;
+    repoFilters.offset = 0;
 
     let jobs;
     const ftsQuery = keyword ? sanitizeFtsQuery(keyword) : null;
 
-    if (ftsQuery) {
+    if (looksLikeDirectIdentifier(keyword)) {
+      jobs = searchJobsByIdentifier(keyword, repoFilters);
+      if (jobs.length === 0 && ftsQuery) {
+        jobs = searchJobs(ftsQuery, repoFilters);
+      }
+    } else if (ftsQuery) {
       jobs = searchJobs(ftsQuery, repoFilters);
+      if (jobs.length === 0 && keyword) {
+        jobs = searchJobsByIdentifier(keyword, repoFilters);
+      }
+    } else if (keyword) {
+      jobs = searchJobsByIdentifier(keyword, repoFilters);
     } else {
       jobs = getJobsWithScore(repoFilters);
     }
 
-    // Get total count for pagination (approximate using current result set)
-    // For simplicity, if we got a full page, there are likely more
-    const totalCount = jobs.length < JOBS_PER_PAGE ? (page - 1) * JOBS_PER_PAGE + jobs.length : (page + 1) * JOBS_PER_PAGE;
+    jobs = applySalaryFiltersAndSort(jobs, { salaryMin, salaryMax, sort });
+
+    // Classify every job so we can (a) count categories for the chip bar
+    // and (b) filter when activeRoles is non-empty.
+    for (const job of jobs) {
+      job.role_category = classifyJobTitle(job.title);
+    }
+
+    // Counts come from the FULL result (pre-filter) so chips always show
+    // "(N)" regardless of what the user has currently checked.
+    const categoryCounts = {};
+    for (const j of jobs) {
+      categoryCounts[j.role_category] = (categoryCounts[j.role_category] || 0) + 1;
+    }
+
+    if (activeRoles.length > 0) {
+      jobs = jobs.filter((j) => activeRoles.includes(j.role_category));
+    }
+    const totalCount = jobs.length;
     const totalPages = Math.max(1, Math.ceil(totalCount / JOBS_PER_PAGE));
+    // In-memory paginate after any category filtering
+    const start = (page - 1) * JOBS_PER_PAGE;
+    jobs = jobs.slice(start, start + JOBS_PER_PAGE);
 
     const user = req.user || null;
     const resume = user ? getPrimaryResume() : null;
@@ -175,6 +273,9 @@ router.get('/jobs', (req, res) => {
       sourceFreshness,
       scoringInProgress,
       _userResumeCount,
+      activeRoles,
+      categoryCounts,
+      allCategories: getAllCategories(),
       currentPath: '/jobs',
     });
   } catch (err) {
@@ -322,6 +423,8 @@ router.get('/jobs/:id', (req, res, next) => {
 
   // Application tracking status
   const application = user ? findByUserAndJob(user.id, job.id) : null;
+  const sourceUrl = getJobSourceUrl(job);
+  const applyUrl = getJobApplyUrl(job);
 
   // Score feedback
   const scoreFeedback = user ? findFeedbackByUserAndJob(user.id, job.id) : null;
@@ -385,6 +488,8 @@ router.get('/jobs/:id', (req, res, next) => {
     application,
     scoreFeedback,
     isAps,
+    sourceUrl,
+    applyUrl,
     recommendedModes,
     duplicateSources,
     optimizationSuggestions,
@@ -540,9 +645,23 @@ router.get('/api/jobs', (req, res, next) => {
     const ftsQuery = q ? sanitizeFtsQuery(q) : null;
     let jobs, total;
 
-    if (ftsQuery) {
+    if (q && looksLikeDirectIdentifier(q)) {
+      jobs = searchJobsByIdentifier(q, filters);
+      total = countJobsByIdentifier(q, filters);
+      if (total === 0 && ftsQuery) {
+        jobs = searchJobsApi(ftsQuery, filters);
+        total = countSearchJobs(ftsQuery, filters);
+      }
+    } else if (ftsQuery) {
       jobs = searchJobsApi(ftsQuery, filters);
       total = countSearchJobs(ftsQuery, filters);
+      if (total === 0 && q) {
+        jobs = searchJobsByIdentifier(q, filters);
+        total = countJobsByIdentifier(q, filters);
+      }
+    } else if (q) {
+      jobs = searchJobsByIdentifier(q, filters);
+      total = countJobsByIdentifier(q, filters);
     } else {
       jobs = getJobsApi(filters);
       total = countJobs(filters);
@@ -590,7 +709,7 @@ router.get('/api/jobs', (req, res, next) => {
         security_clearance: job.security_clearance,
         aps_classification: job.aps_classification,
         is_active: job.is_active,
-        url: job.url,
+        url: getJobSourceUrl(job),
         fit_score,
         application,
       };
@@ -661,6 +780,8 @@ router.get('/api/jobs/:id', (req, res, next) => {
       status_updated_at: rawApp.status_updated_at,
     } : null;
     const duplicate_sources = getDuplicateSourcesForJob(job.id);
+    const source_url = getJobSourceUrl(job);
+    const apply_url = getJobApplyUrl(job);
 
     res.json({
       job: {
@@ -674,7 +795,8 @@ router.get('/api/jobs/:id', (req, res, next) => {
         salary_min: job.salary_min,
         salary_max: job.salary_max,
         description: job.description,
-        url: job.url,
+        url: source_url,
+        apply_url,
         source: job.source,
         external_id: job.external_id,
         posted_at: job.posted_at,

@@ -1,23 +1,11 @@
 <%
   var _t = typeof t === 'function' ? t : function(key, fallback) { return fallback || key; };
-  var _locale = typeof locale !== 'undefined' ? locale : 'en';
 %>
 <footer class="app-footer" role="contentinfo">
   <span>&copy; <%= new Date().getFullYear() %> <%= _t('app.name', 'Job Hunter') %>. <%= _t('footer.rights', 'All rights reserved.') %></span>
   <span>
     <a href="/how-it-works"><%= _t('footer.howItWorks', 'How It Works') %></a>
-    <span class="lang-separator">·</span>
+    <span class="lang-separator">&middot;</span>
     <a href="/how-it-works#privacy"><%= _t('footer.privacy', 'Privacy') %></a>
   </span>
-  <div class="lang-toggle" aria-label="<%= _t('nav.language', 'Language') %>">
-    <a
-      href="/lang/zh"
-      class="lang-pill <%= _locale === 'zh' ? 'active' : '' %>"
-    ><%= _t('lang.zh', '中') %></a>
-    <span class="lang-separator">·</span>
-    <a
-      href="/lang/en"
-      class="lang-pill <%= _locale === 'en' ? 'active' : '' %>"
-    ><%= _t('lang.en', 'EN') %></a>
-  </div>
 </footer>

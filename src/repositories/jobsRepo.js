@@ -4,6 +4,91 @@ function getDbInstance() {
   return getDb();
 }
 
+function normalizeSourceFilter(sourceValue) {
+  if (!sourceValue) return [];
+  if (Array.isArray(sourceValue)) {
+    return sourceValue
+      .map((value) => String(value || '').trim())
+      .filter(Boolean);
+  }
+  return String(sourceValue)
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function applySourceFilter(conditions, params, sourceValue, column = 'j.source') {
+  const sources = normalizeSourceFilter(sourceValue);
+  if (sources.length === 0) return;
+  if (sources.length === 1) {
+    conditions.push(`${column} = @source`);
+    params.source = sources[0];
+    return;
+  }
+
+  const placeholders = sources.map((source, index) => {
+    const key = `source_${index}`;
+    params[key] = source;
+    return `@${key}`;
+  });
+  conditions.push(`${column} IN (${placeholders.join(', ')})`);
+}
+
+function extractIdentifierCandidates(rawKeyword) {
+  if (!rawKeyword || typeof rawKeyword !== 'string') return [];
+
+  const trimmed = rawKeyword.trim();
+  if (!trimmed) return [];
+
+  const candidates = new Set([trimmed]);
+
+  try {
+    const parsed = new URL(trimmed);
+    const pathnameParts = parsed.pathname.split('/').filter(Boolean);
+    const lastPart = pathnameParts[pathnameParts.length - 1];
+    const genericPathParts = new Set(['job-details', 'job-search', 'search-jobs', 'jobs']);
+    if (lastPart && !genericPathParts.has(String(lastPart).toLowerCase())) {
+      candidates.add(lastPart);
+      candidates.add(decodeURIComponent(lastPart));
+    }
+    const jobId = parsed.searchParams.get('Id') || parsed.searchParams.get('id');
+    if (jobId) {
+      candidates.add(jobId);
+    }
+  } catch {
+    // Not a URL; keep the raw string only.
+  }
+
+  const referenceMatch = trimmed.match(/\b([A-Za-z]{2,}-\d{4,})\b/);
+  if (referenceMatch) {
+    candidates.add(referenceMatch[1]);
+  }
+
+  return Array.from(candidates)
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+}
+
+function buildIdentifierMatchClause(params, rawKeyword) {
+  const candidates = extractIdentifierCandidates(rawKeyword);
+  if (candidates.length === 0) return null;
+
+  const clauses = [];
+  candidates.forEach((candidate, index) => {
+    const key = `identifier_${index}`;
+    const likeKey = `identifier_like_${index}`;
+    params[key] = candidate;
+    params[likeKey] = `%${candidate}%`;
+    clauses.push(`j.external_id = @${key}`);
+    clauses.push(`j.external_id LIKE @${likeKey}`);
+    clauses.push(`j.url = @${key}`);
+    clauses.push(`j.url LIKE @${likeKey}`);
+    clauses.push(`j.raw_json LIKE @${likeKey}`);
+  });
+
+  return `(${clauses.join(' OR ')})`;
+}
+
 function insertJob(job) {
   const db = getDbInstance();
   const stmt = db.prepare(
@@ -154,10 +239,7 @@ function getJobsWithScore(filters = {}) {
     conditions.push('j.role = @role');
     params.role = filters.role;
   }
-  if (filters.source) {
-    conditions.push('j.source = @source');
-    params.source = filters.source;
-  }
+  applySourceFilter(conditions, params, filters.source);
   if (filters.location) {
     conditions.push('j.location LIKE @location');
     params.location = `%${filters.location}%`;
@@ -223,10 +305,7 @@ function searchJobs(ftsQuery, filters = {}) {
   const conditions = ['j.is_active = 1'];
   const params = {};
 
-  if (filters.source) {
-    conditions.push('j.source = @source');
-    params.source = filters.source;
-  }
+  applySourceFilter(conditions, params, filters.source);
   if (filters.location) {
     conditions.push('j.location LIKE @location');
     params.location = `%${filters.location}%`;
@@ -267,6 +346,67 @@ function searchJobs(ftsQuery, filters = {}) {
     LIMIT @limit OFFSET @offset
   `;
 
+  return db.prepare(sql).all(params);
+}
+
+function searchJobsByIdentifier(rawKeyword, filters = {}) {
+  const db = getDbInstance();
+  const conditions = ['j.is_active = 1'];
+  const params = {};
+
+  applySourceFilter(conditions, params, filters.source);
+  if (filters.location) {
+    conditions.push('j.location LIKE @location');
+    params.location = `%${filters.location}%`;
+  }
+  if (filters.work_type) {
+    conditions.push('j.work_type = @work_type');
+    params.work_type = filters.work_type;
+  }
+  if (filters.visa_eligibility) {
+    conditions.push('j.visa_eligibility = @visa_eligibility');
+    params.visa_eligibility = filters.visa_eligibility;
+  }
+  if (filters.aps_classification) {
+    conditions.push('j.aps_classification = @aps_classification');
+    params.aps_classification = filters.aps_classification;
+  }
+  if (typeof filters.minScore === 'number') {
+    conditions.push('fs.overall_score >= @minScore');
+    params.minScore = filters.minScore;
+  }
+  if (!filters.includeDuplicates) {
+    conditions.push('j.canonical_job_id IS NULL');
+  }
+
+  const identifierClause = buildIdentifierMatchClause(params, rawKeyword);
+  if (!identifierClause) return [];
+
+  conditions.push(identifierClause);
+  const where = `WHERE ${conditions.join(' AND ')}`;
+  const limit = filters.limit || 50;
+  const offset = filters.offset || 0;
+
+  const sql = `
+    SELECT
+      j.*,
+      fs.overall_score,
+      fs.semantic_score,
+      fs.keyword_score,
+      fs.role_alignment_score,
+      fs.location_score,
+      fs.overall_score AS fs_overall_score,
+      fs.visa_match AS fs_visa_match,
+      fs.breakdown_json AS fs_breakdown_json
+    FROM jobs j
+    LEFT JOIN job_fit_scores fs ON fs.job_id = j.id
+    ${where}
+    ORDER BY j.posted_at DESC, j.created_at DESC
+    LIMIT @limit OFFSET @offset
+  `;
+
+  params.limit = limit;
+  params.offset = offset;
   return db.prepare(sql).all(params);
 }
 
@@ -538,6 +678,48 @@ function countSearchJobs(ftsQuery, filters = {}) {
   return db.prepare(sql).get(params).total;
 }
 
+function countJobsByIdentifier(rawKeyword, filters = {}) {
+  const db = getDbInstance();
+  const conditions = ['j.is_active = 1'];
+  const params = {};
+
+  applySourceFilter(conditions, params, filters.source);
+  if (filters.location) {
+    conditions.push('j.location LIKE @location');
+    params.location = `%${filters.location}%`;
+  }
+  if (filters.work_type) {
+    conditions.push('j.work_type = @work_type');
+    params.work_type = filters.work_type;
+  }
+  if (filters.visa_eligibility) {
+    conditions.push('j.visa_eligibility = @visa_eligibility');
+    params.visa_eligibility = filters.visa_eligibility;
+  }
+  if (filters.aps_classification) {
+    conditions.push('j.aps_classification = @aps_classification');
+    params.aps_classification = filters.aps_classification;
+  }
+  if (typeof filters.minScore === 'number') {
+    conditions.push('fs.overall_score >= @minScore');
+    params.minScore = filters.minScore;
+  }
+  if (!filters.includeDuplicates) {
+    conditions.push('j.canonical_job_id IS NULL');
+  }
+
+  const identifierClause = buildIdentifierMatchClause(params, rawKeyword);
+  if (!identifierClause) return 0;
+
+  conditions.push(identifierClause);
+  const where = `WHERE ${conditions.join(' AND ')}`;
+  const scoreJoin = typeof filters.minScore === 'number'
+    ? 'LEFT JOIN job_fit_scores fs ON fs.job_id = j.id'
+    : 'LEFT JOIN job_fit_scores fs ON fs.job_id = j.id';
+  const sql = `SELECT COUNT(*) AS total FROM jobs j ${scoreJoin} ${where}`;
+  return db.prepare(sql).get(params).total;
+}
+
 /**
  * API-ready job listing with comma-separated source filter, salary filters,
  * and sort options including salary (nulls last).
@@ -772,10 +954,12 @@ module.exports = {
   getJobByExternalId,
   getJobsWithScore,
   searchJobs,
+  searchJobsByIdentifier,
   getJobsApi,
   searchJobsApi,
   countJobs,
   countSearchJobs,
+  countJobsByIdentifier,
   findDuplicateCandidates,
   getJobCounts,
   getActiveJobIds,
@@ -792,4 +976,9 @@ module.exports = {
   getJobsWithoutVisaInfo,
   archiveInactive,
   countActiveNonDuplicate,
+  // Exported for testing
+  _normalizeSourceFilter: normalizeSourceFilter,
+  _applySourceFilter: applySourceFilter,
+  _extractIdentifierCandidates: extractIdentifierCandidates,
+  _buildIdentifierMatchClause: buildIdentifierMatchClause,
 };

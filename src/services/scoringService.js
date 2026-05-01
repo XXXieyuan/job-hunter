@@ -8,6 +8,13 @@ const {
   decodeEmbedding,
   bufferFromFloats,
 } = require('./embeddingService');
+const {
+  detectJobSeniority,
+  detectResumeSeniority,
+  seniorityFactor,
+  seniorityLabel,
+  describeSeniority,
+} = require('../utils/seniority');
 const { getLogger } = require('../logger');
 
 const logger = getLogger('scoringService');
@@ -602,6 +609,18 @@ async function scoreJobAgainstResume(job, resume, opts = {}) {
   const { score: keywordScore, matched, missing, details: matchDetails } = computeKeywordScore(job, resume);
   const locationScore = computeLocationScore(job, resume);
 
+  // ── Seniority gating ────────────────────────────────────────────────
+  // Title cosine + skill overlap can't catch seniority gaps. "Principal AI
+  // Engineer" embeds very close to "AI Engineer" (same domain), and the JD
+  // skill list overlaps a junior resume's skills heavily. So we penalize
+  // role_score by a seniority factor (Mid resume vs Lead JD => 0.4×) and
+  // soft-cap overall when the gap is severe (>= 2 levels).
+  const jobLevel = detectJobSeniority(job.title);
+  const resumeLevel = detectResumeSeniority(resume);
+  const sFactor = seniorityFactor(jobLevel, resumeLevel);
+  const adjustedRoleScore = clamp(roleAlignmentScore * sFactor, 0, 100);
+  const seniorityGap = jobLevel - resumeLevel;
+
   // Composite score calculation
   // If semantic score unavailable, redistribute weight to keyword
   let overallScore;
@@ -609,7 +628,7 @@ async function scoreJobAgainstResume(job, resume, opts = {}) {
     overallScore =
       W_SEMANTIC * semanticScore +
       W_KEYWORD * keywordScore +
-      W_ROLE * roleAlignmentScore +
+      W_ROLE * adjustedRoleScore +
       W_LOCATION * locationScore;
   } else {
     // Fallback: redistribute semantic weight proportionally
@@ -618,8 +637,15 @@ async function scoreJobAgainstResume(job, resume, opts = {}) {
     const fallbackLocationWeight = W_LOCATION + W_SEMANTIC * (W_LOCATION / (W_KEYWORD + W_ROLE + W_LOCATION));
     overallScore =
       fallbackKeywordWeight * keywordScore +
-      fallbackRoleWeight * roleAlignmentScore +
+      fallbackRoleWeight * adjustedRoleScore +
       fallbackLocationWeight * locationScore;
+  }
+
+  // Soft cap when severely under-qualified (Mid applying to Lead, Junior to
+  // Principal). The role_score factor alone isn't enough — semantic + keyword
+  // can still push a Principal job to 70%+. Cap at 60% for gap >= 2.
+  if (seniorityGap >= 2) {
+    overallScore = Math.min(overallScore, 60);
   }
 
   overallScore = clamp(Math.round(overallScore * 100) / 100, 0, 100);
@@ -636,8 +662,9 @@ async function scoreJobAgainstResume(job, resume, opts = {}) {
     }));
   }
 
-  // Build detail strings for breakdown
-  const roleAlignmentDetail = buildRoleAlignmentDetail(job, resume, roleAlignmentScore);
+  // Build detail strings for breakdown — describe the *adjusted* role score
+  // so the explanation matches the number the user sees in the UI.
+  const roleAlignmentDetail = buildRoleAlignmentDetail(job, resume, adjustedRoleScore);
   const locationDetail = buildLocationDetail(job, resume, locationScore);
   const visaNote = buildVisaNote(job);
   const valuesInternationalExperience = detectInternationalExperience(resume);
@@ -654,6 +681,16 @@ async function scoreJobAgainstResume(job, resume, opts = {}) {
     role_alignment_detail: roleAlignmentDetail,
     location_detail: locationDetail,
     visa_note: visaNote,
+    seniority: {
+      job_level: jobLevel,
+      resume_level: resumeLevel,
+      job_label: seniorityLabel(jobLevel),
+      resume_label: seniorityLabel(resumeLevel),
+      gap: seniorityGap,
+      factor: sFactor,
+      capped: seniorityGap >= 2,
+      detail: describeSeniority(jobLevel, resumeLevel),
+    },
   };
 
   // Compute visa_match: 0=ineligible, 1=eligible, null=unknown
@@ -668,7 +705,7 @@ async function scoreJobAgainstResume(job, resume, opts = {}) {
         overall_score: overallScore,
         semantic_score: semanticScore != null ? Math.round(semanticScore * 100) / 100 : null,
         keyword_score: Math.round(keywordScore * 100) / 100,
-        role_alignment_score: Math.round(roleAlignmentScore * 100) / 100,
+        role_alignment_score: Math.round(adjustedRoleScore * 100) / 100,
         location_score: locationScore,
         breakdown_json: JSON.stringify(breakdown),
         skill_gaps_json: JSON.stringify(skillGaps),
@@ -684,7 +721,7 @@ async function scoreJobAgainstResume(job, resume, opts = {}) {
     overall_score: overallScore,
     semantic_score: semanticScore != null ? Math.round(semanticScore * 100) / 100 : null,
     keyword_score: Math.round(keywordScore * 100) / 100,
-    role_alignment_score: Math.round(roleAlignmentScore * 100) / 100,
+    role_alignment_score: Math.round(adjustedRoleScore * 100) / 100,
     location_score: locationScore,
     visa_match: visaMatch,
     values_international_experience: valuesInternationalExperience,

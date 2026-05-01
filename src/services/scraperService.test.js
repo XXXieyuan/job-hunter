@@ -15,14 +15,15 @@ describe('Scraper Service — module interface (T-K.2)', () => {
     assert.ok(Array.isArray(scraperService.VALID_PLATFORMS));
   });
 
-  it('VALID_PLATFORMS contains linkedin, seek, apsjobs, actgov', () => {
+  it('VALID_PLATFORMS contains registered scraper sources', () => {
     const { VALID_PLATFORMS } = require('./scraperService');
 
     assert.ok(VALID_PLATFORMS.includes('linkedin'));
     assert.ok(VALID_PLATFORMS.includes('seek'));
     assert.ok(VALID_PLATFORMS.includes('apsjobs'));
     assert.ok(VALID_PLATFORMS.includes('actgov'));
-    assert.equal(VALID_PLATFORMS.length, 4);
+    assert.ok(VALID_PLATFORMS.includes('nswgov'));
+    assert.equal(VALID_PLATFORMS.length, 5);
   });
 
   it('triggerScrape rejects invalid platform', () => {

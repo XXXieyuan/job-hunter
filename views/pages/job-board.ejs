@@ -1,0 +1,205 @@
+<% layout('layout') -%>
+
+<%
+  var _sections = typeof sectionPreviews !== 'undefined' && Array.isArray(sectionPreviews) ? sectionPreviews : [];
+  var _totalMatches = typeof totalMatches !== 'undefined' ? totalMatches : 0;
+  var _allCategories = typeof allCategories !== 'undefined' && Array.isArray(allCategories) ? allCategories : [];
+  var _categoryLabels = {};
+  _allCategories.forEach(function(category) {
+    _categoryLabels[category.key] = category.label;
+  });
+
+  function arrayValue(value) {
+    if (!value) return [];
+    return Array.isArray(value) ? value : String(value).split(',').map(function(item) { return item.trim(); }).filter(Boolean);
+  }
+
+  function buildFilterPills(filters) {
+    filters = filters || {};
+    var pills = [];
+    if (filters.keyword) pills.push('Keyword: ' + filters.keyword);
+    if (filters.location) pills.push('Location: ' + filters.location);
+    var sources = arrayValue(filters.source);
+    if (sources.length) pills.push('Sources: ' + sources.join(', '));
+    if (filters.workType) pills.push('Type: ' + filters.workType);
+    if (filters.visa) pills.push('Visa: ' + String(filters.visa).replace(/_/g, ' '));
+    if (filters.minScore) pills.push('Score >= ' + filters.minScore + '%');
+    if (filters.salaryMin) pills.push('Salary >= $' + Number(filters.salaryMin).toLocaleString('en-AU'));
+    if (filters.salaryMax) pills.push('Salary <= $' + Number(filters.salaryMax).toLocaleString('en-AU'));
+    var roles = arrayValue(filters.roles).map(function(role) { return _categoryLabels[role] || role; });
+    if (roles.length) pills.push('Roles: ' + roles.join(', '));
+    return pills;
+  }
+
+  function buildJobsUrl(filters) {
+    filters = filters || {};
+    var params = new URLSearchParams();
+    if (filters.keyword) params.set('keyword', filters.keyword);
+    if (filters.location) params.set('location', filters.location);
+    var sources = arrayValue(filters.source);
+    if (sources.length) params.set('source', sources.join(','));
+    if (filters.workType) params.set('workType', filters.workType);
+    if (filters.visa) params.set('visa', filters.visa);
+    if (filters.minScore) params.set('minScore', filters.minScore);
+    if (filters.salaryMin) params.set('salaryMin', filters.salaryMin);
+    if (filters.salaryMax) params.set('salaryMax', filters.salaryMax);
+    var roles = arrayValue(filters.roles);
+    if (roles.length) params.set('roles', roles.join(','));
+    if (filters.sort) params.set('sort', filters.sort);
+    var query = params.toString();
+    return '/jobs' + (query ? '?' + query : '');
+  }
+%>
+
+<section class="jh-page-head job-board-head">
+  <div class="jh-page-kicker">/job-board</div>
+  <h1 class="jh-page-title">Custom Job Board</h1>
+  <p class="jh-page-description">
+    Build your own dashboard sections for different job searches: Canberra ICT, AI engineer, software roles, APS-only searches, game jobs, or any other keyword scope you care about.
+  </p>
+
+  <div class="jh-command-grid" aria-label="Job board summary">
+    <div class="jh-command-card">
+      <small>Sections</small>
+      <strong><%= _sections.length %></strong>
+      <span>Saved search lanes</span>
+    </div>
+    <div class="jh-command-card">
+      <small>Matches</small>
+      <strong><%= _totalMatches %></strong>
+      <span>Jobs across all sections</span>
+    </div>
+    <div class="jh-command-card">
+      <small>Preview</small>
+      <strong>6</strong>
+      <span>Cards shown per section</span>
+    </div>
+    <div class="jh-command-card">
+      <small>Scope</small>
+      <strong>Live</strong>
+      <span>Uses the latest local job database</span>
+    </div>
+  </div>
+</section>
+
+<section class="jh-page-shell job-board-layout">
+  <aside class="job-board-builder">
+    <div class="job-board-builder__intro">
+      <span class="job-board-builder__tag">New section</span>
+      <h2>Add a search lane</h2>
+      <p>Each section can have its own keyword, source, location, role category, salary, and score filters.</p>
+    </div>
+
+    <form method="POST" action="/job-board/sections" class="job-board-form">
+      <input type="hidden" name="redirectTo" value="/job-board" />
+
+      <label for="section-name">Section name</label>
+      <input id="section-name" type="text" name="name" maxlength="80" placeholder="Canberra AI roles" required />
+
+      <label for="section-keyword">Keyword</label>
+      <input id="section-keyword" type="text" name="keyword" maxlength="120" placeholder="software engineer, ICT, Unity" />
+
+      <label for="section-location">Location</label>
+      <input id="section-location" type="text" name="location" maxlength="120" placeholder="Canberra, Sydney, Remote" />
+
+      <label>Sources</label>
+      <div class="job-board-check-grid">
+        <label><input type="checkbox" name="source" value="seek" /> Seek</label>
+        <label><input type="checkbox" name="source" value="linkedin" /> LinkedIn</label>
+        <label><input type="checkbox" name="source" value="apsjobs" /> APSJobs</label>
+        <label><input type="checkbox" name="source" value="actgov" /> ACT Gov</label>
+        <label><input type="checkbox" name="source" value="nswgov" /> NSW Gov</label>
+      </div>
+
+      <label for="section-work-type">Work type</label>
+      <select id="section-work-type" name="workType">
+        <option value="">Any</option>
+        <option value="full-time">Full-time</option>
+        <option value="part-time">Part-time</option>
+        <option value="contract">Contract</option>
+      </select>
+
+      <label>Role category</label>
+      <div class="job-board-check-grid job-board-check-grid--roles">
+        <% _allCategories.forEach(function(category) { %>
+          <label><input type="checkbox" name="roles" value="<%= category.key %>" /> <%= category.label %></label>
+        <% }); %>
+      </div>
+
+      <div class="job-board-form__pair">
+        <div>
+          <label for="section-salary-min">Min salary</label>
+          <input id="section-salary-min" type="number" name="salaryMin" min="0" step="1000" placeholder="120000" />
+        </div>
+        <div>
+          <label for="section-min-score">Min score</label>
+          <input id="section-min-score" type="number" name="minScore" min="0" max="100" step="5" placeholder="70" />
+        </div>
+      </div>
+
+      <label for="section-sort">Sort</label>
+      <select id="section-sort" name="sort">
+        <option value="newest">Newest</option>
+        <option value="score">Best match</option>
+        <option value="salary">Salary</option>
+      </select>
+
+      <button type="submit" class="btn btn-primary">Add section</button>
+    </form>
+  </aside>
+
+  <div class="job-board-sections">
+    <% if (_sections.length === 0) { %>
+      <div class="job-board-empty">
+        <span>Start with one lane</span>
+        <h2>No custom sections yet</h2>
+        <p>Create a section for a search you keep repeating, or go to Jobs and save the current filtered view.</p>
+        <a class="btn btn-ghost" href="/jobs">Browse jobs</a>
+      </div>
+    <% } %>
+
+    <% _sections.forEach(function(section, sectionIndex) { %>
+      <section class="job-board-section" style="animation-delay: <%= Math.min(sectionIndex, 8) * 50 %>ms">
+        <div class="job-board-section__header">
+          <div>
+            <div class="job-board-section__kicker">Section <%= sectionIndex + 1 %></div>
+            <h2><%= section.name %></h2>
+            <p><%= section.totalCount %> matching job<%= section.totalCount === 1 ? '' : 's' %></p>
+          </div>
+          <div class="job-board-section__actions">
+            <a class="btn btn-ghost btn-sm" href="<%= buildJobsUrl(section.filters) %>">Open search</a>
+            <form method="POST" action="/job-board/sections/<%= section.id %>/delete">
+              <input type="hidden" name="redirectTo" value="/job-board" />
+              <button type="submit" class="btn btn-ghost btn-sm">Delete</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="job-board-pills">
+          <% var _pills = buildFilterPills(section.filters); %>
+          <% _pills.forEach(function(pill) { %>
+            <span><%= pill %></span>
+          <% }); %>
+          <% if (_pills.length === 0) { %>
+            <span>All active jobs</span>
+          <% } %>
+        </div>
+
+        <% if (section.jobs.length === 0) { %>
+          <div class="job-board-section__empty">No jobs match this section yet.</div>
+        <% } else { %>
+          <div class="job-board-job-grid">
+            <% section.jobs.forEach(function(job, idx) { %>
+              <%
+                var boardScore = null;
+                if (typeof job.display_score === 'number') boardScore = job.display_score;
+                else if (typeof job.overall_score === 'number') boardScore = job.overall_score;
+              %>
+              <%- include('../partials/job-card', { job: job, score: boardScore, index: idx }) %>
+            <% }); %>
+          </div>
+        <% } %>
+      </section>
+    <% }); %>
+  </div>
+</section>

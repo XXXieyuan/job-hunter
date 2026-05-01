@@ -13,6 +13,7 @@ const settingsRoutes = require('./routes/settingsRoutes');
 const alertRoutes = require('./routes/alertRoutes');
 const salaryRoutes = require('./routes/salaryRoutes');
 const batchApplyRoutes = require('./routes/batchApplyRoutes');
+const jobBoardRoutes = require('./routes/jobBoardRoutes');
 const { optionalAuth, csrfProtection } = require('./middleware/auth');
 const { alertBadge } = require('./middleware/alertBadge');
 const { rateLimiter } = require('./middleware/rateLimiter');
@@ -103,28 +104,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// Language switch route – sets cookie then redirects back
+// English-only UI: keep the old language route as a compatibility no-op.
 app.get('/lang/:code', (req, res) => {
-  const requested = req.params.code;
-  const locale = resolveLocale(requested);
-
-  res.cookie('lang', locale, {
-    httpOnly: false,
-    sameSite: 'lax',
-    maxAge: 365 * 24 * 60 * 60 * 1000,
-  });
-
+  res.clearCookie('lang');
   const referer = req.get('Referer');
   res.redirect(referer || '/jobs');
 });
 
 // Inject common locals (locale data available to all templates including error pages)
 app.use((req, res, next) => {
-  const cookieLang = req.cookies ? req.cookies.lang : null;
-  const locale = resolveLocale(cookieLang);
+  const locale = 'en';
   res.locals.locale = locale;
-  res.locals.localeData = locales[locale] || locales.en;
-  res.locals.t = createTranslator(locale);
+  res.locals.localeData = locales.en;
+  res.locals.t = createTranslator('en');
   res.locals.currentPath = req.path;
   res.locals.user = req.user || null;
   next();
@@ -141,6 +133,7 @@ app.use('/', settingsRoutes);
 app.use('/', alertRoutes);
 app.use('/', salaryRoutes);
 app.use('/', batchApplyRoutes);
+app.use('/', jobBoardRoutes);
 
 // 404 handler — must come after all routes
 app.use((req, res, next) => {
